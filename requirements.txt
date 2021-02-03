@@ -1,0 +1,11 @@
+# Numerial and plotting
+numpy
+matplotlib
+
+# ML stuff
+torch>=1.7.1
+hydra-core
+omegaconf
+
+# Misc
+pelutils[ds]>=0.5.3
