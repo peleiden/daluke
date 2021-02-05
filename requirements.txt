@@ -15,6 +15,9 @@ polyglot
 PyICU
 pycld2
 morfessor
+spacy
+pandas
+conllu
 
 # Misc
 pelutils[ds]>=0.5.3
