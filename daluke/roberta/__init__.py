@@ -6,26 +6,22 @@ from pelutils import log
 
 import torch
 import torch.hub
-import torch.nn as nn
 
 from daluke import cuda
 
 
 FNAME = "roberta.pt"
 
-def load(loc: str) -> Type[nn.Module]:
-    path = os.path.join(loc, FNAME)
-    log.debug("Loading RoBERTa from %s" % path)
-    return torch.load(path, map_location=cuda)
-
-
-def download(loc: str):
-    os.makedirs(loc, exist_ok=True)
-    path = os.path.join(loc, FNAME)
-    log.debug("Saving RoBERTa to %s" % path)
-    roberta = torch.hub.load("pytorch/fairseq", "roberta.large")
-    torch.save(roberta.state_dict(), path)
+def load(*, large=True, force_reload=False):
+    model = "large" if large else "base"
+    roberta = torch.hub.load("pytorch/fairseq", "roberta.%s" % model)
+    roberta.eval()
+    return roberta
 
 
 if __name__ == "__main__":
-    download("local_workspace")
+    roberta = load(large = True, force_reload=True)
+    print(type(roberta))
+    s = "$GME 🚀🚀🚀"
+    tokens = roberta.encode(s)
+    print(tokens)
