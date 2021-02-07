@@ -9,8 +9,8 @@ from pelutils import log
 class TestDataset(ABC):
     def __init__(self, name: str):
         self.name = name
-        self.text: list[str] = None
-        self.ne:   list[str] = None
+        self.test_strings: list[str] = None
+        self.named_entities:   list[str] = None
 
     @abstractmethod
     def setup(self):
@@ -23,10 +23,10 @@ class TestDataset(ABC):
 class Dane(TestDataset):
     def setup(self):
         # Third element is test data
-        self.text, self.ne = DDT().load_as_simple_ner(predefined_splits=True)[2]
+        self.test_strings, self.named_entities = DDT().load_as_simple_ner(predefined_splits=True)[2]
 
-    def get_data(self) -> (list[str], list[str]):
-        for text, entities in zip(self.text, self.ne):
+    def get_data(self) -> Generator(tuple(list[str], list[str])):
+        for text, entities in zip(self.self.test_strings, self.named_entities):
             yield text, entities
 
 class Plank(TestDataset):
@@ -46,8 +46,8 @@ class Wikiann(TestDataset):
 
 ALL_DATASETS = (
     Dane("DaNE"),
-    Plank("Plank"),
-    Wikiann("WikiANN"),
+    # Plank("Plank"),
+    # Wikiann("WikiANN"),
 )
 
 def setup_datasets(names_to_setup: list[str]) -> list[TestDataset]:
@@ -55,11 +55,11 @@ def setup_datasets(names_to_setup: list[str]) -> list[TestDataset]:
     for name in names_to_setup:
         try:
             datasets.append(
-                [d for d in ALL_DATASETS if d.name == name][0]
+                next(d for d in ALL_DATASETS if d.name == name)
             )
         except IndexError as ie:
             raise ValueError(f"Dataset with given name {name} not found, see --help for options") from ie
     for d in datasets:
-        log.debug(f"Setting up dataset \"{d.name}\" ...")
+        log(f"Setting up dataset \"{d.name}\" ...")
         d.setup()
     return datasets

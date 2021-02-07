@@ -48,7 +48,7 @@ def run_experiment(args: dict[str, str]):
         for dataset in datasets:
             e = Evaluator(model, dataset)
             e.run()
-            e.result.save(args["location"])
+            e.result.save(os.path.join(args["location"], "-".join((model.name, dataset.name))))
 
 if __name__ == '__main__':
     with log.log_errors:
