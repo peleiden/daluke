@@ -13,8 +13,7 @@ class NER_TestResults(DataStorage):
     """
     preds: all predictions of model with `modelname` on the dataset with `dataname`
     classes: list of names of relevant (either guessed by model or included in data) classes. Often PER, LOG, ORG
-    confusion_matrices: list of same length as above where each element is 2x2 array
-    accs, precs, recs, F1s: accuracies, precisions, recalls, F1-scores for each class
+    statistics: The output of seqeval.metrics.classification_report on the data
     """
     modelname: str
     dataname : str
@@ -39,21 +38,18 @@ class Evaluator:
     def _get_results(self) -> (list[list[str]], list[list[str]]):
         preds, truths = list(), list()
         for text, truth in self.dataset.get_data():
-            p = self.model.predict(text)
-            preds.append(p)
+            preds.append(self.model.predict(text))
             truths.append(truth)
-            if len(p) != len(truth):
-                raise ValueError
         return preds, truths
 
     def _calculate_stats(self, preds: list[list[str]], truth: list[list[str]]) -> NER_TestResults:
-        #TODO: Calculate some global stats without the `MISC` category
+        #TODO: Use this to calculate some global stats without the `MISC` category
         classes = self._calculate_relevant_classes(preds, truth)
         # Set divide by zero cases to 0 to avoid warning for models that can't see "MISC"
         stats = classification_report(truth, preds, output_dict=True, zero_division=0)
         # Run `.item()` on every number to avoid json serialization errors for numpy format
         stats = {skey: {key: val.item() for key, val in sval.items()} for skey, sval in stats.items()}
-        # TODO: Print this myself instead of running classification report twice
+        # TODO: Format this myself instead of running classification report twice
         log(classification_report(truth, preds, zero_division=0))
 
         return NER_TestResults(
@@ -79,5 +75,5 @@ class Evaluator:
         Converts IOB format to simple class label
         """
         if label == "O":
-            return "O"
+            return label
         return label.split("-")[1]
