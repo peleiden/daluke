@@ -21,6 +21,8 @@ conllu
 seqeval
 
 # Misc
-pelutils[ds]>=0.5.3
+pelutils[ds]>=0.5.5
 regex
 requests
+wget
+tqdm
