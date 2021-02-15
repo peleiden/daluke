@@ -6,20 +6,6 @@ matplotlib
 torch>=1.7.1
 fairseq
 
-# For Danish NER
-danlp
-gensim
-transformers
-flair
-polyglot
-PyICU
-pycld2
-morfessor
-spacy
-pandas
-conllu
-seqeval
-
 # Misc
 pelutils[ds]>=0.5.5
 regex

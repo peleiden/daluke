@@ -1,0 +1,12 @@
+danlp
+gensim
+transformers
+flair
+polyglot
+PyICU
+pycld2
+morfessor
+spacy
+pandas
+conllu
+seqeval
