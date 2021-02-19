@@ -21,6 +21,10 @@ def main():
             {"default": "all", "type": str,
                 "help": f"Datasets to test on. Either `all` or space-seperated list of following datasets:\n{ALL_DATASET_NAMES}"
             },
+        "daner_path":
+            {"default": "daner", "type": str,
+                "help": "Path to the cloned repository ITUnlp/daner. Only needed if testing daner"
+            },
     }
     parser = Parser(options, name="NER_Test")
     experiments = parser.parse()
@@ -38,7 +42,7 @@ def run_experiment(args: dict[str, str]):
     if args["datasets"] == "all":
         args["datasets"] = ALL_DATASET_NAMES
 
-    models = setup_models(args["models"].split())
+    models = setup_models(args["models"].split(), args["location"], daner_path=args["daner_path"])
     log(f"Succesfully set up {len(models)} models")
 
     datasets = setup_datasets(args["datasets"].split())

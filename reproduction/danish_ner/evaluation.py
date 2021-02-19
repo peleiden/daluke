@@ -36,10 +36,8 @@ class Evaluator:
         self.result = self._calculate_stats(preds, truths)
 
     def _get_results(self) -> (list[list[str]], list[list[str]]):
-        preds, truths = list(), list()
-        for text, truth in self.dataset.get_data():
-            preds.append(self.model.predict(text))
-            truths.append(truth)
+        text, truths = self.dataset.get_data()
+        preds = self.model.predict(text)
         return preds, truths
 
     def _calculate_stats(self, preds: list[list[str]], truth: list[list[str]]) -> NER_TestResults:
@@ -77,3 +75,4 @@ class Evaluator:
         if label == "O":
             return label
         return label.split("-")[1]
+
