@@ -1,3 +1,4 @@
+#!/bin/sh
 #BSUB -q gpuv100
 #BSUB -R "select[gpu32gb]"
 #BSUB -gpu "num=1"
@@ -12,7 +13,6 @@
 
 echo "Running job"
 
-mkdir -p data/lukout
 #python -m examples.cli \
 #    --model-file=data/luke_large_500k.tar.gz \
 #    --output-dir=data/lukout \
@@ -21,13 +21,22 @@ mkdir -p data/lukout
 #    --checkpoint-file=data/pytorch_model.bin \
 #    --no-train
 
-python -m examples.cli \
-    --model-file=data/luke_large_500k.tar.gz \
-    --output-dir=data/lukout \
-    ner run \
-    --data-dir=data/CoNLL2003 \
-    --train-batch-size=2 \
-    --gradient-accumulation-steps=2 \
-    --learning-rate=1e-5 \
-    --num-train-epochs=5 \
-    --fp16
+SIZE=base
+for i in {1..5}
+do
+    OUTDIR="data/lukout$SIZE$i"
+    echo $OUTDIR
+    mkdir -p $OUTDIR
+
+    LR=$(["$SIZE" == "large"] && echo "1e-5" || echo "5e-5")
+    python -m examples.cli \
+        --model-file=data/luke_${SIZE}_500k.tar.gz \
+        --output-dir=$OUTDIR \
+        ner run \
+        --data-dir=data/CoNLL2003 \
+        --train-batch-size=8 \
+        --gradient-accumulation-steps=2 \
+        --learning-rate=$LR \
+        --num-train-epochs=5 \
+        --fp16
+done
