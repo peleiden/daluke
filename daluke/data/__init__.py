@@ -61,9 +61,9 @@ def _parse_wikidata(dest: str, lang="da"):
     os.makedirs(dest)
 
     log("Reading %s" % xmlfile)
-    with bz2.BZ2File(xmlfile) as xmlfile:
+    with bz2.BZ2File(xmlfile) as xmlobj:
         page_info: dict = None
-        for event, elem in tqdm(ET.iterparse(xmlfile, events=("start", "end",))):
+        for event, elem in tqdm(ET.iterparse(xmlobj, events=("start", "end",))):
             tag = elem.tag.split("}")[-1]
             if event == "start" and tag == "page":
                 page_info = dict()
