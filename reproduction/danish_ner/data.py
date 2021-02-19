@@ -26,8 +26,7 @@ class Dane(TestDataset):
         self.test_strings, self.named_entities = DDT().load_as_simple_ner(predefined_splits=True)[2]
 
     def get_data(self) -> Generator(tuple(list[str], list[str])):
-        for text, entities in zip(self.test_strings, self.named_entities):
-            yield text, entities
+        return self.test_strings, self.named_entities
 
 class Plank(TestDataset):
     def setup(self):
