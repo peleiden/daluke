@@ -16,6 +16,7 @@ nltk
 progressbar
 sklearn
 NERDA
+srsly
 
 pelutils
 pexpect

@@ -21,9 +21,19 @@ def main():
             {"default": "all", "type": str,
                 "help": f"Datasets to test on. Either `all` or space-seperated list of following datasets:\n{ALL_DATASET_NAMES}"
             },
-        "daner_path":
+        "daner":
             {"default": "daner", "type": str,
                 "help": "Path to the cloned repository ITUnlp/daner. Only needed if testing daner"
+            },
+        "wikiann":
+            {"default": "wikiann", "type": str,
+                "help": "Path to folder containing WikiANN-da data set. Only needed if testing on dataset WikiANN.\n"\
+                        "Dataset was downloaded from https://github.com/afshinrahimi/mmner"
+            },
+        "plank":
+            {"default": "plank", "type": str,
+                "help": "Path to the folder containing B. Plank data set. Only needed if testing on dataset Plank.\n"\
+                        "Dataset was downloaded from https://github.com/bplank/danish_ner_transfer"
             },
     }
     parser = Parser(options, name="NER_Test", multiple_jobs=False)
@@ -42,17 +52,17 @@ def run_experiment(args: dict[str, str]):
     if args["datasets"] == "all":
         args["datasets"] = ALL_DATASET_NAMES
 
-    models = setup_models(args["models"].split(), args["location"], daner_path=args["daner_path"])
+    models = setup_models(args["models"].split(), args["location"], daner_path=args["daner"])
     log(f"Succesfully set up {len(models)} models")
 
-    datasets = setup_datasets(args["datasets"].split())
+    datasets = setup_datasets(args["datasets"].split(), wikiann_path=args["wikiann"], plank_path=args["plank"])
     log(f"Sucessfully acquired {len(datasets)} NER datasets")
 
     for model in models:
         for dataset in datasets:
             e = Evaluator(model, dataset)
-            e.run()
-            e.result.save(os.path.join(args["location"], "-".join((model.name, dataset.name))))
+            res = e.run()
+            res.save(os.path.join(args["location"], "-".join((model.name, dataset.name))))
 
 if __name__ == '__main__':
     with log.log_errors:

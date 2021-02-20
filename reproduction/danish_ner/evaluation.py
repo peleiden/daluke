@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-
+from typing import Union
 
 import numpy as np
 from seqeval.metrics import classification_report
@@ -19,23 +19,21 @@ class NER_TestResults(DataStorage):
     """
     modelname: str
     dataname : str
-    preds: list[list[str]]
+    predictions: list[list[str]]
 
-    classes: list[str]
-    statistics: dict[str, dict[str, float]]
+    statistics:         dict[str, dict[str, float]]
+    statistics_nomisc:  dict[str, dict[str, float]]
 
 class Evaluator:
     def __init__(self, model: NER_TestModel, dataset: TestDataset):
         self.model = model
         self.dataset = dataset
 
-        self.result = None
-
     def run(self):
         log(f"Evaluating {self.model.name} on {self.dataset.name} ...")
         preds, truths = self._get_results()
         log.debug(f"Calculating statistics for {len(preds)} sentences")
-        self.result = self._calculate_stats(preds, truths)
+        return  self._calculate_stats(preds, truths)
 
     def _get_results(self) -> (list[list[str]], list[list[str]]):
         text, truths = self.dataset.get_data()
@@ -43,40 +41,35 @@ class Evaluator:
         return preds, truths
 
     def _calculate_stats(self, preds: list[list[str]], truth: list[list[str]]) -> NER_TestResults:
-        #TODO: Use this to calculate some global stats without the `MISC` category
-        classes = self._calculate_relevant_classes(preds, truth)
-        # Set divide by zero cases to 0 to avoid warning for models that can't see "MISC"
-        stats = classification_report(truth, preds, output_dict=True, zero_division=0)
-        # Run `.item()` on every number to avoid json serialization errors for numpy format
-        stats = {skey: {key: val.item() for key, val in sval.items()} for skey, sval in stats.items()}
-        # TODO: Format this myself instead of running classification report twice
-        log(classification_report(truth, preds, zero_division=0))
+        # Convert to python numericals to avoid json serialization problems
+        # Set divide by zero cases to 0 to avoid warnings for models that can't see "MISC"
+        stats = self._stats_to_py_nums(
+                    classification_report(truth, preds, output_dict=True, zero_division=0)
+                )
+        # If the dataset includes the MISC category, a version of the result without this is computed
+        stats_nomisc = self._stats_to_py_nums(
+                        classification_report(self._rm_misc(truth), self._rm_misc(preds), output_dict=True)
+                    ) if any(any("MISC" in ent for ent in sent) for sent in truth) else stats
+
+        #FIXME: Do this manually instead of rerunning everything
+        log(classification_report(truth, preds, zero_division=0, digits=4))
+        if stats != stats_nomisc:
+            log(classification_report(self._rm_misc(truth), self._rm_misc(preds), digits=4))
 
         return NER_TestResults(
-                modelname  = self.model.name,
-                dataname   = self.dataset.name,
-                preds      = preds,
-                classes    = classes,
-                statistics = stats,
+                modelname   = self.model.name,
+                dataname    = self.dataset.name,
+                predictions = preds,
+                statistics  = stats,
+                statistics_nomisc = stats_nomisc,
         )
 
-    def _calculate_relevant_classes(self, preds: list[list[str]], truth: list[list[str]]) -> list[str]:
-        pred_classes, true_classes = set(), set()
-        for i, (p, t) in enumerate(zip(preds, truth)):
-            pred_classes.update(self._get_class(_p) for _p in p)
-            true_classes.update(self._get_class(_t) for _t in t)
-            if not len(p) == len(t):
-                raise Valueerror(f"Sentence #{i} has wrong length: ground truth is {t} tokens, but model returned {p} tokens")
-        # Take smallest class number
-        classes = pred_classes if len(pred_classes) < len(true_classes) else true_classes
-        return list(classes)
+    @staticmethod
+    def _rm_misc(seqs: list[list[str]]) -> list[list[str]]:
+        """ Convert all "MISC"-entities to "O"-entities """
+        return [["O" if "MISC" in ent else ent for ent in seq] for seq in seqs]
 
     @staticmethod
-    def _get_class(label: str) -> str:
-        """
-        Converts IOB format to simple class label
-        """
-        if label == "O":
-            return label
-        return label.split("-")[1]
-
+    def _stats_to_py_nums(stats: dict[dict[Union[np.int64, np.float64]]]) -> dict[dict[Union[int, float]]]:
+        """ Convert each element in stats dict to python numerical instead of numpy data type """
+        return {skey: {key: val.item() for key, val in sval.items()} for skey, sval in stats.items()}

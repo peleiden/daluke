@@ -18,7 +18,6 @@ import pexpect
 
 from pelutils import log
 
-
 class NER_TestModel(ABC):
     """ Allow testing a wide range of models by using the same NER model API """
     def __init__(self, name: str):
@@ -104,7 +103,7 @@ class Daner(NER_TestModel):
         self.data_path = data_path
         self.exe, self.model = os.path.join(repo_path, "stanford-ner.jar"), os.path.join(repo_path, "da01.model.gz")
         if not os.path.exists(self.exe) or not os.path.exists(self.model):
-            raise FileNotFoundError(f"Could not find daner model in given repo path {os.path.abspath(repo_path)}")
+            raise FileNotFoundError(f"Could not find daner model in given repo path {os.path.abspath(repo_path)} - use --daner to indicate correct path")
 
     def predict(self, text: Generator[list[str]]) -> list[list[str]]:
         args = ["-cp", self.exe, "edu.stanford.nlp.ie.crf.CRFClassifier", "-loadClassifier", self.model, "-readStdin"]
@@ -139,7 +138,6 @@ class Mbert(NER_TestModel):
 
     def predict(self, text: Generator[list[str]]) -> list[list[str]]:
         return self.model.predict(list(text))
-
 
 class Ælæctra(NER_TestModel):
     def setup(self):
