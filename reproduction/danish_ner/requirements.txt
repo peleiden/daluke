@@ -1,6 +1,6 @@
 danlp
 gensim
-transformers
+transformers==3.5.1
 flair==0.4.5
 polyglot
 PyICU
@@ -15,3 +15,5 @@ nerda
 nltk
 progressbar
 sklearn
+NERDA
+pelutils
