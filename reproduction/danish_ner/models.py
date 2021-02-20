@@ -2,7 +2,6 @@ from __future__ import annotations
 import os
 from abc import ABC, abstractmethod
 from typing import Generator
-import subprocess
 import shutil
 from pathlib import Path
 
@@ -15,6 +14,7 @@ from spacy.util import load_model_from_path as spacy_load
 from NERDA.datasets import download_dane_data
 from NERDA.precooked import DA_BERT_ML, DA_ELECTRA_DA
 import torch
+import pexpect
 
 from pelutils import log
 
@@ -41,7 +41,7 @@ class Bert(NER_TestModel):
     def predict(self, text: Generator[list[str]]) -> list[list[str]]:
         preds = list()
         for words in text:
-            #TODO: This is a temporary woraround until danlp fixes giving BERT custom tokens, see
+            #TODO: This is a temporary woraround until danlp/transformers fixes giving BERT custom tokens, see
             # https://github.com/alexandrainst/danlp/issues/113
             masks = list()
             for w in words:
@@ -107,54 +107,27 @@ class Daner(NER_TestModel):
             raise FileNotFoundError(f"Could not find daner model in given repo path {os.path.abspath(repo_path)}")
 
     def predict(self, text: Generator[list[str]]) -> list[list[str]]:
-        # Save the data temporarily to tisk
-        tmppath = os.path.join(self.data_path, "tmp[dont delete]")
-        os.makedirs(tmppath, exist_ok=True)
-        textfile = os.path.join(tmppath, "danerdata.txt")
-        added_periods = set()
-        with open(textfile, "w") as t:
-            for i, words in enumerate(text):
-                t.write(" ".join(words))
-                # Period added to make sure that daner does not read multiple sentences
-                if not "." in words:
-                    t.write(" .")
-                    added_periods.add(i)
-                t.write("\n")
-        # Read saved data using daner java executable
-        cmd = ("java", "-cp", self.exe, "edu.stanford.nlp.ie.crf.CRFClassifier", "-loadClassifier", self.model, "-textFile", textfile)
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-
-        # Read output of java software from stdout while extracting labels
+        args = ["-cp", self.exe, "edu.stanford.nlp.ie.crf.CRFClassifier", "-loadClassifier", self.model, "-readStdin"]
+        # These options disable the Stanford NLP tokenizer such that output correponds to training data
+        args += ["-tokenizerFactory", "edu.stanford.nlp.process.WhitespaceTokenizer", "-tokenizerOptions", "tokenizeNLs=true"]
+        # Spawn java child process and wait for classifier to boot
+        child = pexpect.spawn("java", args, encoding="utf-8")
+        child.expect(f"Loading classifier from {self.model} ... done")
         preds = list()
-        lines = list()
-        for i, line in enumerate(iter(p.stdout.readline, b'')):
-            labels = list()
-            line_ = list()
-            for word in line.decode("utf8").split():
-                line_.append(word)
-                labels.append(word.split("/")[-1])
-            if i in added_periods:
-                labels = labels[:-1]
-                lines = lines[:-1]
-            # Dont include the last manually added period
-            preds.append(labels)
-            lines.append(line_)
-
-        from evaluation import Evaluator
-        for p, w, l in zip(preds, text, lines):
-            try:
-                assert len(p) == len(w)
-                e = Evaluator("lala", "lala")
-                for p_ in p:
-                    e._get_class(p_)
-            except Exception as allah:
-                print(allah)
-                print(p)
-                print(w)
-                print(l)
-                breakpoint()
-        # Cleanup
-        shutil.rmtree(tmppath, ignore_errors=True)
+        for words in text:
+            inputline = " ".join(words)
+            child.sendline(inputline)
+            # Wait for classifier to return output
+            child.expect("CRFClassifier tagged")
+            # Read classifier output and filter out the input line and the time taking line
+            res = " ".join(
+                line for line in child.before.split("\n")
+                    if line.strip() not in ("", inputline.strip()) and
+                        not any(e in line for e in ("sec].", "words per second."))
+            )
+            # Classifier will not give all numbers a label - force it to be unknown
+            preds.append([r.split("/")[-1] if "/" in r else "O" for r in res.split()])
+        child.terminate(force=True)
         return preds
 
 class Mbert(NER_TestModel):
@@ -183,7 +156,7 @@ ALL_MODELS = (
     Flair("Flair"),
     Spacy("spaCy"),
     Polyglot("Polyglot"),
-    #Daner("daner"),
+    Daner("daner"),
     Mbert("mBERT"),
     Ælæctra("Ælæctra"),
 )

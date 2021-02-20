@@ -16,4 +16,6 @@ nltk
 progressbar
 sklearn
 NERDA
+
 pelutils
+pexpect

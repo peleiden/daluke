@@ -26,7 +26,7 @@ def main():
                 "help": "Path to the cloned repository ITUnlp/daner. Only needed if testing daner"
             },
     }
-    parser = Parser(options, name="NER_Test")
+    parser = Parser(options, name="NER_Test", multiple_jobs=False)
     experiments = parser.parse()
 
     log.configure(
