@@ -62,9 +62,11 @@ class Evaluator:
 
     def _calculate_relevant_classes(self, preds: list[list[str]], truth: list[list[str]]) -> list[str]:
         pred_classes, true_classes = set(), set()
-        for p, t in zip(preds, truth):
+        for i, (p, t) in enumerate(zip(preds, truth)):
             pred_classes.update(self._get_class(_p) for _p in p)
             true_classes.update(self._get_class(_t) for _t in t)
+            if not len(p) == len(t):
+                raise Valueerror(f"Sentence #{i} has wrong length: ground truth is {t} tokens, but model returned {p} tokens")
         # Take smallest class number
         classes = pred_classes if len(pred_classes) < len(true_classes) else true_classes
         return list(classes)
