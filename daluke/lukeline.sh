@@ -11,32 +11,36 @@ cd ..
 
 alias python=python3  # So it works on HPC
 
+echo "BUILD DUMP DATABASE"
 python -m luke.cli build-dump-db\
     data/dawiki-latest-pages-articles.xml.bz2\
     data/$DUMP_FILE
 
+echo "BUILD ENTITY VOCAB"
 python -m luke.cli build-entity-vocab\
     data/$DUMP_FILE\
-    data/entity-vocab.json
+    data/entity-vocab.jsonl
 
+echo "BUILD PRETRAINING DATASET"
 # If you get an error that Locale cannot be imported from icu, run the following:
 # pip install icu pyicu pycld2 morfessor
 python -m luke.cli build-wikipedia-pretraining-dataset\
     data/$DUMP_FILE\
     $TOKENIZER\
-    data/entity-vocab.json\
+    data/entity-vocab.jsonl\
     data/da-pretrain-dataset
 
+echo "PRETRAIN"
 # TODO: Danish BERT
 python -m luke.cli pretrain\
     data/da-pretrain-dataset\
-    data/daluke-out\
-    # --cpu\
+    data/\
     --bert-model-name "roberta-base"\
     --num-epochs 2\
     --fp16\
     --log-dir data/logs
 
+# echo "BUILD INTERWIKI DATABASE"
 # python -m luke.cli build-interwiki-db\
 #     data/$DUMP_FILE\
 #     data/interwiki-db\
