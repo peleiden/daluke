@@ -135,6 +135,8 @@ class Mbert(NER_TestModel):
         self.model = DA_BERT_ML()
         self.model.download_network()
         self.model.load_network()
+        # WikiANN has sentences longer than default of 128 words
+        self.model.max_len=300
 
     def predict(self, text: Generator[list[str]]) -> list[list[str]]:
         return self.model.predict(list(text))
@@ -145,6 +147,8 @@ class Ælæctra(NER_TestModel):
         self.model = DA_ELECTRA_DA()
         self.model.download_network()
         self.model.load_network()
+        # WikiANN has sentences longer than default of 128 words
+        self.model.max_len=300
 
     def predict(self, text: Generator[list[str]]) -> list[list[str]]:
         return self.model.predict(list(text))
