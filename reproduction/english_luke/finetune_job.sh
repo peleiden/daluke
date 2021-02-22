@@ -28,7 +28,7 @@ do
     echo $OUTDIR
     mkdir -p $OUTDIR
 
-    LR=$(["$SIZE" == "large"] && echo "1e-5" || echo "5e-5")
+    LR=$([ "$SIZE" == "large" ] && echo "1e-5" || echo "5e-5")
     python -m examples.cli \
         --model-file=data/luke_${SIZE}_500k.tar.gz \
         --output-dir=$OUTDIR \
