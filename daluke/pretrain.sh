@@ -7,7 +7,7 @@ python3 -m luke.cli pretrain\
     --bert-model-name "Maltehb/danish-bert-botxo"\
     --num-epochs 2\
     --log-dir $DATA_PATH/logs
-    #--cpu
+#    --cpu
 
 #BERT models "roberta-base"/"Maltehb/danish-bert-botxo"
 
