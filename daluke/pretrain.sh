@@ -1,22 +1,16 @@
-
-alias python=python3
+DATA_PATH=data
 
 echo "PRETRAIN"
-# TODO: Danish BERT
-python -m luke.cli pretrain\
-    data/da-pretrain-dataset\
-    data/\
-    --bert-model-name "roberta-base"\
+python3 -m luke.cli pretrain\
+    $DATA_PATH/da-pretrain-dataset\
+    $DATA_PATH\
+    --bert-model-name "Maltehb/danish-bert-botxo"\
     --num-epochs 2\
-    --log-dir data/logs
+    --log-dir $DATA_PATH/logs
+    #--cpu
 
-# echo "BUILD INTERWIKI DATABASE"
-# python -m luke.cli build-interwiki-db\
-#     data/$DUMP_FILE\
-#     data/interwiki-db\
-#     --language da  # This one failed
+#BERT models "roberta-base"/"Maltehb/danish-bert-botxo"
 
 ## Questions ##
 #1) Which of the steps are needed? interwiki failed and I did not run multilingual-entity-vocab
-#2) Where do I get to choose my pretrained transformer? Is it in the buid-wiki-pretraining? This seemed to only be about the tokenizer.
-#3) How do I get the danish tokenizer (e.g. https://huggingface.co/Maltehb/danish-bert-botxo)? This failed as I had too old transformers version, but with the newest transformers version, the luke code failed.
+#2) How do I get the danish tokenizer (e.g. https://huggingface.co/Maltehb/danish-bert-botxo)? This failed as I had too old transformers version, but with the newest transformers version, the luke code failed.

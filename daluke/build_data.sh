@@ -1,31 +1,35 @@
-# This was run from LUKE repo
-
+# Run from LUKE repo
+DATA_PATH=data
 DUMP_FILE=da-dump-db
-# TODO: Figure out how to use danish bert tokenizer
-TOKENIZER=xlm-roberta-base  # One of xlm-roberta-base, xlm-roberta-large, xlm-roberta-large-finetuned-conll02-dutch, xlm-roberta-large-finetuned-conll02-spanish, xlm-roberta-large-finetuned-conll03-english, xlm-roberta-large-finetuned-conll03-german
+TOKENIZER=xlm-roberta-base # TODO: Figure out how to use danish bert tokenizer
+# ^ One of xlm-roberta-base, xlm-roberta-large, xlm-roberta-large-finetuned-conll02-dutch, xlm-roberta-large-finetuned-conll02-spanish, xlm-roberta-large-finetuned-conll03-english, xlm-roberta-large-finetuned-conll03-german
 
-mkdir -p data
-cd data
-wget https://dumps.wikimedia.org/dawiki/latest/dawiki-latest-pages-articles.xml.bz2
-cd ..
-
-alias python=python3  # So it works on HPC
+P=$(pwd)
+mkdir -p $DATA_PATH
+cd $DATA_PATH
+#wget https://dumps.wikimedia.org/dawiki/latest/dawiki-latest-pages-articles.xml.bz2
+cd $P
 
 echo "BUILD DUMP DATABASE"
-python -m luke.cli build-dump-db\
-    data/dawiki-latest-pages-articles.xml.bz2\
-    data/$DUMP_FILE
+python3 -m luke.cli build-dump-db\
+    $DATA_PATH/dawiki-latest-pages-articles.xml.bz2\
+    $DATA_PATH/$DUMP_FILE
 
 echo "BUILD ENTITY VOCAB"
-python -m luke.cli build-entity-vocab\
-    data/$DUMP_FILE\
-    data/entity-vocab.jsonl
+python3 -m luke.cli build-entity-vocab\
+    $DATA_PATH/$DUMP_FILE\
+    $DATA_PATH/entity-vocab.jsonl
 
 echo "BUILD PRETRAINING DATASET"
-# If you get an error that Locale cannot be imported from icu, run the following:
-# pip install icu pyicu pycld2 morfessor
-python -m luke.cli build-wikipedia-pretraining-dataset\
-    data/$DUMP_FILE\
+python3 -m luke.cli build-wikipedia-pretraining-dataset\
+    $DATA_PATH/$DUMP_FILE\
     $TOKENIZER\
-    data/entity-vocab.jsonl\
-    data/da-pretrain-dataset
+    $DATA_PATH/entity-vocab.jsonl\
+    $DATA_PATH/da-pretrain-dataset
+    --sentence-tokenizer da
+
+# echo "BUILD INTERWIKI DATABASE"
+# python -m luke.cli build-interwiki-db\
+#     data/$DUMP_FILE\
+#     data/interwiki-db\
+#     --language da  # This one failed
