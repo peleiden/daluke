@@ -11,32 +11,32 @@ from evaluation import Evaluator
 ALL_MODEL_NAMES   = " ".join(m.name for m in ALL_MODELS)
 ALL_DATASET_NAMES = " ".join(d.name for d in ALL_DATASETS)
 
+ARGUMENTS = {
+    "models":
+        {"default": "all", "type": str,
+            "help": f"Models to test. Either `all` or space-seperated list of following models:\n{ALL_MODEL_NAMES}"
+        },
+    "datasets":
+        {"default": "all", "type": str,
+            "help": f"Datasets to test on. Either `all` or space-seperated list of following datasets:\n{ALL_DATASET_NAMES}"
+        },
+    "daner":
+        {"default": "daner", "type": str,
+            "help": "Path to the cloned repository ITUnlp/daner. Only needed if testing daner"
+        },
+    "wikiann":
+        {"default": "wikiann", "type": str,
+            "help": "Path to folder containing WikiANN-da data set. Only needed if testing on dataset WikiANN.\n"\
+                    "Dataset was downloaded from https://github.com/afshinrahimi/mmner"
+        },
+    "plank":
+        {"default": "plank", "type": str,
+            "help": "Path to the folder containing B. Plank data set. Only needed if testing on dataset Plank.\n"\
+                    "Dataset was downloaded from https://github.com/bplank/danish_ner_transfer"
+        },
+}
 def main():
-    options = {
-        "models":
-            {"default": "all", "type": str,
-                "help": f"Models to test. Either `all` or space-seperated list of following models:\n{ALL_MODEL_NAMES}"
-            },
-        "datasets":
-            {"default": "all", "type": str,
-                "help": f"Datasets to test on. Either `all` or space-seperated list of following datasets:\n{ALL_DATASET_NAMES}"
-            },
-        "daner":
-            {"default": "daner", "type": str,
-                "help": "Path to the cloned repository ITUnlp/daner. Only needed if testing daner"
-            },
-        "wikiann":
-            {"default": "wikiann", "type": str,
-                "help": "Path to folder containing WikiANN-da data set. Only needed if testing on dataset WikiANN.\n"\
-                        "Dataset was downloaded from https://github.com/afshinrahimi/mmner"
-            },
-        "plank":
-            {"default": "plank", "type": str,
-                "help": "Path to the folder containing B. Plank data set. Only needed if testing on dataset Plank.\n"\
-                        "Dataset was downloaded from https://github.com/bplank/danish_ner_transfer"
-            },
-    }
-    parser = Parser(options, name="NER_Test", multiple_jobs=False)
+    parser = Parser(ARGUMENTS, name="NER_Test", multiple_jobs=False)
     experiments = parser.parse()
 
     log.configure(

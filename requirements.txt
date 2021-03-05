@@ -4,11 +4,8 @@ matplotlib
 
 # ML stuff
 torch>=1.7.1
-fairseq
+transformers>=4.0.0
+
 
 # Misc
 pelutils[ds]>=0.5.5
-regex
-requests
-wget
-tqdm
