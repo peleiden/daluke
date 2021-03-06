@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+A convenience script to take the output of the luke pretraining and tar-gz it
+for easy
+"""
 import os
 import re
 import tarfile
@@ -21,6 +25,10 @@ def _natural_sort(L: list) -> list:
     ])
 
 def _get_newest_model(path: str) -> str:
+    """
+    In folder of model_epoch1.bin, model_epoch10.bin, model_epoch2.bin,
+    model_epoch10.bin is returned.
+    """
     pattern = re.compile(MODEL_FILE.format(i=r"\d+"))
     models = list()
     for f in os.listdir(path):
