@@ -14,7 +14,7 @@ class TestDataset(ABC):
         self.data = None
 
     @abstractmethod
-    def setup(self, **kwargs):
+    def setup(self, *args, **kwargs):
         """ Set up the dataset, possibly downloading data """
 
     @abstractmethod

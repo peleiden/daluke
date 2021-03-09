@@ -5,7 +5,8 @@ matplotlib
 # ML stuff
 torch>=1.7.1
 transformers>=4.0.0
-
+danlp
+conllu
 
 # Misc
 pelutils[ds]>=0.5.5
