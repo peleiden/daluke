@@ -138,10 +138,10 @@ def load_from_archive(model: str) -> (list[dict], dict, dict):
     with tarfile.open(model, "r:*") as tar:
         log.debug(f"Extracting {VOCAB_FILE} and {METADATA_FILE} ...")
         with tar.extractfile(tar.getmember(VOCAB_FILE)) as vfile:
-            [json.loads(l) for l in vfile.read().splitlines()]
+            entity_vocab = [json.loads(l) for l in vfile.read().splitlines()]
         with tar.extractfile(tar.getmember(METADATA_FILE)) as metafile:
             metadata = json.load(metafile)
         log.debug(f"Extracting {MODEL_OUT} ...")
         with tar.extractfile(tar.getmember(MODEL_OUT)) as mfile:
-                state_dict = torch.load(mfile, map_location="cpu")
+            state_dict = torch.load(mfile, map_location="cpu")
     return entity_vocab, metadata, state_dict
