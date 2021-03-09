@@ -6,7 +6,8 @@ matplotlib
 torch>=1.7.1
 transformers>=4.0.0
 danlp
-conllu
+conllu #for danlp
+pandas #for danlp
 
 # Misc
 pelutils[ds]>=0.5.5
