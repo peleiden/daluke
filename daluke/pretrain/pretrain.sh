@@ -5,14 +5,12 @@ python3 -m luke.cli pretrain\
     $DATA_PATH/da-pretrain-dataset\
     $DATA_PATH\
     --bert-model-name "Maltehb/danish-bert-botxo"\
-    --num-epochs 6\
+    --num-epochs 20\
     --log-dir $DATA_PATH/logs\
     --learning-rate "5e-5"\
-    --batch-size 4096
+    --batch-size 2048\
+    --parallel
 
-
-
-#    --cpu
 
 #BERT models "roberta-base"/"Maltehb/danish-bert-botxo"
 
