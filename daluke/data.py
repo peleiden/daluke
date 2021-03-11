@@ -28,11 +28,14 @@ class NERDataset(ABC):
 
     def __init__(self):
         self.tokenizer = AutoTokenizer.from_pretrained(TOKENIZER)
+        self.texts: list[list[str]] = None
+        self.annotations: list[list[str]] = None
         self.features: list[dict] = None
         self.current_split: Split = None
+        self.entity_spans: list[list[int]] = None
 
     @abstractmethod
-    def build_dataloader(self, split: Split, batch_size: int) -> DataLoader:
+    def build(self, split: Split, batch_size: int) -> DataLoader:
         pass
 
     @property
@@ -40,20 +43,21 @@ class NERDataset(ABC):
         L = list() if self.null_label is None else [self.null_label]
         return L + list(self.labels)
 
-    def _build_features(self, texts: list[list[str]], annotations: list[list[str]], sent_bounds: list[list[int]]) -> list[dict[str, Any]]:
+    def _build_features(self, sent_bounds: list[list[int]]) -> list[dict[str, Any]]:
         feature_objects: list[InputFeatures] = convert_examples_to_features(
-            list(zip(texts, annotations, sent_bounds)),
+            list(zip(self.texts, self.annotations, sent_bounds)),
             self.all_labels,
             self.tokenizer,
             max_seq_length=512,    #FIXME: No hardcode
             max_entity_length=128,
-            max_mention_length=16,
+            max_mention_length=18,
         )
-        # Convert to dict using only the relevant fields + as the data is highly flexible
+        # Convert to dict using only the relevant fields, as the data is highly flexible
         fields = ("entity_start_positions", "entity_end_positions", "word_ids", "entity_ids", "word_segment_ids",
             "entity_segment_ids", "entity_position_ids", "word_attention_mask", "entity_attention_mask", "labels")
+        self.entity_spans = [f_obj.original_entity_spans for f_obj in feature_objects]
         return [
-            { fname: getattr(f_obj, field) for fname, field in zip(self.feature_names, fields) }
+            {fname: getattr(f_obj, field) for fname, field in zip(self.feature_names, fields)}
                 for f_obj in feature_objects
         ]
 
@@ -67,19 +71,21 @@ class NERDataset(ABC):
             tensors = [torch.tensor(x[1][feature], dtype=torch.long) for x in batch]
             pad_val = paddings.get(feature) or 0
             collated[feature] = nn.utils.rnn.pad_sequence(tensors, batch_first=True, padding_value=pad_val)
+        if self.current_split != Split.TRAIN:
+            collated.pop("labels")
+            collated["spans"] = [self.entity_spans[x[0]] for x in batch]
         return collated
-
 
 class DaNE(NERDataset):
     null_label = "O"
     labels = ("LOC", "PER", "ORG", "MISC")
 
-    def build_dataloader(self, split: Split, batch_size: int) -> DataLoader:
-        #self.current_split = split # Used by collator
-        texts, annotations = DDT().load_as_simple_ner(predefined_splits=True)[split.value]
+    def build(self, split: Split, batch_size: int) -> DataLoader:
+        self.current_split = split
+        self.texts, self.annotations = DDT().load_as_simple_ner(predefined_splits=True)[split.value]
         # Sadly, we do not have access to where the DaNE sentences are divided into articles, so we let each sentence be an entire text.
-        sentence_boundaries = [[0, len(s)] for s in texts]
+        sentence_boundaries = [[0, len(s)] for s in self.texts]
 
-        self.features = self._build_features(texts, annotations, sentence_boundaries)
+        self.features = self._build_features(sentence_boundaries)
         sampler = RandomSampler(self.features) if split == split.TRAIN else None
         return DataLoader(list(enumerate(self.features)), batch_size=batch_size, collate_fn=self._collate, sampler=sampler)

@@ -8,6 +8,7 @@ transformers>=4.0.0
 danlp
 conllu #for danlp
 pandas #for danlp
+seqeval
 
 # Misc
 pelutils[ds]>=0.5.5

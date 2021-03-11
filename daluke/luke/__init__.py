@@ -333,6 +333,8 @@ def convert_examples_to_features(
                     )
                 )
 
+        if entity_labels:
+            breakpoint()
         assert not entity_labels
 
     return features
