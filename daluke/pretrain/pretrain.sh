@@ -9,7 +9,8 @@ python3 -m luke.cli pretrain\
     --log-dir $DATA_PATH/logs\
     --learning-rate "5e-5"\
     --batch-size 2048\
-    --parallel
+    --parallel\
+    --fp16
 
 
 #BERT models "roberta-base"/"Maltehb/danish-bert-botxo"
