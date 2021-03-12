@@ -6,40 +6,44 @@ from transformers import AdamW, get_linear_schedule_with_warmup
 
 from pelutils import log
 
-class TrainNER:
-    #FIXME: Don't hardcode all these!
-    lr              = 5e-5
-    adam_eps        = 1e-6
-    adam_betas      = (0.9, 0.98)
-    warmup_prop     = 0.06
-    grad_accumulate = 2
-    epochs          = 5
-    weight_decay    = 0.01
+from daluke import cuda
 
+class TrainNER:
     # These layers should not be subject to weight decay
     no_decay = {"bias", "LayerNorm.weight"}
 
-    def __init__(self, model: nn.Module, dataloader: torch.utils.data.DataLoader, device: torch.device):
+    def __init__(self,
+        model: nn.Module,
+        dataloader: torch.utils.data.DataLoader,
+        epochs: int,
+        grad_accumulate: int = 2,
+        lr: float = 5e-5,
+        adam_betas: tuple[float] = (0.9, 0.98),
+        warmup_prop: float = 0.06,
+        weight_decay: float = 0.01,
+        device: torch.device = cuda,
+        ):
         self.model = model
         self.device = device
         self.dataloader = dataloader
-        self.num_updates = int(self.epochs * (len(self.dataloader) // self.grad_accumulate))
+        self.grad_accumulate = grad_accumulate
+        self.num_updates = int(epochs * (len(self.dataloader) // self.grad_accumulate))
         # Create optimizer
         params = list(model.named_parameters())
         self.optimizer = AdamW(
-            [{"params": self._get_optimizer_params(params, do_decay=True), "weight_decay": self.weight_decay},
+            [{"params": self._get_optimizer_params(params, do_decay=True), "weight_decay": weight_decay},
              {"params": self._get_optimizer_params(params, do_decay=False), "weight_decay": 0.0}],
-            lr           = self.lr,
-            eps          = self.adam_eps,
-            betas        = self.adam_betas,
+            lr           = lr,
+            betas        = adam_betas,
         )
         # Create LR scheduler
-        self.scheduler = get_linear_schedule_with_warmup(self.optimizer, int(self.warmup_prop * self.num_updates), self.num_updates)
+        self.scheduler = get_linear_schedule_with_warmup(self.optimizer, int(warmup_prop * self.num_updates), self.num_updates)
         self.loss = nn.CrossEntropyLoss(ignore_index=-1)
 
     def run(self):
         self.model.train()
         updates, epoch = 0, 0
+        #TODO: Save running loss
         while updates < self.num_updates:
             for step, batch in enumerate(self.dataloader):
                 inputs  = {key: val.to(self.device) for key, val in batch.items()}

@@ -11,4 +11,4 @@ pandas #for danlp
 seqeval
 
 # Misc
-pelutils[ds]>=0.5.5
+pelutils[ds]>=0.5.6

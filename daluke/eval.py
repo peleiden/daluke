@@ -49,9 +49,6 @@ def evaluate_ner(model: nn.Module, dataloader: torch.utils.data.DataLoader, data
     #FIXME: Do this manually instead of rerunning everything
     log(classification_report(dataset.annotations, preds, zero_division=0, digits=4))
     log(classification_report(_rm_misc(dataset.annotations, dataset.null_label), _rm_misc(preds, dataset.null_label), digits=4))
-    # Change span probs to lists intead of np arrays to allow json saving
-    #FIXME: Save the results in a way that datastorage can handle: no tuples as keys allowed
-    span_probs = [{k: list(v) for k, v in sp.items()} for sp in span_probs]
 
     return NER_Results(
         preds=preds,

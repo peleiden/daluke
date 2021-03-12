@@ -123,7 +123,6 @@ def span_probs_to_preds(span_probs: dict[tuple[int], np.ndarray], seq_len: int, 
     preds = [dataset.null_label for _ in range(seq_len)]
     # Sort after max probability
     for _, span, label in reversed(sorted(positives)):
-        breakpoint()
         if all(l == dataset.null_label for l in preds[span[0]:span[1]]):
             # Follow IOUB2 scheme: Set all to "I-X" unless first which is "B-X"
             for i in range(*span):
