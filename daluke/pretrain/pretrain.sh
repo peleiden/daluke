@@ -3,7 +3,7 @@ DATA_PATH=data
 echo "PRETRAIN"
 python3 -m luke.cli pretrain\
     $DATA_PATH/da-pretrain-dataset\
-    $DATA_PATH\
+    /work3/$USER/$DATA_PATH\
     --bert-model-name "Maltehb/danish-bert-botxo"\
     --num-epochs 20\
     --log-dir $DATA_PATH/logs\
