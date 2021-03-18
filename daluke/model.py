@@ -95,7 +95,7 @@ class DaLukeNER(nn.Module):
         # Compute the extended attention mask
         att_mask = torch.cat((word_att_mask, ent_att_mask), dim=1) if ent_att_mask is not None else word_att_mask
         att_mask = att_mask.unsqueeze(1).unsqueeze(2).to(dtype=next(self.parameters()).dtype)
-        att_mask = -10_000.0 * (1.0 - att_mask) #TODO: Understand this
+        att_mask = 10_000.0 * (att_mask - 1.0) #TODO: Understand this
 
         return self.encoder(w_embeds, ent_embeds, att_mask)
 

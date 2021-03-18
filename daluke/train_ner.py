@@ -58,10 +58,14 @@ def run_experiment(args: dict[str, str]):
         weight_decay    = args["weight_decay"],
         device          = device,
     )
+    log.debug(training.model)
+    log.debug(training.scheduler)
+    log.debug(training.optimizer)
 
-    training.run()
+    results = training.run()
 
     os.makedirs(args["location"], exist_ok=True)
+    results.save(args["location"])
     outpath = os.path.join(args["location"], OUT_FILE)
     save_to_archive(outpath, entity_vocab, metadata, model)
     log("Training complete, saved model archive to", outpath)

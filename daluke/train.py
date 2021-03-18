@@ -1,12 +1,17 @@
 from __future__ import annotations
+from dataclasses import dataclass
+
 import torch
 from torch import nn
-
 from transformers import AdamW, get_linear_schedule_with_warmup
 
-from pelutils import log
+from pelutils import log, DataStorage
 
 from daluke import cuda
+
+@dataclass
+class TrainResults(DataStorage):
+    losses: list
 
 class TrainNER:
     # These layers should not be subject to weight decay
@@ -43,7 +48,7 @@ class TrainNER:
     def run(self):
         self.model.train()
         updates, epoch = 0, 0
-        #TODO: Save running loss
+        losses = list()
         while updates < self.num_updates:
             for step, batch in enumerate(self.dataloader):
                 inputs  = {key: val.to(self.device) for key, val in batch.items()}
@@ -57,10 +62,14 @@ class TrainNER:
                     self.scheduler.step()
                     self.model.zero_grad()
 
+                    losses.append(loss.item())
                     updates += 1
                     if updates == self.num_updates: break
             epoch += 1
             log.debug(f"Epoch {epoch}, updates: {updates}/{self.num_updates}. Loss: {loss.item()}.")
+        return TrainResults(
+            losses = losses,
+        )
 
     def _get_optimizer_params(self, params: list, do_decay: bool) -> list:
         # Only include the parameter if do_decay has reverse truth value of the parameter being in no_decay
