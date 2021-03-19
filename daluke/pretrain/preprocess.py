@@ -6,7 +6,6 @@ import click
 from pelutils import log
 from tqdm import tqdm
 
-
 def repeat_entities(article: str) -> str:
     start_indices = list()
     hyperlinks = list()
@@ -103,13 +102,12 @@ def _get_lineblocks(filepath: str) -> Generator:
                 current_lines = list()
         yield False, "".join(current_lines)
 
-
 def _replace_bytes(tag: str, nbytes: int) -> str:
     bytes_index = tag.index("bytes=\"")
     end_index = tag.index("\"", bytes_index+7)
     return tag[:bytes_index+7] + str(nbytes) + tag[end_index:]
 
-
+#FIXME: Remove click
 @click.command()
 @click.argument("wikidownload", type=click.Path(exists=True, dir_okay=False))
 @click.option("--func", default="default")

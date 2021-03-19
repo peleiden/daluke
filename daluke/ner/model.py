@@ -21,6 +21,7 @@ from daluke.luke import EntityEmbeddings, EntityAwareEncoder
 from daluke.data import NERDataset
 
 
+#FIXME: Inherit from DaLUKE
 class DaLukeNER(nn.Module):
     """
     The BERT based model LUKE using Entity Aware Attention

@@ -10,12 +10,9 @@ from argparse import ArgumentParser
 
 from pelutils import log, Levels
 
-OUT_FILE  = "daluke.tar.gz"
-MODEL_OUT = "model.bin"
+from daluke.serialize import OUT_FILE, MODEL_OUT, VOCAB_FILE, METADATA_FILE
 
-VOCAB_FILE    = "entity_vocab.jsonl"
-METADATA_FILE = "metadata.json"
-MODEL_FILE    = "model_epoch{i}.bin"
+MODEL_FILE = "model_epoch{i}.bin"
 
 def _natural_sort(L: list) -> list:
     """ Natural sorting from https://stackoverflow.com/a/37036428 """
