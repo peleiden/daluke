@@ -21,7 +21,7 @@ class Split(IntEnum):
 
 class NERDataset(ABC):
     feature_names = ("ent_start_pos", "ent_end_pos", "word_ids", "ent_ids", "word_seg_ids", "ent_seg_ids",
-        "ent_pos_ids", "word_att_mask", "ent_att_mask", "labels")
+        "ent_pos_ids", "word_att_mask", "ent_att_mask", "labels", "idx")
 
     null_label: str = None
     labels: tuple[str] = None
@@ -54,7 +54,7 @@ class NERDataset(ABC):
         )
         # Convert to dict using only the relevant fields, as the data is highly flexible
         fields = ("entity_start_positions", "entity_end_positions", "word_ids", "entity_ids", "word_segment_ids",
-            "entity_segment_ids", "entity_position_ids", "word_attention_mask", "entity_attention_mask", "labels")
+            "entity_segment_ids", "entity_position_ids", "word_attention_mask", "entity_attention_mask", "labels", "example_index")
         self.entity_spans = [f_obj.original_entity_spans for f_obj in feature_objects]
         return [
             {fname: getattr(f_obj, field) for fname, field in zip(self.feature_names, fields)}
@@ -68,11 +68,13 @@ class NERDataset(ABC):
         paddings = {"word_ids": self.tokenizer.pad_token_id, "ent_pos_ids": -1, "labels": -1}
         collated = dict()
         for feature in self.feature_names:
+            if feature == "idx": continue
             tensors = [torch.tensor(x[1][feature], dtype=torch.long) for x in batch]
-            pad_val = paddings.get(feature) or 0
+            pad_val = paddings.get(feature, 0)
             collated[feature] = nn.utils.rnn.pad_sequence(tensors, batch_first=True, padding_value=pad_val)
         if self.current_split != Split.TRAIN:
             collated.pop("labels")
+            collated["idx"] = [x[1]["idx"] for x in batch]
             collated["spans"] = [self.entity_spans[x[0]] for x in batch]
         return collated
 

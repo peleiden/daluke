@@ -27,16 +27,16 @@ class NER_Results(DataStorage):
 
 def evaluate_ner(model: nn.Module, dataloader: torch.utils.data.DataLoader, dataset: NERDataset, device: torch.device) -> NER_Results:
     model.eval()
-    span_probs: list[dict[tuple[int], np.ndarray]] = list()
+    span_probs: list[dict[tuple[int, int], np.ndarray]] = list(dict() for _ in range(len(dataset.texts)))
     log.debug(f"Forward passing {len(dataloader)} batches")
     for batch in tqdm(dataloader):
-        feature_spans = batch.pop("spans")
+        feature_spans, idxes = batch.pop("spans"), batch.pop("idx")
         inputs = {key: val.to(device) for key, val in batch.items()}
         with torch.no_grad():
             probs = F.softmax(model(**inputs), dim=2)
         # We save probability distribution, for every possible span in the example
-        for i, spans in enumerate(feature_spans):
-            span_probs.append({
+        for idx, (i, spans) in zip(idxes, enumerate(feature_spans)):
+            span_probs[idx].update({
                 span: probs[i, j].detach().cpu().numpy() for j, span in enumerate(spans) if span
             })
     preds = [span_probs_to_preds(p, len(t), dataset) for p, t in zip(span_probs, dataset.texts)]
