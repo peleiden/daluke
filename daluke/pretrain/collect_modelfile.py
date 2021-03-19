@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 A convenience script to take the output of the luke pretraining and tar-gz it
-for easy
+for easy loading
 """
 import os
 import re
