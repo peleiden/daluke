@@ -1,12 +1,16 @@
 from dataclasses import dataclass
 
-@dataclass
-class Words:
-    ...
+import torch
 
 @dataclass
-class Entities:
-    ...
+class Words:
+    ids: torch.Tensor
+    pos: torch.Tensor
+    attention_mask: torch.Tensor
+
+@dataclass
+class Entities(Words):
+    types: torch.Tensor
 
 @dataclass
 class Example:
@@ -15,4 +19,3 @@ class Example:
     """
     words: Words
     entities: Entities
-
