@@ -92,13 +92,15 @@ class EntitySelfAttention(nn.Module):
         queries = self.Q_w(word_hidden), self.Qe(entity_hidden), self.Q_w2e(word_hidden), self.Q_e2w(entity_hidden)
         # Key layers divided dependant on domain TO which they map
         key = self.reshape_to_matrix(self.K(total_hidden))
-        key_2w, key_2e = key[:, :, :word_size, :].transpose(-1, -2), key[: , :, word_size:, :].transpose(-1, -2)
+        key_2w = key[:, :, :word_size, :].transpose(-1, -2)
+        key_2e = key[:, :, word_size:, :].transpose(-1, -2)
 
         # Attention matrices computed as query*key and then concatenated
         A_w, A_e, A_w2e, A_e2w = (q @ k for q, k in zip(queries, [key_2w, key_2e]*2))
         attention = torch.cat(
             [torch.cat(a, dim=3) for a in ((A_w, A_w2e), (A_e2w, A_e))],
-        dim=2)
+            dim=2,
+        )
 
         # Attention is transformed to probability and matmul'ed with value layer, creating context
         attention = self.drop(

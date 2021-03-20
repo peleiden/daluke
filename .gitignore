@@ -2,6 +2,7 @@
 **/local_*/
 local_*
 *.tmp
+.vscode
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
