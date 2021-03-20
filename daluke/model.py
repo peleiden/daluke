@@ -5,16 +5,14 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from transformers.models.bert.modeling_bert import (
-    BertEncoder,
-    BertPooler,
     BertConfig,
     BertEmbeddings,
     BertSelfOutput,
-    BertfOutput,
+    BertOutput,
     BertIntermediate,
 )
 
-from daluke.data import Example
+from daluke.data import Features
 
 class DaLUKE(nn.Module):
     """
@@ -31,21 +29,20 @@ class DaLUKE(nn.Module):
         ent_vocab_size: Necessary for the entity embeddings
         """
         super().__init__()
-        self.pooler = BertPooler(bert_config)
         self.word_embeddings   = BertEmbeddings(bert_config)
         self.entity_embeddings = EntityEmbeddings(bert_config, ent_vocab_size, self.ent_emb_size)
         self.encoder = nn.ModuleList(
             [EntityAwareLayer(bert_config) for _ in range(bert_config.num_hidden_layers)]
         )
 
-    def forward(self, example: Example) -> (torch.Tensor, torch.Tensor):
+    def forward(self, feat: Features) -> (torch.Tensor, torch.Tensor):
         """
 
         """
-        word_hidden    = self.word_embeddings(example.words.ids, example.words.pos)
-        entity_hidden  = self.entity_embeddings(example.entities.ids, example.entities.pos, example.entities.types)
+        word_hidden    = self.word_embeddings(feat.words.ids, feat.words.segments)
+        entity_hidden  = self.entity_embeddings(feat.entities.ids, feat.entities.pos, feat.entities.types)
 
-        attention_mask = torch.cat((example.words.attention_mask, example.entities.attention_mask), dim=1).unsqueeze(1).unsqueeze(2)
+        attention_mask = torch.cat((feat.words.attention_mask, feat.entities.attention_mask), dim=1).unsqueeze(1).unsqueeze(2)
         attention_mask = 10_000.0 * (attention_mask - 1.0)
 
         for encode in self.encoder:
@@ -112,34 +109,6 @@ class EntitySelfAttention(nn.Module):
             context.size()[:-2] + (self.head_size, )
         )
 
-class EntityEmbeddings(nn.Module):
-    """
-
-    """
-    def __init__(self, bert_config: BertConfig, ent_vocab_size: int, ent_emb_size: int):
-        super().__init__()
-        h = bert_config.hidden_size
-
-        self.ent_embeds = nn.Embedding(ent_vocab_size, ent_emb_size, padding_idx=0)
-        self.pos_embeds = nn.Embedding(bert_config.max_position_embeddings, h)
-        self.typ_embeds = nn.Embedding(bert_config.type_vocab_size, h)
-
-        self.ent_embeds_dense = nn.Linear(ent_emb_size, h) if ent_emb_size != h else None
-
-        self.lnorm = nn.LayerNorm(h, eps=bert_config.layer_norm_eps)
-        self.drop  = nn.Dropout(bert_config.hidden_dropout_prob)
-
-    def forward(self, entity_ids: torch.Tensor, pos_ids: torch.Tensor, typ_ids: torch.Tensor):
-        ent_embeds = self.ent_embeds(entity_ids)
-        ent_embeds = self.ent_embeds_dense(ent_embeds) if self.ent_embeds_dense is not None else ent_embedsh
-
-        pos_embeds = self.pos_embeds(pos_ids.clamp(min=0))
-        pos_embed_mask = (pos_embeds != -1).type_as(pos_embeds).unsqueeze(-1)
-        pos_embeds = (pos_embeds*pos_embed_mask).sum(dim=-2) / pos_embed_mask.sum(dim=-2).clamp(min=1e-7)
-
-        typ_embeds = self.typ_embeds(typ_ids)
-        return self.drop(self.lnorm(ent_embeds + pos_embeds + typ_embeds))
-
 class EntityAwareLayer(nn.Module):
     def __init__(self, bert_config: BertConfig):
         super().__init__()
@@ -158,3 +127,38 @@ class EntityAwareLayer(nn.Module):
         out = self.output(self.intermediate(self_out), self_out)
         return out[:, :word_size, :], out[:, word_size:, :]
 
+class EntityEmbeddings(nn.Module):
+    """
+
+    """
+    def __init__(self, bert_config: BertConfig, ent_vocab_size: int, ent_emb_size: int):
+        super().__init__()
+        h = bert_config.hidden_size
+
+        self.ent_embeds = nn.Embedding(ent_vocab_size, ent_emb_size, padding_idx=0)
+        self.pos_embeds = nn.Embedding(bert_config.max_position_embeddings, h)
+        self.typ_embeds = nn.Embedding(bert_config.type_vocab_size, h)
+
+        self.ent_embeds_dense = nn.Linear(ent_emb_size, h) if ent_emb_size != h else None
+
+        self.lnorm = nn.LayerNorm(h, eps=bert_config.layer_norm_eps)
+        self.drop  = nn.Dropout(bert_config.hidden_dropout_prob)
+
+    def forward(self, entity_ids: torch.Tensor, pos_ids: torch.Tensor, typ_ids: torch.Tensor):
+        """
+        Takes
+        entity_ids: Vector of length X holding the vocab. ids of entities
+        pos_ids: (X, max_position_embeddings) holding the position of entity i in the sequence
+        typ_ids: Vector of length (X) holding types of entity tokens (0 or 1)
+
+        Output embeddings of shape (X, H), H: hidden layer size
+        """
+        ent_embeds = self.ent_embeds(entity_ids)
+        ent_embeds = self.ent_embeds_dense(ent_embeds) if self.ent_embeds_dense is not None else ent_embeds
+
+        pos_embeds = self.pos_embeds(pos_ids.clamp(min=0))
+        pos_embed_mask = (pos_ids != -1).type_as(pos_embeds).unsqueeze(-1)
+        pos_embeds = (pos_embeds*pos_embed_mask).sum(dim=-2) / pos_embed_mask.sum(dim=-2).clamp(min=1e-7)
+
+        typ_embeds = self.typ_embeds(typ_ids)
+        return self.drop(self.lnorm(ent_embeds + pos_embeds + typ_embeds))
