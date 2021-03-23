@@ -46,20 +46,25 @@ class Entities(Words):
     pos: torch.LongTensor
 
     @classmethod
-    def build(cls, ids: torch.LongTensor, pos: torch.LongTensor,
+    def build(cls, ids: torch.LongTensor, spans: list[tuple],
             max_len: int=128,
             max_mention: int=30,
         ):
         """
         For creating a single example
+
+        ids: N ids found from entity vocab used to train the model
+        spans: N long list containing start and end of entities
         """
         s = ids.shape[0]
         ent_ids = torch.zeros(max_len, dtype=torch.long)
         ent_ids[:s] = ids
 
-        pos[pos != -1] += 1
         ent_pos = torch.LongTensor(max_len, max_mention).fill_(-1)
-        ent_pos[:pos.shape[0]] = pos
+        # TODO: Make faster than for loop
+        for i, e in enumerate(spans):
+            ent_pos[i, :e[1]-e[0]] = torch.LongTensor(list(range(*e)))
+        ent_pos[ent_pos != -1] += 1 #+1 for [cls]
 
         return cls(
             ids            = ent_ids,
@@ -76,8 +81,28 @@ class Features:
     words: Words
     entities: Entities
 
-if __name__ == '__main__':
-    # TODO: Make this part of the eventual batchgenerator/dataloader/dataset classes
-    tokenizer = AutoTokenizer.from_pretrained(daBERT)
-    sep, cls, pad = (tokenizer.convert_tokens_to_ids(t) for t in (tokenizer.sep_token, tokenizer.cls_token, tokenizer.pad_token))
-    print(sep, cls, pad)
+def _get_special_ids(tokenizer: AutoTokenizer) -> (int, int, int):
+    """ Returns seperator id, close id and pad id """
+    return tuple(tokenizer.convert_tokens_to_ids(t) for t in (tokenizer.sep_token, tokenizer.cls_token, tokenizer.pad_token))
+
+# FIXME: A lot of the logic in here should call methods implemented in a Dataset class
+def features_from_str(words: list[str], entity_spans: list[tuple[int, int]], entity_vocab: dict[str, int], tokenizer: AutoTokenizer) -> Features:
+    """
+    A one-time feature generator used for inference of a single example - mostly practical as an example.
+    words: The sentence as tokenized list of strings e.g. ['Jeg', 'hedder', 'Wolfgang', 'Amadeus', 'Mozart', 'og', 'er', 'fra', 'Salzburg']
+    entity_spans: List of start (included) and end (excluded) indices of each entity e.g. [(2, 5), (8, 9)]
+    --
+    entity_vocab: Maps entity string to entity ids for forward passing
+    tokenizer: tokenizer used for word id computation
+    """
+    sep, cls_, pad = _get_special_ids(tokenizer)
+    word_ids = torch.LongTensor(tokenizer.convert_tokens_to_ids(words))
+    ents = (" ".join(words[e[0]:e[1]]) for e in entity_spans)
+        # FIXME: Handle tokenization, e.g.: What if the entity is subword?
+    ent_ids = torch.LongTensor([entity_vocab.get(ent, entity_vocab["[UNK]"]) for ent in ents])
+        # FIXME: Make a class for entity vocab
+        # FIXME: Consider entity casing
+    return Features(
+        words=Words.build(word_ids),
+        entities=Entities.build(ent_ids, entity_spans)
+    )

@@ -18,7 +18,7 @@ class DaLUKE(nn.Module):
     """
 
     """
-    ent_emb_size = 256
+    ent_emb_size = 256 #FIXME: Don't hardcode me
 
     def __init__(self,
         bert_config: BertConfig,
