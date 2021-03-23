@@ -1,7 +1,7 @@
 import torch
 from transformers import AutoTokenizer
 
-from daluke.data import Words, Entities, Features, features_from_str
+from daluke.data import Words, Entities, Feature, features_from_str
 from daluke import daBERT
 
 def test_words():
@@ -35,7 +35,7 @@ def test_entities():
 def test_create_features():
     ent_vocab = {"[UNK]": 1, "Danmark": 42}
     res = features_from_str("Jeg hedder Jens Nielsen og er fra Danmark".split(), [(2,4), (7, 8)], ent_vocab, AutoTokenizer.from_pretrained(daBERT))
-    assert isinstance(res, Features)
+    assert isinstance(res, Feature)
     assert res.words.ids[2].item() == 2567
     assert sum(res.words.attention_mask) == 10
     assert res.entities.ids[1].item() == 42

@@ -12,7 +12,7 @@ from transformers.models.bert.modeling_bert import (
     BertIntermediate,
 )
 
-from daluke.data import Features
+from daluke.data import BatchedFeatures
 
 class DaLUKE(nn.Module):
     """
@@ -35,12 +35,12 @@ class DaLUKE(nn.Module):
             [EntityAwareLayer(bert_config) for _ in range(bert_config.num_hidden_layers)]
         )
 
-    def forward(self, feat: Features) -> (torch.Tensor, torch.Tensor):
+    def forward(self, feat: BatchedFeatures) -> (torch.Tensor, torch.Tensor):
         """
 
         """
         word_hidden    = self.word_embeddings(feat.words.ids, feat.words.segments)
-        entity_hidden  = self.entity_embeddings(feat.entities.ids, feat.entities.pos, feat.entities.types)
+        entity_hidden  = self.entity_embeddings(feat.entities.ids, feat.entities.pos, feat.entities.segments)
 
         attention_mask = torch.cat((feat.words.attention_mask, feat.entities.attention_mask), dim=1).unsqueeze(1).unsqueeze(2)
         attention_mask = 10_000.0 * (attention_mask - 1.0)
@@ -86,14 +86,14 @@ class EntitySelfAttention(nn.Module):
         total_hidden = torch.cat((word_hidden, entity_hidden), dim=1)
 
         # Queries are given input dependant on the domain FROM which they map
-        queries = self.Q_w(word_hidden), self.Qe(entity_hidden), self.Q_w2e(word_hidden), self.Q_e2w(entity_hidden)
+        queries = self.Q_w(word_hidden), self.Q_e(entity_hidden), self.Q_w2e(word_hidden), self.Q_e2w(entity_hidden)
         # Key layers divided dependant on domain TO which they map
         key = self.reshape_to_matrix(self.K(total_hidden))
         key_2w = key[:, :, :word_size, :].transpose(-1, -2)
         key_2e = key[:, :, word_size:, :].transpose(-1, -2)
 
         # Attention matrices computed as query*key and then concatenated
-        A_w, A_e, A_w2e, A_e2w = (q @ k for q, k in zip(queries, [key_2w, key_2e]*2))
+        A_w, A_e, A_w2e, A_e2w = (self.reshape_to_matrix(q) @ k for q, k in zip(queries, (key_2w, key_2e, key_2e, key_2w)))
         attention = torch.cat(
             [torch.cat(a, dim=3) for a in ((A_w, A_w2e), (A_e2w, A_e))],
             dim=2,
@@ -106,7 +106,7 @@ class EntitySelfAttention(nn.Module):
         value = self.reshape_to_matrix(self.V(total_hidden))
         context = (attention @ value).permute(0, 2, 1, 3).contiguous()
         return context.view(
-            context.size()[:-2] + (self.head_size, )
+            *context.size()[:-2], self.num_heads*self.head_size
         )
 
 class EntityAwareLayer(nn.Module):
@@ -122,8 +122,6 @@ class EntityAwareLayer(nn.Module):
         total_hidden = torch.cat((word_hidden, entity_hidden), dim=1)
         self_attention = self.attention(word_hidden, entity_hidden, attention_mask)
         self_out  = self.self_output(self_attention, total_hidden)
-        # Divide self attention output after word and entity parts
-        self_out  = torch.cat((self_out[:, :word_size, :], self_out[:, word_size:, :]))
         out = self.output(self.intermediate(self_out), self_out)
         return out[:, :word_size, :], out[:, word_size:, :]
 

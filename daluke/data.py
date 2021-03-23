@@ -5,7 +5,6 @@ from transformers import AutoTokenizer
 
 from daluke import daBERT
 
-
 @dataclass
 class Words:
     ids: torch.LongTensor
@@ -74,19 +73,42 @@ class Entities(Words):
         )
 
 @dataclass
-class Features:
+class Feature:
     """
-    Data to be forward passed to daLUKE
+    A single data example
     """
     words: Words
     entities: Entities
+
+@dataclass
+class BatchedFeatures(Feature):
+    """
+    Data to be forward passed to daLUKE
+    """
+    @classmethod
+    def build(cls, features: list[Feature]):
+        return cls(
+            words = Words(
+                ids             = torch.stack(tuple(f.words.ids for f in features)),
+                segments        = torch.stack(tuple(f.words.segments for f in features)),
+                attention_mask  = torch.stack(tuple(f.words.attention_mask for f in features)),
+            ),
+            entities = Entities(
+                ids             = torch.stack(tuple(f.entities.ids for f in features)),
+                segments        = torch.stack(tuple(f.entities.segments for f in features)),
+                attention_mask  = torch.stack(tuple(f.entities.attention_mask for f in features)),
+                pos             = torch.stack(tuple(f.entities.pos for f in features)),
+
+            )
+        )
+
 
 def _get_special_ids(tokenizer: AutoTokenizer) -> (int, int, int):
     """ Returns seperator id, close id and pad id """
     return tuple(tokenizer.convert_tokens_to_ids(t) for t in (tokenizer.sep_token, tokenizer.cls_token, tokenizer.pad_token))
 
 # FIXME: A lot of the logic in here should call methods implemented in a Dataset class
-def features_from_str(words: list[str], entity_spans: list[tuple[int, int]], entity_vocab: dict[str, int], tokenizer: AutoTokenizer) -> Features:
+def features_from_str(words: list[str], entity_spans: list[tuple[int, int]], entity_vocab: dict[str, int], tokenizer: AutoTokenizer) -> Feature:
     """
     A one-time feature generator used for inference of a single example - mostly practical as an example.
     words: The sentence as tokenized list of strings e.g. ['Jeg', 'hedder', 'Wolfgang', 'Amadeus', 'Mozart', 'og', 'er', 'fra', 'Salzburg']
@@ -102,7 +124,7 @@ def features_from_str(words: list[str], entity_spans: list[tuple[int, int]], ent
     ent_ids = torch.LongTensor([entity_vocab.get(ent, entity_vocab["[UNK]"]) for ent in ents])
         # FIXME: Make a class for entity vocab
         # FIXME: Consider entity casing
-    return Features(
+    return Feature(
         words=Words.build(word_ids),
         entities=Entities.build(ent_ids, entity_spans)
     )
