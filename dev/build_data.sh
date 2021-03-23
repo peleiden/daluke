@@ -1,6 +1,6 @@
 # Run from LUKE repo
 DATA_PATH=/work3/$USER/data
-DUMP_FILE=da-dump-db
+DUMP_FILE=da-dump-db.dump
 TOKENIZER="Maltehb/danish-bert-botxo"
 # ^ One of xlm-roberta-base, xlm-roberta-large, xlm-roberta-large-finetuned-conll02-dutch, xlm-roberta-large-finetuned-conll02-spanish, xlm-roberta-large-finetuned-conll03-english, xlm-roberta-large-finetuned-conll03-german
 

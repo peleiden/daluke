@@ -10,6 +10,9 @@ conllu  # for danlp
 pandas  # for danlp
 seqeval
 
+# Text handling
+pyicu
+
 # Misc
 pelutils[ds]>=0.5.7
 click
