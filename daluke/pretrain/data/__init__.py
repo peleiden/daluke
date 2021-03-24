@@ -6,7 +6,7 @@ import torch
 
 from daluke import daBERT
 # Must be imported for API availability
-from .example import Words, Entities, Example, BatchedExamples, features_from_str
+from .loader import DataLoader
 
 class ICUSentenceTokenizer:
     """ Segment text to sentences. """

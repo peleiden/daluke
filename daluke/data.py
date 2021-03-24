@@ -1,6 +1,7 @@
 from __future__ import annotations
-from transformers import AutoTokenizer
 from dataclasses import dataclass
+
+from transformers import AutoTokenizer
 
 import torch
 
@@ -101,7 +102,7 @@ class BatchedExamples(Example):
             )
         )
 
-def _get_special_ids(tokenizer: AutoTokenizer) -> (int, int, int):
+def get_special_ids(tokenizer: AutoTokenizer) -> (int, int, int):
     """ Returns seperator id, close id and pad id """
     return tuple(tokenizer.convert_tokens_to_ids(t) for t in (tokenizer.sep_token, tokenizer.cls_token, tokenizer.pad_token))
 
@@ -115,7 +116,7 @@ def features_from_str(words: list[str], entity_spans: list[tuple[int, int]], ent
     entity_vocab: Maps entity string to entity ids for forward passing
     tokenizer: tokenizer used for word id computation
     """
-    sep, cls_, pad = _get_special_ids(tokenizer)
+    sep, cls_, pad = get_special_ids(tokenizer)
     word_ids = torch.LongTensor(tokenizer.convert_tokens_to_ids(words))
     ents = (" ".join(words[e[0]:e[1]]) for e in entity_spans)
         # FIXME: Handle tokenization, e.g.: What if the entity is subword?

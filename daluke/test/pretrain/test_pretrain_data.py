@@ -1,8 +1,9 @@
 import os
+import json
 
 from pelutils import MainTest
 
-from daluke.pretrain.data import load_entity_vocab
+from daluke.pretrain.data import load_entity_vocab, DataLoader
 
 class TestData(MainTest):
     def test_entity_loader(self):
@@ -23,3 +24,18 @@ class TestData(MainTest):
             "2. marts":        { "id": 1274, "count": 527 },
             "Guvern\u00f8r":   { "id": 1275, "count": 527 },
         }
+
+    def test_dataloader(self):
+        path = os.path.join(self.test_dir, "data.json")
+        with open(path, "w") as f:
+            json.dump(
+                {
+                    "word_ids":     [[32, 59, 3], [42, 11]],
+                    "entity_ids":   [[5], []],
+                    "entity_spans": [[(0, 3)], []]
+                }, f
+            )
+        dl = DataLoader(path)
+
+
+
