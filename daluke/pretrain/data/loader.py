@@ -3,9 +3,10 @@ import json
 
 from transformers import AutoTokenizer
 import torch
+
 from pelutils import log
 
-from daluke.data import Example, Words, Entities, get_special_ids
+from daluke.data import Example, Words, Entities, get_special_ids, BatchedExamples
 from daluke import daBERT
 
 class DataLoader:
@@ -40,7 +41,7 @@ class DataLoader:
         assert N == len(data["entity_ids"]) == len(data["entity_spans"])
 
         log.debug("Creating examples ...")
-        self.examples = [None for _ in range(N)]
+        self.examples: list[Example] = [None for _ in range(N)]
         for i in range(N):
             # Pop to keep minimal data in memory
             word_ids, ent_ids, ent_spans = data["word_ids"].pop(0), data["entity_ids"].pop(0), data["entity_spans"].pop(0)
@@ -56,4 +57,9 @@ class DataLoader:
                     max_mention=self.max_mention,
                 )
             )
+    def get_dataloader(self, batch_size: int, sampler: torch.utils.data.Sampler) -> DataLoader:
+        return torch.utils.data.DataLoader(list(enumerate(self.examples)), batch_size=batch_size, sampler=sampler, collate_fn=self.collate)
 
+    @staticmethod
+    def collate(batch: list[tuple[int, Example]]) -> BatchedExamples:
+        return BatchedExamples.build([ex for _, ex in batch])
