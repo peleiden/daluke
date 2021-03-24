@@ -1,12 +1,20 @@
 from __future__ import annotations
+from dataclasses import dataclass
 import json
 
 from icu import Locale, BreakIterator
 import torch
 
 from daluke import daBERT
+from daluke.data import BatchedExamples
 # Must be imported for API availability
 from .loader import DataLoader
+
+@dataclass
+class MaskedBatchedExamples(BatchedExamples):
+    word_masks: torch.LongTensor
+    entity_masks: torch.LongTensor
+
 
 class ICUSentenceTokenizer:
     """ Segment text to sentences. """

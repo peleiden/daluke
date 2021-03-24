@@ -35,14 +35,14 @@ class DaLUKE(nn.Module):
             [EntityAwareLayer(bert_config) for _ in range(bert_config.num_hidden_layers)]
         )
 
-    def forward(self, feat: BatchedExamples) -> (torch.Tensor, torch.Tensor):
+    def forward(self, ex: BatchedExamples) -> (torch.Tensor, torch.Tensor):
         """
 
         """
-        word_hidden    = self.word_embeddings(feat.words.ids, feat.words.segments)
-        entity_hidden  = self.entity_embeddings(feat.entities.ids, feat.entities.pos, feat.entities.segments)
+        word_hidden    = self.word_embeddings(ex.words.ids, ex.words.segments)
+        entity_hidden  = self.entity_embeddings(ex.entities.ids, ex.entities.pos, ex.entities.segments)
 
-        attention_mask = torch.cat((feat.words.attention_mask, feat.entities.attention_mask), dim=1).unsqueeze(1).unsqueeze(2)
+        attention_mask = torch.cat((ex.words.attention_mask, ex.entities.attention_mask), dim=1).unsqueeze(1).unsqueeze(2)
         attention_mask = 10_000.0 * (attention_mask - 1.0)
 
         for encode in self.encoder:
