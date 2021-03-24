@@ -12,8 +12,11 @@ from daluke.pretrain.train import train, Hyperparams
 
 
 ARGUMENTS = {
-    "quiet": { "action": "store_true", "help": "Don't show debug logging" },
-    "lr":    { "default": Hyperparams.lr, "type": float, "help": "Initial learning rate" },
+    "quiet":           { "action": "store_true", "help": "Don't show debug logging" },
+    "batch-size":      { "default": Hyperparams.batch_size, "type": int },
+    "grad-accumulate": { "default": Hyperparams.grad_accumulate, "type": int,  "help": "Steps taken to accumulate gradient" },
+    "lr":              { "default": Hyperparams.lr, "type": float, "help": "Initial learning rate" },
+    "ent-embed-size":  { "default": Hyperparams.ent_emb_size, "type": int, "help": "Dimension of the entity embeddings" },
 }
 
 

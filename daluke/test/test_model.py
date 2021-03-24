@@ -10,7 +10,7 @@ def _create_cfg():
     return AutoConfig.from_pretrained(daBERT)
 
 def test_daluke():
-    model = DaLUKE(_create_cfg(), 100)
+    model = DaLUKE(_create_cfg(), 100, 256)
     features = features_from_str("Jeg hedder Jens Nielsen og er fra Danmark".split(), [(2,4), (7, 8)], {"[UNK]": 1, "Danmark": 42}, AutoTokenizer.from_pretrained(daBERT))
     model(BatchedExamples.build([features]))
 

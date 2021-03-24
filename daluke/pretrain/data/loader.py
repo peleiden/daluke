@@ -10,6 +10,7 @@ from daluke.data import Example, Words, Entities, get_special_ids, BatchedExampl
 from daluke import daBERT
 
 class DataLoader:
+
     def __init__(self, path: str,
             tokenizer_name: str = daBERT,
             max_sentence_len: int=512,
@@ -57,6 +58,10 @@ class DataLoader:
                     max_mention=self.max_mention,
                 )
             )
+
+    def __len__(self):
+        return len(self.examples)
+
     def get_dataloader(self, batch_size: int, sampler: torch.utils.data.Sampler) -> DataLoader:
         return torch.utils.data.DataLoader(list(enumerate(self.examples)), batch_size=batch_size, sampler=sampler, collate_fn=self.collate)
 

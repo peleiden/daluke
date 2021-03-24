@@ -18,17 +18,17 @@ class DaLUKE(nn.Module):
     """
 
     """
-    ent_emb_size = 256 #FIXME: Don't hardcode me
-
     def __init__(self,
         bert_config: BertConfig,
         ent_vocab_size: int,
+        ent_emb_size: int,
     ):
         """
         bert_config:    Used for the BERT Pooler
         ent_vocab_size: Necessary for the entity embeddings
         """
         super().__init__()
+        self.ent_emb_size = ent_emb_size
         self.word_embeddings   = BertEmbeddings(bert_config)
         self.entity_embeddings = EntityEmbeddings(bert_config, ent_vocab_size, self.ent_emb_size)
         self.encoder = nn.ModuleList(

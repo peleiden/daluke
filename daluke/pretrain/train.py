@@ -1,19 +1,17 @@
 from __future__ import annotations
 import os
-import json
 from dataclasses import dataclass
-from pprint import pformat
-from typing import Any
-
-from pelutils.logger import log, Levels
-from pelutils.ticktock import TickTock
+import json
 
 import torch.distributed as dist
+from transformers import AutoConfig
 
+from pelutils.logger import log, Levels
 
-TT = TickTock()
+from daluke.pretrain.data import DataLoader
+from daluke import daBERT
+
 PORT = "3090"
-
 
 def setup(rank: int, world_size: int):
     if rank != -1:
@@ -29,10 +27,12 @@ def is_master(rank: int) -> bool:
     """ Determine if master node """
     return rank < 1
 
-
 @dataclass
 class Hyperparams:
     lr: float = 1e-4
+    ent_emb_size: int = 256
+    batch_size: int = 2048
+    grad_accumulate: int = 1024
 
     def __str__(self):
         return json.dumps(self.__dict__, indent=4)
@@ -62,7 +62,14 @@ def train(
     # Setup multi-gpu if used
     setup(rank, world_size)
 
+    # FIXME: Get device and use it for dataloader and model
+    data = DataLoader(os.path.join(location, "data.json"))
+    # FIXME: Get out-name from module constant in pretrain.data.build
+    # FIXME: Pass dataset metadata to DataLoader
+    bert_config = AutoConfig.from_pretrained(daBERT)
+    # FIXME: Get transformer name from metadata
+
+
 
     # Clean up multi-gpu if used
     cleanup(rank)
-
