@@ -12,7 +12,7 @@ from transformers.models.bert.modeling_bert import (
     BertIntermediate,
 )
 
-from daluke.data import BatchedFeatures
+from daluke.data import BatchedExamples
 
 class DaLUKE(nn.Module):
     """
@@ -35,7 +35,7 @@ class DaLUKE(nn.Module):
             [EntityAwareLayer(bert_config) for _ in range(bert_config.num_hidden_layers)]
         )
 
-    def forward(self, feat: BatchedFeatures) -> (torch.Tensor, torch.Tensor):
+    def forward(self, feat: BatchedExamples) -> (torch.Tensor, torch.Tensor):
         """
 
         """

@@ -3,7 +3,7 @@ from transformers import AutoConfig, AutoTokenizer
 
 import torch
 from daluke.model import DaLUKE, EntityEmbeddings
-from daluke.data import features_from_str, BatchedFeatures
+from daluke.data import features_from_str, BatchedExamples
 from daluke import daBERT
 
 def _create_cfg():
@@ -12,7 +12,7 @@ def _create_cfg():
 def test_daluke():
     model = DaLUKE(_create_cfg(), 100)
     features = features_from_str("Jeg hedder Jens Nielsen og er fra Danmark".split(), [(2,4), (7, 8)], {"[UNK]": 1, "Danmark": 42}, AutoTokenizer.from_pretrained(daBERT))
-    model(BatchedFeatures.build([features]))
+    model(BatchedExamples.build([features]))
 
 def test_ent_embeds():
     # From original LUKE repository
