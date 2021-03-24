@@ -14,7 +14,7 @@ from daluke.pretrain.data import MaskedBatchedExamples
 
 class PretrainTaskDaLUKE(DaLUKE):
     """
-    DaLUKE for Masked Language Modelling
+    DaLUKE for the LUKE pre-training task consisting of masked language modelling and entity masking
     """
     def __init__(self,
         bert_config: BertConfig,
@@ -23,8 +23,8 @@ class PretrainTaskDaLUKE(DaLUKE):
         ):
         super().__init__(bert_config, ent_vocab_size, ent_emb_size)
 
-        self.mlm_scorer = BertPreTrainingHeads(self.bert_config)
-        self.entity_scorer = EntityPreTrainingHeads(self.bert_config, self.ent_vocab_size, self.ent_emb_size)
+        self.mask_word_scorer = BertPreTrainingHeads(self.bert_config)
+        self.mask_entity_scorer = EntityPreTrainingHeads(self.bert_config, self.ent_vocab_size, self.ent_emb_size)
         # FIXME: Set decoder weights
 
     def forward(self, ex: MaskedBatchedExamples):
@@ -41,5 +41,5 @@ class EntityPreTrainingHeads(nn.Module):
         self.decode = nn.Linear(ent_emb_size, ent_vocab_size, bias=False)
         self.bias = nn.Parameter(torch.zeros(ent_vocab_size))
 
-    def forward(self, hidden: torch.LongTensor) -> torch.LongTensor:
+    def forward(self, hidden: torch.Tensor) -> torch.Tensor:
         return self.decode(self.transform(hidden)) + self.bias

@@ -7,12 +7,13 @@ import torch
 
 @dataclass
 class Words:
-    ids: torch.LongTensor
-    segments: torch.LongTensor
-    attention_mask: torch.LongTensor
+    ids: torch.Tensor
+    segments: torch.Tensor
+    attention_mask: torch.Tensor
+    N: int
 
     @classmethod
-    def build(cls, ids: torch.LongTensor,
+    def build(cls, ids: torch.Tensor,
             max_len: int=512,
             sep_id: int=3,
             cls_id: int=2,
@@ -21,13 +22,14 @@ class Words:
         """
         For creating a single example
         """
-        s = ids.shape[0]
+        N = ids.shape[0]
         word_ids = torch.LongTensor(max_len).fill_(pad_id)
-        word_ids[:s+2] = torch.cat((torch.LongTensor([cls_id]), ids, torch.LongTensor([sep_id])))
+        word_ids[:N+2] = torch.cat((torch.LongTensor([cls_id]), ids, torch.LongTensor([sep_id])))
         return cls(
             ids            = word_ids,
             segments       = cls._build_segments(max_len),
-            attention_mask = cls._build_att_mask(s+2, max_len),
+            attention_mask = cls._build_att_mask(N+2, max_len),
+            N              = N
         )
 
     @staticmethod
@@ -42,10 +44,10 @@ class Words:
 
 @dataclass
 class Entities(Words):
-    pos: torch.LongTensor
+    pos: torch.Tensor
 
     @classmethod
-    def build(cls, ids: torch.LongTensor, spans: list[tuple],
+    def build(cls, ids: torch.Tensor, spans: list[tuple],
             max_len: int=128,
             max_mention: int=30,
         ):
@@ -55,9 +57,9 @@ class Entities(Words):
         ids: N ids found from entity vocab used to train the model
         spans: N long list containing start and end of entities
         """
-        s = ids.shape[0]
+        N = ids.shape[0]
         ent_ids = torch.zeros(max_len, dtype=torch.long)
-        ent_ids[:s] = ids
+        ent_ids[:N] = ids
 
         ent_pos = torch.LongTensor(max_len, max_mention).fill_(-1)
         # TODO: Make faster than for loop
@@ -68,8 +70,9 @@ class Entities(Words):
         return cls(
             ids            = ent_ids,
             segments       = cls._build_segments(max_len),
-            attention_mask = cls._build_att_mask(s, max_len),
-            pos            = ent_pos
+            attention_mask = cls._build_att_mask(N, max_len),
+            pos            = ent_pos,
+            N              = N,
         )
 
 @dataclass
@@ -85,22 +88,24 @@ class BatchedExamples(Example):
     """
     Data to be forward passed to daLUKE
     """
+    @staticmethod
+    def stack(features: list[Example]) -> (Words, Entities):
+        return Words(
+            ids             = torch.stack(tuple(f.words.ids for f in features)),
+            segments        = torch.stack(tuple(f.words.segments for f in features)),
+            attention_mask  = torch.stack(tuple(f.words.attention_mask for f in features)),
+            N               = None,
+        ), Entities(
+            ids             = torch.stack(tuple(f.entities.ids for f in features)),
+            segments        = torch.stack(tuple(f.entities.segments for f in features)),
+            attention_mask  = torch.stack(tuple(f.entities.attention_mask for f in features)),
+            pos             = torch.stack(tuple(f.entities.pos for f in features)),
+            N               = None,
+        )
+
     @classmethod
     def build(cls, features: list[Example]):
-        return cls(
-            words = Words(
-                ids             = torch.stack(tuple(f.words.ids for f in features)),
-                segments        = torch.stack(tuple(f.words.segments for f in features)),
-                attention_mask  = torch.stack(tuple(f.words.attention_mask for f in features)),
-            ),
-            entities = Entities(
-                ids             = torch.stack(tuple(f.entities.ids for f in features)),
-                segments        = torch.stack(tuple(f.entities.segments for f in features)),
-                attention_mask  = torch.stack(tuple(f.entities.attention_mask for f in features)),
-                pos             = torch.stack(tuple(f.entities.pos for f in features)),
-
-            )
-        )
+        return cls(*cls.stack(features))
 
 def get_special_ids(tokenizer: AutoTokenizer) -> (int, int, int):
     """ Returns seperator id, close id and pad id """

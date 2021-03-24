@@ -16,7 +16,8 @@ from daluke.data import BatchedExamples
 
 class DaLUKE(nn.Module):
     """
-
+    Language Understanding with Knowledge-based Embeddings in Danish.
+    Returns entity and word representations.
     """
     def __init__(self,
         bert_config: BertConfig,
@@ -26,6 +27,7 @@ class DaLUKE(nn.Module):
         """
         bert_config:    Used for the BERT Pooler
         ent_vocab_size: Necessary for the entity embeddings
+        ent_emb_size:   Dimension of entity embedding
         """
         super().__init__()
         self.ent_emb_size = ent_emb_size
@@ -37,19 +39,41 @@ class DaLUKE(nn.Module):
 
     def forward(self, ex: BatchedExamples) -> (torch.Tensor, torch.Tensor):
         """
-
+        Given a data class of word and entity ids and other tokens, return embeddings of both
         """
         word_hidden    = self.word_embeddings(ex.words.ids, ex.words.segments)
         entity_hidden  = self.entity_embeddings(ex.entities.ids, ex.entities.pos, ex.entities.segments)
 
         attention_mask = torch.cat((ex.words.attention_mask, ex.entities.attention_mask), dim=1).unsqueeze(1).unsqueeze(2)
-        attention_mask = 10_000.0 * (attention_mask - 1.0)
+        attention_mask = 10_000.0 * (attention_mask - 1.0) # TODO: Explain
 
         for encode in self.encoder:
             word_hidden, entity_hidden = encode(word_hidden, entity_hidden, attention_mask)
         return word_hidden, entity_hidden
 
+class EntityAwareLayer(nn.Module):
+    """
+    Transformer layer where the attention is replaced by the entity-aware method
+    """
+    def __init__(self, bert_config: BertConfig):
+        super().__init__()
+        self.attention    = EntitySelfAttention(bert_config.hidden_size, bert_config.num_attention_heads, bert_config.attention_probs_dropout_prob)
+        self.self_output  = BertSelfOutput(bert_config)
+        self.intermediate = BertIntermediate(bert_config)
+        self.output       = BertOutput(bert_config)
+
+    def forward(self, word_hidden: torch.Tensor, entity_hidden: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
+        word_size = word_hidden.size(1)
+        total_hidden = torch.cat((word_hidden, entity_hidden), dim=1)
+        self_attention = self.attention(word_hidden, entity_hidden, attention_mask)
+        self_out  = self.self_output(self_attention, total_hidden)
+        out = self.output(self.intermediate(self_out), self_out)
+        return out[:, :word_size, :], out[:, word_size:, :]
+
 class EntitySelfAttention(nn.Module):
+    """
+    As LUKE uses both entities and words, this self-attention takes the token type into account.
+    """
     def __init__(self, hidden_size: int, num_heads: int, drop_prob: float):
         """
         Sets up the four query matrices used in the Entity-aware Self-attention:
@@ -70,17 +94,10 @@ class EntitySelfAttention(nn.Module):
         )
         self.drop = nn.Dropout(drop_prob)
 
-    def reshape_to_matrix(self, layer_out: torch.Tensor):
-        """
-
-        """
-        return layer_out.view(
-            *layer_out.size()[:-1], self.num_heads, self.head_size
-        ).permute(0, 2, 1, 3)
-
     def forward(self, word_hidden: torch.Tensor, entity_hidden: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
         """
-
+        Query and key is divided into the four cases (word2word, entity2entity, word2entity, entity2word), but is otherwise
+        used in normal transformer way to compute attention from which context is returned
         """
         word_size = word_hidden.size(1)
         total_hidden = torch.cat((word_hidden, entity_hidden), dim=1)
@@ -109,25 +126,17 @@ class EntitySelfAttention(nn.Module):
             *context.size()[:-2], self.num_heads*self.head_size
         )
 
-class EntityAwareLayer(nn.Module):
-    def __init__(self, bert_config: BertConfig):
-        super().__init__()
-        self.attention    = EntitySelfAttention(bert_config.hidden_size, bert_config.num_attention_heads, bert_config.attention_probs_dropout_prob)
-        self.self_output  = BertSelfOutput(bert_config)
-        self.intermediate = BertIntermediate(bert_config)
-        self.output       = BertOutput(bert_config)
-
-    def forward(self, word_hidden: torch.Tensor, entity_hidden: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
-        word_size = word_hidden.size(1)
-        total_hidden = torch.cat((word_hidden, entity_hidden), dim=1)
-        self_attention = self.attention(word_hidden, entity_hidden, attention_mask)
-        self_out  = self.self_output(self_attention, total_hidden)
-        out = self.output(self.intermediate(self_out), self_out)
-        return out[:, :word_size, :], out[:, word_size:, :]
+    def reshape_to_matrix(self, layer_out: torch.Tensor) -> torch.Tensor:
+        """
+        Make the layer outputs usable for matrix products
+        """
+        return layer_out.view(
+            *layer_out.size()[:-1], self.num_heads, self.head_size
+        ).permute(0, 2, 1, 3)
 
 class EntityEmbeddings(nn.Module):
     """
-
+    Embeds entitites from the entity vocabulary
     """
     def __init__(self, bert_config: BertConfig, ent_vocab_size: int, ent_emb_size: int):
         super().__init__()

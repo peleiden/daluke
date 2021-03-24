@@ -6,7 +6,7 @@ import torch
 
 from pelutils import log
 
-from daluke.data import Example, Words, Entities, get_special_ids, BatchedExamples
+from daluke.data import Example, Words, Entities, get_special_ids, BatchedExamples, Words, Entities
 from daluke import daBERT
 
 class DataLoader:
@@ -33,6 +33,8 @@ class DataLoader:
 
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
         self.sep_id, self.cls_id, self.pad_id = get_special_ids(self.tokenizer)
+        self.mask_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.mask_token)
+        self.ent_mask_id = 2 # FIXME: Load entity vocab and dont hardcode this!
 
 
         log.debug("Loading json dataset into memory ...")
