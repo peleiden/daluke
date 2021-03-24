@@ -23,7 +23,7 @@ class Words:
         For creating a single example
         """
         N = ids.shape[0]
-        word_ids = torch.LongTensor(max_len).fill_(pad_id)
+        word_ids = torch.full((max_len,), pad_id, dtype=torch.long)
         word_ids[:N+2] = torch.cat((torch.LongTensor([cls_id]), ids, torch.LongTensor([sep_id])))
         return cls(
             ids            = word_ids,
@@ -61,7 +61,7 @@ class Entities(Words):
         ent_ids = torch.zeros(max_len, dtype=torch.long)
         ent_ids[:N] = ids
 
-        ent_pos = torch.LongTensor(max_len, max_mention).fill_(-1)
+        ent_pos = torch.full((max_len, max_mention), -1, dtype=torch.long)
         # TODO: Make faster than for loop
         for i, e in enumerate(spans):
             ent_pos[i, :e[1]-e[0]] = torch.LongTensor(list(range(*e)))

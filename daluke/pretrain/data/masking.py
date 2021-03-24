@@ -19,7 +19,7 @@ class MaskedBatchedExamples(BatchedExamples):
         return cls(words, entities, word_masks, entity_masks)
 
 def mask_ent(ent: Entities, prob: float) -> torch.Tensor:
-    masks = torch.LongTensor(ent.ids.shape).fill_(-1)
+    masks = torch.full_like(ent.ids, -1)
     I = list(range(ent.N))
     random.shuffle(I)
     for i in I[max(1, int(round(ent.N*prob)))]:
@@ -27,7 +27,7 @@ def mask_ent(ent: Entities, prob: float) -> torch.Tensor:
     return masks
 
 def mask_words(words: Words) -> torch.Tensor:
-    masks = torch.LongTensor(ent.ids.shape).fill_(-1)
+    masks = torch.full_like(words.ids, -1)
     raise NotImplementedError
 
 
