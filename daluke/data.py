@@ -94,13 +94,13 @@ class BatchedExamples(Example):
             ids             = torch.stack(tuple(f.words.ids for f in features)),
             segments        = torch.stack(tuple(f.words.segments for f in features)),
             attention_mask  = torch.stack(tuple(f.words.attention_mask for f in features)),
-            N               = None,
+            N               = torch.tensor(tuple(f.words.N for f in featueres)),
         ), Entities(
             ids             = torch.stack(tuple(f.entities.ids for f in features)),
             segments        = torch.stack(tuple(f.entities.segments for f in features)),
             attention_mask  = torch.stack(tuple(f.entities.attention_mask for f in features)),
             pos             = torch.stack(tuple(f.entities.pos for f in features)),
-            N               = None,
+            N               = torch.tensor(tuple(f.entities.N for f in featueres)),
         )
 
     @classmethod

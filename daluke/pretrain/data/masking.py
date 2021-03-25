@@ -10,13 +10,21 @@ class MaskedBatchedExamples(BatchedExamples):
     entity_masks: torch.Tensor
 
     @classmethod
-    def build(cls, features: list[Example], ent_mask_prob: float):
+    def build(cls, features: list[Example],
+            word_mask_prob: float,
+            ent_mask_prob: float,
+        ):
+        words, entities = cls.stack(features)
+
         # Create entity masks first as entity mask positions influence word masking
         entity_masks = torch.stack(tuple(mask_ent(f.entities, ent_mask_prob) for f in features))
         word_masks   = torch.stack(tuple())
 
-        words, entities = cls.stack(features)
         return cls(words, entities, word_masks, entity_masks)
+
+def mask_entity_batch(ent: Entities, prob: float) -> torch.Tensor:
+    masks = torch.full_like(ent.ids, -1)
+    # FIXME Rewrite below funciton to work on batch - also change ids of entity batch
 
 def mask_ent(ent: Entities, prob: float) -> torch.Tensor:
     masks = torch.full_like(ent.ids, -1)
@@ -28,6 +36,4 @@ def mask_ent(ent: Entities, prob: float) -> torch.Tensor:
 
 def mask_words(words: Words) -> torch.Tensor:
     masks = torch.full_like(words.ids, -1)
-    raise NotImplementedError
-
-
+    candidates = list()
