@@ -1,39 +1,51 @@
+from __future__ import annotations
 from dataclasses import dataclass
 import random
+from typing import Union
 
 import torch
 from daluke.data import Example, Words, Entities, get_special_ids, BatchedExamples, Words, Entities
 
 @dataclass
 class MaskedBatchedExamples(BatchedExamples):
-    word_masks: torch.Tensor
-    entity_masks: torch.Tensor
+    word_mask_labels: torch.Tensor
+    word_mask: torch.BoolTensor
+    ent_mask_labels: torch.Tensor
+    ent_mask: torch.BoolTensor
 
     @classmethod
-    def build(cls, features: list[Example],
+    def build(cls, examples: list[Example],
+            word_mask_id: int,
+            ent_mask_id: int,
             word_mask_prob: float,
             ent_mask_prob: float,
         ):
-        words, entities = cls.stack(features)
+        words, entities = cls.stack(examples)
 
-        # Create entity masks first as entity mask positions influence word masking
-        entity_masks = torch.stack(tuple(mask_ent(f.entities, ent_mask_prob) for f in features))
-        word_masks   = torch.stack(tuple())
+        word_mask_labels, word_mask = mask_word_batch(examples.words, word_mask_prob, word_mask_id)
+        ent_mask_labels, ent_mask = mask_ent_batch(examples.entities, word_mask_prob, ent_mask_id)
 
-        return cls(words, entities, word_masks, entity_masks)
+        return cls(words, entities, word_mask_labels, word_mask, ent_mask_labels, ent_mask)
 
-def mask_entity_batch(ent: Entities, prob: float) -> torch.Tensor:
-    masks = torch.full_like(ent.ids, -1)
-    # FIXME Rewrite below funciton to work on batch - also change ids of entity batch
+def mask_ent_batch(ent: Entities, prob: float, mask_id: int) -> (torch.Tensor, torch.BoolTensor):
+    mask = torch.zeros_like(ent.ids, dtype=torch.bool)
+    # TODO: Can this be vectorized?
+    to_masks = (ent.N*prob).round().long()
+    for i, (n, t) in enumerate(zip(ent.N, to_masks)):
+        throw = torch.multinomial(torch.ones(n), t)
+        mask[i, throw] = True
+    labels = torch.full_like(ent.ids, -1)
+    labels[mask] = ent.ids[mask]
+    ent.ids[mask] = mask_id
+    return labels, mask
 
-def mask_ent(ent: Entities, prob: float) -> torch.Tensor:
-    masks = torch.full_like(ent.ids, -1)
-    I = list(range(ent.N))
-    random.shuffle(I)
-    for i in I[max(1, int(round(ent.N*prob)))]:
-        masks[i] = ent.ids[i]
-    return masks
-
-def mask_words(words: Words) -> torch.Tensor:
-    masks = torch.full_like(words.ids, -1)
-    candidates = list()
+def mask_word_batch(w: Words, prob: float, mask_id: int) -> (torch.Tensor, torch.BoolTensor):
+    raise NotImplementedError
+    mask = torch.zeros_like(w.ids, dtype=torch.bool)
+    # TODO: Can this be vectorized?
+    for i, n in enumerate(w.N):
+        mask[i, torch.randint(n, int(round(n*prob)) or 1)] = True
+    labels = torch.full_like(w.ids, -1)
+    labels[mask] = w.ids[mask]
+    w.ids[mask] = mask_id
+    return labels, mask

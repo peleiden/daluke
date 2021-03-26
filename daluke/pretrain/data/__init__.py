@@ -8,7 +8,7 @@ from daluke import daBERT
 from daluke.data import BatchedExamples
 # Must be imported for API availability
 from .loader import DataLoader
-from .masking import MaskedBatchedExamples
+from .masking import MaskedBatchedExamples, mask_ent_batch
 
 class ICUSentenceTokenizer:
     """ Segment text to sentences. """
