@@ -89,23 +89,23 @@ class BatchedExamples(Example):
     Data to be forward passed to daLUKE
     """
     @staticmethod
-    def stack(features: list[Example]) -> (Words, Entities):
+    def stack(ex: list[Example]) -> (Words, Entities):
         return Words(
-            ids             = torch.stack(tuple(f.words.ids for f in features)),
-            segments        = torch.stack(tuple(f.words.segments for f in features)),
-            attention_mask  = torch.stack(tuple(f.words.attention_mask for f in features)),
-            N               = torch.tensor(tuple(f.words.N for f in featueres)),
+            ids             = torch.stack(tuple(e.words.ids for e in ex)),
+            segments        = torch.stack(tuple(e.words.segments for e in ex)),
+            attention_mask  = torch.stack(tuple(e.words.attention_mask for e in ex)),
+            N               = torch.tensor(tuple(e.words.N for e in ex)),
         ), Entities(
-            ids             = torch.stack(tuple(f.entities.ids for f in features)),
-            segments        = torch.stack(tuple(f.entities.segments for f in features)),
-            attention_mask  = torch.stack(tuple(f.entities.attention_mask for f in features)),
-            pos             = torch.stack(tuple(f.entities.pos for f in features)),
-            N               = torch.tensor(tuple(f.entities.N for f in featueres)),
+            ids             = torch.stack(tuple(e.entities.ids for e in ex)),
+            segments        = torch.stack(tuple(e.entities.segments for e in ex)),
+            attention_mask  = torch.stack(tuple(e.entities.attention_mask for e in ex)),
+            pos             = torch.stack(tuple(e.entities.pos for e in ex)),
+            N               = torch.tensor(tuple(e.entities.N for e in ex)),
         )
 
     @classmethod
-    def build(cls, features: list[Example]):
-        return cls(*cls.stack(features))
+    def build(cls, ex: list[Example]):
+        return cls(*cls.stack(ex))
 
 def get_special_ids(tokenizer: AutoTokenizer) -> (int, int, int):
     """ Returns seperator id, close id and pad id """
