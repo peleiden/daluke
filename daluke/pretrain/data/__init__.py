@@ -68,3 +68,22 @@ def load_entity_vocab(vocab_file: str) -> dict[str, dict[str, int]]:
                 }
     return entities
 
+def calculate_spans(tokens: list[str]) -> list[tuple[int, int]]:
+    """ Calculate word spans from a list of tokens. Excludes punctuation """
+    spans = list()
+    start, i = -1, 0
+    while i < len(tokens):
+        if tokens[i].isalnum():
+            start = i
+        elif tokens[i].startswith("##"):  # '##' marks word continuation token
+            while i < len(tokens) and tokens[i].startswith("##") and start != -1:
+                i += 1
+            i -= 1
+            if start != -1:
+                spans.append((start, i))
+        elif start == i - 1 and start != -1:
+            spans.append((start, i))
+        i += 1
+
+    return spans
+

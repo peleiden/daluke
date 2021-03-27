@@ -14,7 +14,7 @@ def run_build_dataset():
     parser.add_argument("tokenizer_name", type=str)
     parser.add_argument("out_dir", type=str)
     parser.add_argument("--max-seq-length", type=str, default=512)
-    parser.add_argument("--max-entity-length", type=str, default=128)
+    parser.add_argument("--max-entities", type=str, default=128)
     parser.add_argument("--min-sentence-length", type=str, default=5)
     args = parser.parse_args()
 
