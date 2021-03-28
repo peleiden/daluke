@@ -37,7 +37,6 @@ class Hyperparams:
     def __str__(self):
         return json.dumps(self.__dict__, indent=4)
 
-
 def train(
     rank: int,
     world_size: int,

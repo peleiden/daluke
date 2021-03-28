@@ -5,6 +5,7 @@ import json
 import multiprocessing as mp
 import random
 import re
+from collections import defaultdict
 
 from pelutils import log, TickTock
 from tqdm import tqdm
@@ -21,11 +22,8 @@ class Builder:
     tokenizer_language = "da"
 
     # Some of the files saved by the build method
-    metadata_file     = "metadata.json"
-    word_ids_file     = "word_ids.json"
-    word_spans_file   = "word_spans.json"
-    entity_ids_file   = "entity_ids.json"
-    entity_spans_file = "entity_spans.json"
+    metadata_file = "metadata.json"
+    data_file     = "data.json"
 
     def __init__(
         self,
@@ -56,6 +54,7 @@ class Builder:
 
 
         # Filter titles so only real articles are included
+        # TODO: billed eller billede?
         self.target_titles = [
             title for title in self.dump_db.titles()
             if not any(title.lower().startswith(word + ":") for word in ("billed", "fil", "kategori"))
@@ -84,6 +83,7 @@ class Builder:
             json.dump(self.entity_vocab, ev, indent=2)
 
         log.section("Processing pages")
+        features = defaultdict(list)
         word_ids: list[list[int]] = list()
         word_spans: list[list[tuple[int, int]]] = list()
         entity_ids: list[list[int]] = list()
@@ -91,11 +91,9 @@ class Builder:
         for title in log.tqdm(tqdm(self.target_titles)):
             log("Processing %s" % title)
             with TT.profile("Process page"):
-                features = self._process_page(title)
-            word_ids += features["word_ids"]
-            word_spans += features["word_spans"]
-            entity_ids += features["entity_ids"]
-            entity_spans += features["entity_spans"]
+                page_features = self._process_page(title)
+            for key in page_features:
+                features[key] += page_features[key]
 
         # Save metadata
         with open(path := os.path.join(self.out_dir, self.metadata_file), "w") as f:
@@ -110,18 +108,9 @@ class Builder:
             }, f, indent=4)
 
         # Save features
-        with open(path := os.path.join(self.out_dir, self.word_ids_file), "w") as f:
-            log("Saving word ids to %s" % path)
-            json.dump(word_ids, f)
-        with open(path := os.path.join(self.out_dir, self.word_spans_file), "w") as f:
-            log("Saving word spans to %s" % path)
-            json.dump(word_spans, f)
-        with open(path := os.path.join(self.out_dir, self.entity_ids_file), "w") as f:
-            log("Saving entity ids to %s" % path)
-            json.dump(entity_ids, f)
-        with open(path := os.path.join(self.out_dir, self.entity_spans_file), "w") as f:
-            log("Saving entity spans to %s" % path)
-            json.dump(entity_spans, f)
+        with open(path := os.path.join(self.out_dir, self.data_file), "w") as f, TT.profile("Save data"):
+            log("Saving features to %s" % path)
+            json.dump(features, f)
 
         log.debug("Time distribution", TT)
 

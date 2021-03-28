@@ -10,6 +10,7 @@ from daluke.data import BatchedExamples
 from .loader import DataLoader
 from .masking import MaskedBatchedExamples, mask_ent_batch
 
+
 class ICUSentenceTokenizer:
     """ Segment text to sentences. """
 
@@ -52,7 +53,6 @@ class ICUSentenceTokenizer:
             spans.append((start_idx, end_idx))
             start_idx = end_idx
         return spans
-
 
 def load_entity_vocab(vocab_file: str) -> dict[str, dict[str, int]]:
     """ Loads an entity vocab created by build-entity-vocab

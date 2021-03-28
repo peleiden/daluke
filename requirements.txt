@@ -1,13 +1,13 @@
-# Numerial and plotting
+# Numerical and plotting
 numpy
 matplotlib
+pandas  # for danlp
 
 # ML stuff
 torch>=1.7.1
 transformers>=4.0.0
 danlp
 conllu  # for danlp
-pandas  # for danlp
 seqeval
 
 # Text handling
