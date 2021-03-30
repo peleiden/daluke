@@ -7,6 +7,7 @@ from pelutils import MainTest
 from daluke.pretrain.data import load_entity_vocab, DataLoader
 from daluke.data import BatchedExamples
 
+
 class TestData(MainTest):
     def test_entity_loader(self):
         path = os.path.join(self.test_dir, "entity.jsonl")
@@ -37,7 +38,7 @@ class TestData(MainTest):
                     "entity_spans": [[(0, 3)], []]
                 }, f
             )
-        dl = DataLoader(path)
+        dl = DataLoader(self.test_dir)
         assert len(dl.examples) == 2
         assert torch.all(dl.examples[1].entities.ids == 0)
         loader = dl.get_dataloader(1, torch.utils.data.RandomSampler(dl.examples))
@@ -45,4 +46,4 @@ class TestData(MainTest):
         for batch in loader:
             i += 1
             assert isinstance(batch, BatchedExamples)
-        assert i ==2
+        assert i == 2

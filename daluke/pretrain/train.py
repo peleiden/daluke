@@ -4,8 +4,10 @@ from dataclasses import dataclass
 import json
 
 import torch.distributed as dist
-from transformers import AutoConfig
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data.distributed import DistributedSampler
 
+from transformers import AutoConfig
 from pelutils.logger import log, Levels
 
 from daluke.pretrain.data import DataLoader
@@ -58,15 +60,22 @@ def train(
     # Test input correctness
     assert params.lr > 0, "Learning rate must be larger than 0"
 
-    # Setup multi-gpu if used
+    # Setup multi-gpu if used and get device
     setup(rank, world_size)
+    if rank == -1:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # TODO: Instantiate model
+    else:
+        device = torch.device("cuda", index=rank)
+        # TODO: Instantiate model and wrap in DDP with device_ids=[rank]
 
-    # FIXME: Get device and use it for dataloader and model
-    data = DataLoader(os.path.join(location, "data.json"))
-    # FIXME: Get out-name from module constant in pretrain.data.build
-    # FIXME: Pass dataset metadata to DataLoader
+    # TODO: Get device and use it for dataloader and model
+    # TODO: Use DistributedSampler if rank != -1
+    data = DataLoader(location, "data.json")
+    # TODO: Get out-name from module constant in pretrain.data.build
+    # TODO: Pass dataset metadata to DataLoader
     bert_config = AutoConfig.from_pretrained(daBERT)
-    # FIXME: Get transformer name from metadata
+    # TODO: Get transformer name from metadata
 
 
 

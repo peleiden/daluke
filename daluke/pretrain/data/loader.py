@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 import json
 
 from transformers import AutoTokenizer
@@ -73,6 +74,7 @@ class DataLoader:
         return len(self.examples)
 
     def get_dataloader(self, batch_size: int, sampler: torch.utils.data.Sampler) -> DataLoader:
+        # TODO: Maybe dataloader should be created in __init__?
         return torch.utils.data.DataLoader(list(enumerate(self.examples)), batch_size=batch_size, sampler=sampler, collate_fn=self.collate)
 
     @staticmethod
