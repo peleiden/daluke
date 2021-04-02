@@ -7,29 +7,50 @@ import torch
 
 @dataclass
 class Words:
+    """
+    Contains all data related to the "words", e.g. text tokens used for forward passing daLUKE.
+
+    ids: Tensor of tokenizer ids for each token, size: (B x) N
+    attention_mask: Mask showing where the actual text is and what is padding, size: (B x) N
+    N: Number of tokens
+    pos: Optional; mask that shows which tokens correspond to which full words, size: (B x) N x N
+    """
     ids: torch.Tensor
     segments: torch.Tensor
     attention_mask: torch.Tensor
     N: int
+    pos: torch.Tensor
 
     @classmethod
     def build(cls, ids: torch.Tensor,
+            spans: list[list[int]]=None,
             max_len: int=512,
             sep_id: int=3,
             cls_id: int=2,
             pad_id: int=0,
         ):
         """
-        For creating a single example
+        For creating a single example: Pads and add special tokens.
         """
         N = ids.shape[0]
         word_ids = torch.full((max_len,), pad_id, dtype=torch.long)
         word_ids[:N+2] = torch.cat((torch.LongTensor([cls_id]), ids, torch.LongTensor([sep_id])))
+
+        if spans is not None:
+            pos = torch.zeros((max_len, max_len), dtype=torch.bool)
+            # TODO: Make faster than for loop
+            for i, w in enumerate(spans):
+                pos[i, w[0]:w[1]] = True
+        else:
+            pos = None
+
         return cls(
             ids            = word_ids,
             segments       = cls._build_segments(max_len),
             attention_mask = cls._build_att_mask(N+2, max_len),
-            N              = N
+            N              = N,
+            pos            = pos,
+
         )
 
     @staticmethod
@@ -40,11 +61,17 @@ class Words:
 
     @staticmethod
     def _build_segments(max_size: int):
+        # TODO: Is this really correct? Seems stupid ...
         return torch.zeros(max_size, dtype=torch.long)
 
 @dataclass
 class Entities(Words):
-    pos: torch.Tensor
+    """
+    ids: Tensor of entity vocabulary ids for each entity, size: (B x ) N
+    attention_mask: Mask showing where the actual content is and what is padding, size: (B x) N
+    N: Number of entities
+    pos: Saves position spans in each row for each entity as these are used for positional embeddings, size: (B x) N x max mention size
+    """
 
     @classmethod
     def build(cls, ids: torch.Tensor, spans: list[tuple],
@@ -71,8 +98,8 @@ class Entities(Words):
             ids            = ent_ids,
             segments       = cls._build_segments(max_len),
             attention_mask = cls._build_att_mask(N, max_len),
-            pos            = ent_pos,
             N              = N,
+            pos            = ent_pos,
         )
 
 @dataclass
@@ -94,6 +121,8 @@ class BatchedExamples(Example):
             ids             = torch.stack(tuple(e.words.ids for e in ex)),
             segments        = torch.stack(tuple(e.words.segments for e in ex)),
             attention_mask  = torch.stack(tuple(e.words.attention_mask for e in ex)),
+            # Assume, that if one of the word examples (1st one) in the batch has a position vector, all of them do
+            pos             = torch.stack(tuple(e.words.pos for e in ex)) if ex[0].words.pos is not None else None,
             N               = torch.tensor(tuple(e.words.N for e in ex)),
         ), Entities(
             ids             = torch.stack(tuple(e.entities.ids for e in ex)),

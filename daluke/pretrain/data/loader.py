@@ -21,12 +21,12 @@ class DataLoader:
         max_entity_len:   int = 128,
         max_mention:      int = 30,
     ):
-        # TODO: Update docs with word spans
         """
         Loads a generated json dataset prepared by the preprocessing pipeline, e.g. like
         ```
         {
             "word_ids":     [[32, 59, 3]], [42, 11]],
+            "word_spans":   [[[0, 2], [2, 3], [5, 7]], [[0, 1], [1, 2]]],
             "entity_ids":   [[5], []],
             "entity_spans": [[[0, 3]], []]
         }
@@ -45,18 +45,19 @@ class DataLoader:
         with open(path := os.path.join(data_dir, "data.json"), "r") as f:
             log.debug("Loading json dataset into memory from %s ..." % path)
             data = json.load(f)
-        N = len(data["word_ids"])
-        assert N == len(data["entity_ids"]) == len(data["entity_spans"])
-
+        if not (N := len(data["word_ids"])) == len(data["entity_ids"]) == len(data["entity_spans"]) == len(data["word_spans"]):
+            raise ValueError("Pretrain json dataset should contain word_ids, entity_ids, entity_spans and word_spans, all of equal length")
         log.debug("Creating examples ...")
         self.examples: list[Example] = [None for _ in range(N)]
         # Build data in reverse order to pop more effeciently
         for i in range(N-1, -1, -1):
             # Pop to reduce memory usage
-            word_ids, ent_ids, ent_spans = data["word_ids"].pop(), data["entity_ids"].pop(), data["entity_spans"].pop()
+            word_ids, word_spans, ent_ids, ent_spans = \
+                data["word_ids"].pop(), data["word_spans"].pop(), data["entity_ids"].pop(), data["entity_spans"].pop()
             self.examples[i] = Example(
                 words = Words.build(
                     torch.LongTensor(word_ids),
+                    word_spans,
                     max_len = self.max_sentence_len,
                     sep_id  = self.sep_id,
                     cls_id  = self.cls_id,
