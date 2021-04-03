@@ -10,16 +10,16 @@ class Words:
     """
     Contains all data related to the "words", e.g. text tokens used for forward passing daLUKE.
 
-    ids: Tensor of tokenizer ids for each token, size: (B x) N
-    attention_mask: Mask showing where the actual text is and what is padding, size: (B x) N
+    ids: Tensor of tokenizer ids for each token, size: (B x) M
+    attention_mask: Mask showing where the actual text is and what is padding, size: (B x) M
     N: Number of tokens
-    pos: Optional; mask that shows which tokens correspond to which full words, size: (B x) N x N
+    spans: Optional; M x 2 vector showing token positions corresponding to full words; necessary for full-word masking
     """
     ids: torch.Tensor
     segments: torch.Tensor
     attention_mask: torch.Tensor
     N: int
-    pos: torch.Tensor
+    spans: torch.Tensor
 
     @classmethod
     def build(cls, ids: torch.Tensor,
@@ -36,21 +36,16 @@ class Words:
         word_ids = torch.full((max_len,), pad_id, dtype=torch.long)
         word_ids[:N+2] = torch.cat((torch.LongTensor([cls_id]), ids, torch.LongTensor([sep_id])))
 
-        if spans is not None:
-            pos = torch.zeros((max_len, max_len), dtype=torch.bool)
-            # TODO: Make faster than for loop
-            for i, w in enumerate(spans):
-                pos[i, w[0]:w[1]] = True
-        else:
-            pos = None
+        # Don't pad the spans as they are not given to model, but used for masking
+        if spans:
+            spans = torch.LongTensor(spans)
 
         return cls(
             ids            = word_ids,
             segments       = cls._build_segments(max_len),
             attention_mask = cls._build_att_mask(N+2, max_len),
             N              = N,
-            pos            = pos,
-
+            spans          = spans,
         )
 
     @staticmethod
@@ -67,11 +62,12 @@ class Words:
 @dataclass
 class Entities(Words):
     """
-    ids: Tensor of entity vocabulary ids for each entity, size: (B x ) N
-    attention_mask: Mask showing where the actual content is and what is padding, size: (B x) N
+    ids: Tensor of entity vocabulary ids for each entity, size: (B x ) M
+    attention_mask: Mask showing where the actual content is and what is padding, size: (B x) M
     N: Number of entities
-    pos: Saves position spans in each row for each entity as these are used for positional embeddings, size: (B x) N x max mention size
+    pos: Saves position spans in each row for each entity as these are used for positional embeddings, size: (B x) M x max mention size
     """
+    pos: torch.Tensor
 
     @classmethod
     def build(cls, ids: torch.Tensor, spans: list[tuple],
@@ -99,6 +95,7 @@ class Entities(Words):
             segments       = cls._build_segments(max_len),
             attention_mask = cls._build_att_mask(N, max_len),
             N              = N,
+            spans          = None, # We do not need to save the spans for masking as we do for words
             pos            = ent_pos,
         )
 
@@ -121,14 +118,15 @@ class BatchedExamples(Example):
             ids             = torch.stack(tuple(e.words.ids for e in ex)),
             segments        = torch.stack(tuple(e.words.segments for e in ex)),
             attention_mask  = torch.stack(tuple(e.words.attention_mask for e in ex)),
-            # Assume, that if one of the word examples (1st one) in the batch has a position vector, all of them do
-            pos             = torch.stack(tuple(e.words.pos for e in ex)) if ex[0].words.pos is not None else None,
             N               = torch.tensor(tuple(e.words.N for e in ex)),
+            # Assume that if one of the word examples (1st one) in the batch has a span vector, all of them do
+            spans           = (e.words.spans for e in ex) if ex[0].words.spans is not None else None,
         ), Entities(
             ids             = torch.stack(tuple(e.entities.ids for e in ex)),
             segments        = torch.stack(tuple(e.entities.segments for e in ex)),
             attention_mask  = torch.stack(tuple(e.entities.attention_mask for e in ex)),
             pos             = torch.stack(tuple(e.entities.pos for e in ex)),
+            spans           = None,
             N               = torch.tensor(tuple(e.entities.N for e in ex)),
         )
 

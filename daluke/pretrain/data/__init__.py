@@ -8,7 +8,7 @@ from daluke import daBERT
 from daluke.data import BatchedExamples
 # Must be imported for API availability
 from .loader import DataLoader
-from .masking import MaskedBatchedExamples, mask_ent_batch
+from .masking import MaskedBatchedExamples, mask_ent_batch, mask_word_batch
 
 
 class ICUSentenceTokenizer:
