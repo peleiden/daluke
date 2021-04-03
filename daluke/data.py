@@ -120,7 +120,7 @@ class BatchedExamples(Example):
             attention_mask  = torch.stack(tuple(e.words.attention_mask for e in ex)),
             N               = torch.tensor(tuple(e.words.N for e in ex)),
             # Assume that if one of the word examples (1st one) in the batch has a span vector, all of them do
-            spans           = (e.words.spans for e in ex) if ex[0].words.spans is not None else None,
+            spans           = [e.words.spans for e in ex] if ex[0].words.spans is not None else None,
         ), Entities(
             ids             = torch.stack(tuple(e.entities.ids for e in ex)),
             segments        = torch.stack(tuple(e.entities.segments for e in ex)),

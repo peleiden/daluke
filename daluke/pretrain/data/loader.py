@@ -8,8 +8,8 @@ import torch
 from pelutils import log
 
 from daluke import daBERT
-from daluke.data import Example, Words, Entities, get_special_ids, BatchedExamples, Words, Entities
-
+from daluke.data import Example, Words, Entities, get_special_ids, Words, Entities
+from .masking import MaskedBatchedExamples
 
 class DataLoader:
 
@@ -17,6 +17,10 @@ class DataLoader:
         self,
         data_dir: str,
         tokenizer_name:   str = daBERT,
+        word_mask_prob:     float   = 0.15,
+        word_unmask_prob:   float   = 0.1,
+        word_randword_prob: float   = 0.1,
+        ent_mask_prob:      float   = 0.15,
         max_sentence_len: int = 512,
         max_entity_len:   int = 128,
         max_mention:      int = 30,
@@ -36,10 +40,17 @@ class DataLoader:
         self.max_entity_len = max_entity_len
         self.max_mention = max_mention
 
+        self.word_mask_prob = word_mask_prob
+        self.word_unmask_prob = word_unmask_prob
+        self.word_randword_prob = word_randword_prob
+        self.ent_mask_prob = ent_mask_prob
+
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
         self.sep_id, self.cls_id, self.pad_id = get_special_ids(self.tokenizer)
-        self.mask_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.mask_token)
+        self.word_mask_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.mask_token)
         self.ent_mask_id = 2  # FIXME: Load entity vocab and dont hardcode this!
+        # Don't insert ids that are special tokens when performing random word insertion in the masking
+        self.random_word_id_range = (self.word_mask_id + 1, self.tokenizer.vocab_size)
 
         # FIXME: Circular imports, so Builder.data_file can be used
         with open(path := os.path.join(data_dir, "data.json"), "r") as f:
@@ -78,6 +89,14 @@ class DataLoader:
         # TODO: Maybe dataloader should be created in __init__?
         return torch.utils.data.DataLoader(list(enumerate(self.examples)), batch_size=batch_size, sampler=sampler, collate_fn=self.collate)
 
-    @staticmethod
-    def collate(batch: list[tuple[int, Example]]) -> BatchedExamples:
-        return BatchedExamples.build([ex for _, ex in batch])
+    def collate(self, batch: list[tuple[int, Example]]) -> MaskedBatchedExamples:
+        return MaskedBatchedExamples.build(
+            [ex for _, ex in batch],
+            word_mask_id       = self.word_mask_id,
+            ent_mask_id        = self.ent_mask_id,
+            word_mask_prob     = self.word_mask_prob,
+            word_unmask_prob   = self.word_unmask_prob,
+            word_randword_prob = self.word_randword_prob,
+            word_id_range      = self.random_word_id_range,
+            ent_mask_prob      = self.ent_mask_prob,
+        )
