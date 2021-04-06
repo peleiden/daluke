@@ -11,8 +11,10 @@ from torch.utils.data.distributed import DistributedSampler
 from transformers import AutoConfig
 from pelutils.logger import log, Levels
 
-from daluke.pretrain.data import DataLoader
-from daluke.pretrain.data.build import DatasetBuilder
+from daluke import daBERT
+from .data import DataLoader
+from .data.build import Builder
+from .model import PretrainTaskDaLUKE
 
 PORT = "3090"
 
@@ -56,7 +58,7 @@ def train(
         log_commit  = True,
         print_level = (Levels.INFO if quiet else Levels.DEBUG) if is_master(rank) else None,
     )
-    log("Running with the following hyperparameters", params)
+    log("Starting pre-training with the following hyperparameters", params)
 
     log.section("Reading metadata")
     with open(os.path.join(location, DatasetBuilder.metadata_file)) as f:
@@ -65,16 +67,29 @@ def train(
     # Test input correctness
     assert params.lr > 0, "Learning rate must be larger than 0"
 
+    with open(os.path.join(location, Builder.metadata_file), "r") as f:
+        metadata = json.load(f)
+    log(f"Loaded metadata:", json.dumps(metadata, indent=4))
+
     # Setup multi-gpu if used and get device
     setup(rank, world_size)
+
+    if is_master(rank):
+        log.info("Setting up model ...")
+
+    bert_config = AutoConfig.from_pretrained(daBERT)
     if rank == -1:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        # TODO: Instantiate model
+        model = PretrainTaskDaLUKE(
+                bert_config,
+                ent_vocab_size = None, # TODO: Load entity vocab
+                ent_emb_size   = None, # TODO: Add this as argument
+        )
     else:
         device = torch.device("cuda", index=rank)
         # TODO: Instantiate model and wrap in DDP with device_ids=[rank]
+    model.to(device)
 
-    # TODO: Get device and use it for dataloader and model
     # TODO: Use DistributedSampler if rank != -1
     data = DataLoader(location, metadata)
     # TODO: Get out-name from module constant in pretrain.data.build

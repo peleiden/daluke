@@ -51,6 +51,7 @@ class DatasetBuilder:
         self.max_seq_length      = max_seq_length
         self.max_entities        = max_entities
         self.min_sentence_length = min_sentence_length
+        self.tokenizer_name      = tokenizer_name
         # Get maximum number of tokens in a sequence excluding [CLS] and [SEP]
         self.max_num_tokens = max_seq_length - 2
         self.max_articles = max_articles
@@ -79,7 +80,7 @@ class DatasetBuilder:
 
     def build(self):
         log("Saving tokenizer config and word token config to %s" % self.out_dir)
-        self.tokenizer.save_pretrained(self.out_dir)
+        self.tokenizer.save_pretrained(self.out_dir) # FIXME: Why do we do this? We don't alter it in any way?
         with open(path := os.path.join(self.out_dir, "entity-vocab.json"), "w", encoding="utf-8") as ev:
             log("Saving entity vocab to %s" % path)
             json.dump(self.entity_vocab, ev, indent=2)
