@@ -5,11 +5,13 @@ import json
 
 import torch
 import torch.distributed as dist
+from torch.nn import CrossEntropyLoss
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data import RandomSampler
+import numpy as np
 
-from transformers import AutoConfig, AutoModelForPreTraining
+from transformers import AutoConfig, AutoModelForPreTraining, AdamW, get_linear_schedule_with_warmup
 from pelutils.logger import log, Levels
 
 from daluke import daBERT
@@ -18,6 +20,7 @@ from .data.build import DatasetBuilder
 from .model import PretrainTaskDaLUKE
 
 PORT = "3090" # Are we sure this port is in stock?
+NO_DECAY =  {"bias", "LayerNorm.weight"}
 
 def setup(rank: int, world_size: int):
     if rank != -1:
@@ -33,19 +36,31 @@ def is_master(rank: int) -> bool:
     """ Determine if master node """
     return rank < 1
 
+def get_optimizer_params(params: list, do_decay: bool) -> list:
+    """ Returns the parameters that should be tracked by optimizer with or without weight decay"""
+    # Only include the parameter if do_decay has reverse truth value of the parameter being in no_decay
+    include = lambda n: not do_decay == any(nd in n for nd in NO_DECAY)
+    return [p for n, p in params if p.requires_grad and include(n)]
+
 @dataclass
 class Hyperparams:
-    lr: float = 1e-4
+    epochs: int = 20
     batch_size: int = 2048
+    lr: float = 1e-4
     grad_accumulate: int = 1024
     ent_embed_size: int = 256
+    weight_decay: float = 0.1
+    warmup_prop: float = 0.06
 
     def __post__init(self):
         # Test input correctness
+        assert self.epochs > 0
         assert self.lr > 0, "Learning rate must be larger than 0"
-        assert isinstance(self.ent_embed_size, int) and self.ent_emb_size > 0
+        assert isinstance(self.ent_embed_size, int) and self.ent_embed_size > 0
         assert isinstance(self.batch_size, int) and self.batch_size > 0
         assert isinstance(self.grad_accumulate, int) and self.grad_accumulate > 0
+        assert 1 > self.weight_decay >= 0
+        assert 1 > self.warmup_prop >= 0
 
     def __str__(self):
         return json.dumps(self.__dict__, indent=4)
@@ -107,11 +122,20 @@ def train(
     )
     sampler = RandomSampler if is_master(rank) else DistributedSampler # TODO: Is this a random sampler?
 
-    # TODO: Set up optimizer
-    # TODO: Set up loss function
+    # TODO: How to handle fixing of BERT parameters
+    num_updates = int(np.ceil((data) / params.batch_size * params.epochs))
+    model_params = list(model.named_parameters())
+    optimizer = AdamW(
+        [{"params": get_optimizer_params(model_params, do_decay=True),  "weight_decay": params.weight_decay},
+         {"params": get_optimizer_params(model_params, do_decay=False), "weight_decay": 0}],
+        lr = params.lr,
+    )
+    scheduler = get_linear_schedule_with_warmup(optimizer, int(params.warmup_prop * num_updates), num_updates)
+    loss = CrossEntropyLoss(ignore_index=-1)
     model.train()
-    for batch in data.get_dataloader(params.batch_size, sampler(data.examples)):
-        preds = model(batch)
+    for i in range(params.epochs):
+        for batch in data.get_dataloader(params.batch_size, sampler(data.examples)):
+            preds = model(batch)
 
     # Clean up multi-gpu if used
     cleanup(rank)

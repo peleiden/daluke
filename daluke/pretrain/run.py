@@ -14,11 +14,13 @@ from daluke.pretrain.train import train, Hyperparams
 
 ARGUMENTS = {
     "entity-vocab-file": { "default": "entity_vocab.json", "type": str, "help": "Location of entity vocabulary" },
-    "quiet":           { "action": "store_true", "help": "Don't show debug logging" },
-    "batch-size":      { "default": Hyperparams.batch_size, "type": int },
-    "grad-accumulate": { "default": Hyperparams.grad_accumulate, "type": int,  "help": "Steps taken to accumulate gradient" },
-    "lr":              { "default": Hyperparams.lr, "type": float, "help": "Initial learning rate" },
-    "ent-embed-size":  { "default": Hyperparams.ent_embed_size, "type": int, "help": "Dimension of the entity embeddings" },
+    "epochs":            { "default": Hyperparams.epochs, "type": int, "help": "Number of passes through the entire data set"},
+    "batch-size":        { "default": Hyperparams.batch_size, "type": int },
+    "lr":                { "default": Hyperparams.lr, "type": float, "help": "Initial learning rate" },
+    "ent-embed-size":    { "default": Hyperparams.ent_embed_size, "type": int, "help": "Dimension of the entity embeddings" },
+    "weight-decay":      { "default": Hyperparams.weight_decay, "type": float, "help": "The decay factor in the AdamW optimizer" },
+    "warmup-prop":       { "default": Hyperparams.warmup_prop, "type": float, "help": "Proportion of training steps used for optimizer warmup" },
+    "quiet":             { "action": "store_true", "help": "Don't show debug logging" },
 }
 
 def _run_training(rank: int, world_size: int, args: dict[str, Any]):
