@@ -7,8 +7,9 @@ import torch
 
 from pelutils import log
 
-from daluke import daBERT
 from daluke.data import Example, Words, Entities, get_special_ids, Words, Entities
+from daluke.pretrain.data import load_jsonl
+from daluke.pretrain.data.build import DatasetBuilder
 from .masking import MaskedBatchedExamples
 
 class DataLoader:
@@ -16,14 +17,14 @@ class DataLoader:
     def __init__(
         self,
         data_dir: str,
-        tokenizer_name:   str = daBERT,
-        word_mask_prob:     float   = 0.15,
-        word_unmask_prob:   float   = 0.1,
-        word_randword_prob: float   = 0.1,
-        ent_mask_prob:      float   = 0.15,
-        max_sentence_len: int = 512,
-        max_entity_len:   int = 128,
-        max_mention:      int = 30,
+        metadata: dict,
+        word_mask_prob:     float = 0.15,
+        word_unmask_prob:   float = 0.1,
+        word_randword_prob: float = 0.1,
+        ent_mask_prob:      float = 0.15,
+        max_sentence_len:   int = 512,
+        max_entity_len:     int = 128,
+        max_mention:        int = 30,
     ):
         """
         Loads a generated json dataset prepared by the preprocessing pipeline, e.g. like
@@ -45,42 +46,34 @@ class DataLoader:
         self.word_randword_prob = word_randword_prob
         self.ent_mask_prob = ent_mask_prob
 
-        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(metadata["base-model"])
         self.sep_id, self.cls_id, self.pad_id = get_special_ids(self.tokenizer)
         self.word_mask_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.mask_token)
         self.ent_mask_id = 2  # FIXME: Load entity vocab and dont hardcode this!
         # Don't insert ids that are special tokens when performing random word insertion in the masking
         self.random_word_id_range = (self.word_mask_id + 1, self.tokenizer.vocab_size)
 
-        # FIXME: Circular imports, so Builder.data_file can be used
-        with open(path := os.path.join(data_dir, "data.json"), "r") as f:
-            log.debug("Loading json dataset into memory from %s ..." % path)
-            data = json.load(f)
-        if not (N := len(data["word_ids"])) == len(data["entity_ids"]) == len(data["entity_spans"]) == len(data["word_spans"]):
-            raise ValueError("Pretrain json dataset should contain word_ids, entity_ids, entity_spans and word_spans, all of equal length")
-        log.debug("Creating examples ...")
-        self.examples: list[Example] = [None for _ in range(N)]
+        log.section("Creating examples ...")
+        self.examples: list[Example] = list()
         # Build data in reverse order to pop more effeciently
-        for i in range(N-1, -1, -1):
+        for seq_data in load_jsonl(os.path.join(data_dir, DatasetBuilder.data_file)):
             # Pop to reduce memory usage
-            word_ids, word_spans, ent_ids, ent_spans = \
-                data["word_ids"].pop(), data["word_spans"].pop(), data["entity_ids"].pop(), data["entity_spans"].pop()
-            self.examples[i] = Example(
+            self.examples.append(Example(
                 words = Words.build(
-                    torch.LongTensor(word_ids),
-                    word_spans,
+                    torch.LongTensor(seq_data["word_ids"]),
+                    seq_data["word_spans"],
                     max_len = self.max_sentence_len,
                     sep_id  = self.sep_id,
                     cls_id  = self.cls_id,
                     pad_id  = self.pad_id,
                 ),
                 entities = Entities.build(
-                    torch.LongTensor(ent_ids),
-                    ent_spans,
+                    torch.LongTensor(seq_data["entity_ids"]),
+                    seq_data["entity_spans"],
                     max_len     = self.max_entity_len,
                     max_mention = self.max_mention,
                 )
-            )
+            ))
 
     def __len__(self):
         return len(self.examples)

@@ -3,14 +3,15 @@ from typing import Callable
 import torch
 from torch import nn
 
+from transformers import AutoTokenizer, AutoModelForPreTraining
 from transformers.models.bert.modeling_bert import (
     BertConfig,
     BertPreTrainingHeads,
 )
 
-
 from daluke.model import DaLUKE
 from daluke.pretrain.data import MaskedBatchedExamples
+
 
 class PretrainTaskDaLUKE(DaLUKE):
     """
@@ -20,7 +21,7 @@ class PretrainTaskDaLUKE(DaLUKE):
         bert_config: BertConfig,
         ent_vocab_size: int,
         ent_emb_size: int,
-        ):
+    ):
         super().__init__(bert_config, ent_vocab_size, ent_emb_size)
 
         self.mask_word_scorer = BertPreTrainingHeads(self.bert_config)

@@ -10,9 +10,10 @@ from torch.utils.data import DataLoader, RandomSampler
 from transformers import AutoTokenizer
 from danlp.datasets import DDT
 
+from daluke import daBERT
 from daluke.luke import convert_examples_to_features, InputFeatures
 
-TOKENIZER = "Maltehb/danish-bert-botxo"
+TOKENIZER = daBERT
 
 class Split(IntEnum):
     TRAIN = 0

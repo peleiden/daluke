@@ -1,14 +1,8 @@
 from __future__ import annotations
 import json
+from typing import Generator
 
 from icu import Locale, BreakIterator
-import torch
-
-from daluke import daBERT
-from daluke.data import BatchedExamples
-# Must be imported for API availability
-from .loader import DataLoader
-from .masking import MaskedBatchedExamples, mask_ent_batch, mask_word_batch
 
 
 class ICUSentenceTokenizer:
@@ -54,18 +48,21 @@ class ICUSentenceTokenizer:
             start_idx = end_idx
         return spans
 
+def load_jsonl(fpath: str, encoding=None) -> Generator:
+    with open(fpath, encoding=encoding) as f:
+        for line in f.readlines():
+            if l := line.strip():
+                yield json.loads(l)
+
 def load_entity_vocab(vocab_file: str) -> dict[str, dict[str, int]]:
     """ Loads an entity vocab created by build-entity-vocab
     { "entity": { "id": int, "count": int } } """
     entities = dict()
-    with open(vocab_file) as vf:
-        for line in vf.readlines():
-            if l := line.strip():
-                entity = json.loads(l)
-                entities[entity["entities"][0][0]] = {
-                    "id": entity["id"],
-                    "count": entity["count"],
-                }
+    for entity in load_jsonl(vocab_file):
+        entities[entity["entities"][0][0]] = {
+            "id": entity["id"],
+            "count": entity["count"],
+        }
     return entities
 
 def calculate_spans(tokens: list[str]) -> list[tuple[int, int]]:
@@ -87,3 +84,10 @@ def calculate_spans(tokens: list[str]) -> list[tuple[int, int]]:
 
     return spans
 
+
+
+# Imported for API availability
+from daluke import daBERT
+from daluke.data import BatchedExamples
+from .loader import DataLoader
+from .masking import MaskedBatchedExamples, mask_ent_batch, mask_word_batch

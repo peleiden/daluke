@@ -17,13 +17,13 @@ from . import ICUSentenceTokenizer, load_entity_vocab, calculate_spans
 TT = TickTock()
 
 
-class Builder:
+class DatasetBuilder:
 
     tokenizer_language = "da"
 
     # Some of the files saved by the build method
     metadata_file = "metadata.json"
-    data_file     = "data.json"
+    data_file     = "data.jsonl"
 
     def __init__(
         self,
@@ -34,10 +34,12 @@ class Builder:
         max_seq_length      = 512,  # Maximum length of any sequence
         max_entities        = 128,  # Maximum number of entities in a sequence
         min_sentence_length = 5,
+        max_articles        = None,
     ):
         log("Reading dump database at %s" % dump_db_file)
         self.dump_db = DumpDB(dump_db_file)
         log("Building tokeninizer: %s" % tokenizer_name)
+        self.tokenizer_name = tokenizer_name
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
         log("Building sentence tokenizer: %s" % self.tokenizer_language)
         self.sentence_tokenizer = ICUSentenceTokenizer(self.tokenizer_language)
@@ -51,7 +53,7 @@ class Builder:
         self.min_sentence_length = min_sentence_length
         # Get maximum number of tokens in a sequence excluding [CLS] and [SEP]
         self.max_num_tokens = max_seq_length - 2
-
+        self.max_articles = max_articles
 
         # Filter titles so only real articles are included
         # TODO: billed eller billede?
@@ -83,34 +85,24 @@ class Builder:
             json.dump(self.entity_vocab, ev, indent=2)
 
         log.section("Processing pages")
-        features = defaultdict(list)
-        word_ids: list[list[int]] = list()
-        word_spans: list[list[tuple[int, int]]] = list()
-        entity_ids: list[list[int]] = list()
-        entity_spans: list[list[int]] = list()
-        for title in log.tqdm(tqdm(self.target_titles)):
+        n_seqs = 0
+        for title in log.tqdm(tqdm(self.target_titles[:self.max_articles])):
             log("Processing %s" % title)
             with TT.profile("Process page"):
-                page_features = self._process_page(title)
-            for key in page_features:
-                features[key] += page_features[key]
+                n_seqs += self._process_page(title)
 
         # Save metadata
         with open(path := os.path.join(self.out_dir, self.metadata_file), "w") as f:
             log("Saving metadata to %s" % path)
             json.dump({
-                "number-of-items":     len(word_ids),
+                "number-of-items":     n_seqs,
                 "max-seq-length":      self.max_seq_length,
                 "max-entity-length":   self.max_entities,
                 "min-sentence-length": self.min_sentence_length,
+                "base-model":          self.tokenizer_name,
                 "tokenizer-class":     self.tokenizer.__class__.__name__,
                 "language":            self.dump_db.language,
             }, f, indent=4)
-
-        # Save features
-        with open(path := os.path.join(self.out_dir, self.data_file), "w") as f, TT.profile("Save data"):
-            log("Saving features to %s" % path)
-            json.dump(features, f)
 
         log.debug("Time distribution", TT)
 
@@ -173,35 +165,25 @@ class Builder:
 
         return sentences
 
-    def _process_page(self, page_title: str) -> dict[str, list[list]]:
+    def _process_page(self, page_title: str) -> int:
         """
-        Processes a Wikipedia article
-        Returns a dict with entries
-        {
-            "word_ids": list of list of word ids,
-            "word_spans": list of lists of (start, end) spans in word_ids
-            "entity_ids": list of list of entity ids,
-            "entity_spans": list of lists of (start, end) spans
-        }
+        Processes a Wikipedia article and save to self.data_file
+        Returns number of sequences
         """
 
         sentences = self._get_sentence_features(page_title)
 
         # Construct features to be saved - word tokens, entities, and entity spans
-        features = {
-            "word_ids":     list(),
-            "word_spans":   list(),
-            "entity_ids":   list(),
-            "entity_spans": list(),
-        }
         words = list()
         links: list[tuple[int, 3]] = list()
+        n_seqs = 0
         TT.profile("Get features")
         for i, (sent_words, sent_links) in enumerate(sentences):
             links += [(id_, start + len(words), end + len(words)) for id_, start, end in sent_links]
             words += sent_words
             if i == len(sentences) - 1 or len(words) + len(sentences[i+1][0]) > self.max_num_tokens:
                 if links:
+                    n_seqs += 1
                     # Save features for this sequence
                     links = links[:self.max_entities]
                     word_ids = self.tokenizer.convert_tokens_to_ids(words)
@@ -209,15 +191,19 @@ class Builder:
                     assert self.min_sentence_length <= len(word_ids) <= self.max_num_tokens
                     entity_ids = [id_ for id_, _, _ in links]
                     entity_spans = [(start, end) for _, start, end in links]
-                    features["word_ids"].append(word_ids)
-                    features["word_spans"].append(word_spans)
-                    features["entity_ids"].append(entity_ids)
-                    features["entity_spans"].append(entity_spans)
+                    features = json.dumps({
+                        "word_ids":     word_ids,
+                        "word_spans":   word_spans,
+                        "entity_ids":   entity_ids,
+                        "entity_spans": entity_spans,
+                    })
+                    with open(os.path.join(self.out_dir, self.data_file), "a") as df, TT.profile("Save features"):
+                        df.write(features + "\n")
                 words = list()
                 links = list()
         TT.end_profile()
 
-        return features
+        return n_seqs
 
 
 

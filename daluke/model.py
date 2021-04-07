@@ -1,3 +1,4 @@
+from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
@@ -37,7 +38,7 @@ class DaLUKE(nn.Module):
             [EntityAwareLayer(bert_config) for _ in range(bert_config.num_hidden_layers)]
         )
 
-    def forward(self, ex: BatchedExamples) -> (torch.Tensor, torch.Tensor):
+    def forward(self, ex: BatchedExamples) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Given a data class of word and entity ids and other tokens, return embeddings of both
         """
