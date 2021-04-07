@@ -16,7 +16,6 @@ from . import ICUSentenceTokenizer, load_entity_vocab, calculate_spans
 
 TT = TickTock()
 
-
 class DatasetBuilder:
 
     tokenizer_language = "da"
@@ -205,10 +204,3 @@ class DatasetBuilder:
         TT.end_profile()
 
         return n_seqs
-
-
-
-
-
-
-

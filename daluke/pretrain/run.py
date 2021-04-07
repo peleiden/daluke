@@ -13,6 +13,7 @@ from daluke.pretrain.train import train, Hyperparams
 
 
 ARGUMENTS = {
+    "entity-vocab-file": { "default": "entity_vocab.json", "type": str, "help": "Location of entity vocabulary" },
     "quiet":           { "action": "store_true", "help": "Don't show debug logging" },
     "batch-size":      { "default": Hyperparams.batch_size, "type": int },
     "grad-accumulate": { "default": Hyperparams.grad_accumulate, "type": int,  "help": "Steps taken to accumulate gradient" },
@@ -20,16 +21,16 @@ ARGUMENTS = {
     "ent-embed-size":  { "default": Hyperparams.ent_embed_size, "type": int, "help": "Dimension of the entity embeddings" },
 }
 
-
 def _run_training(rank: int, world_size: int, args: dict[str, Any]):
     """ Wrapper function for train for easy use with mp.spawn """
     return train(
         rank,
         world_size,
-        location   = args.pop("location"),
-        name       = args.pop("name"),
-        quiet      = args.pop("quiet"),
-        params     = Hyperparams(**args),
+        location        = args.pop("location"),
+        name            = args.pop("name"),
+        quiet           = args.pop("quiet"),
+        ent_vocab_file  = args.pop("entity_vocab_file"),
+        params          = Hyperparams(**args),
     ),
 
 def run(args: dict[str, Any]):

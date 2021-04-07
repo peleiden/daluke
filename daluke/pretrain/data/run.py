@@ -26,7 +26,6 @@ def run_build_dataset():
     builder = DatasetBuilder(**args.__dict__)
     builder.build()
 
-
 if __name__ == "__main__":
     with log.log_errors:
         run_build_dataset()
