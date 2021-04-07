@@ -5,7 +5,7 @@ import json
 
 import torch
 import torch.distributed as dist
-from torch.nn import CrossEntropyLoss
+import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data import RandomSampler
@@ -72,34 +72,32 @@ def train(
     location: str,
     name: str,
     quiet: bool,
-    ent_vocab_file: str,
     params: Hyperparams,
 ):
+    # Get filepath within path context
+    fpath = lambda path: os.path.join(location, path)
+
     # Setup logger
     log.configure(
-        os.path.join(location, f"{name}-{rank if rank != -1 else ''}.log"),
+        fpath(f"{name}{'-' + rank if rank != -1 else ''}.log"),
         "DaLUKE pretraining on node %i" % rank,
         log_commit  = True,
         print_level = (Levels.INFO if quiet else Levels.DEBUG) if is_master(rank) else None,
     )
     log("Starting pre-training with the following hyperparameters", params)
 
-    log.section("Reading metadata")
-    with open(os.path.join(location, DatasetBuilder.metadata_file), "r") as f:
+    log.section("Reading metadata and entity vocabulary")
+    with open(fpath(DatasetBuilder.metadata_file)) as f:
         metadata = json.load(f)
-    if is_master(rank):
-        log("Loaded metadata:", json.dumps(metadata, indent=4))
-
-    # Entity vocabulary
-    entity_vocab = load_entity_vocab(ent_vocab_file)
-    if is_master(rank):
-        log(f"Loaded entity vocabulary of {len(entity_vocab)} entities")
+    with open(fpath(DatasetBuilder.entity_vocab_file)) as f:
+        entity_vocab = json.load(f)
+    log("Loaded metadata:", json.dumps(metadata, indent=4))
+    log(f"Loaded entity vocabulary of {len(entity_vocab)} entities")
 
     # Setup multi-gpu if used and get device
     setup(rank, world_size)
 
-    if is_master(rank):
-        log.info("Setting up model ...")
+    log.info("Setting up model ...")
 
     bert_config = AutoConfig.from_pretrained(daBERT)
     if rank == -1:
@@ -107,23 +105,26 @@ def train(
         model = PretrainTaskDaLUKE(
             bert_config,
             ent_vocab_size = len(entity_vocab),
-            ent_emb_size   = Hyperparams.ent_embed_size,
+            ent_embed_size = Hyperparams.ent_embed_size,
         )
     else:
         device = torch.device("cuda", index=rank)
         raise NotImplementedError # TODO: Instantiate model and wrap in DDP with device_ids=[rank]
     model.to(device)
-    # TODO: Initialize model parameters
-    bert_model = AutoModelForPreTraining.from_pretrained(metadata["base-model"])
 
-    data = DataLoader(
-        os.path.join(location, DatasetBuilder.data_file),
-        metadata,
-    )
+    # TODO: Only initialize model parameters if no existing model given (for resuming training)
+    # Load parameters from base model
+    # TODO: Does this require some .to(device) magic?
+    base_model = AutoModelForPreTraining.from_pretrained(metadata["base-model"])
+    model.load_base_model_weights(base_model)
+    del base_model  # Clear base model weights from memory
+
+    dataloader = DataLoader(location, metadata)
     sampler = RandomSampler if is_master(rank) else DistributedSampler # TODO: Is this a random sampler?
 
     # TODO: How to handle fixing of BERT parameters
-    num_updates = int(np.ceil((data) / params.batch_size * params.epochs))
+    # FIXME: Not enough dedotated WAM for the following 10-ish lines
+    num_updates = int(np.ceil(len(dataloader) / params.batch_size * params.epochs))
     model_params = list(model.named_parameters())
     optimizer = AdamW(
         [{"params": get_optimizer_params(model_params, do_decay=True),  "weight_decay": params.weight_decay},
@@ -131,10 +132,10 @@ def train(
         lr = params.lr,
     )
     scheduler = get_linear_schedule_with_warmup(optimizer, int(params.warmup_prop * num_updates), num_updates)
-    loss = CrossEntropyLoss(ignore_index=-1)
+    loss = nn.CrossEntropyLoss(ignore_index=-1)
     model.train()
     for i in range(params.epochs):
-        for batch in data.get_dataloader(params.batch_size, sampler(data.examples)):
+        for batch in dataloader.get_dataloader(params.batch_size, sampler(dataloader.examples)):
             preds = model(batch)
 
     # Clean up multi-gpu if used

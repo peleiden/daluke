@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from transformers.models.bert.modeling_bert import (
     BertConfig,
     BertEmbeddings,
+    BertPooler,
     BertSelfOutput,
     BertOutput,
     BertIntermediate,
@@ -23,20 +24,22 @@ class DaLUKE(nn.Module):
     def __init__(self,
         bert_config: BertConfig,
         ent_vocab_size: int,
-        ent_emb_size: int,
+        ent_embed_size: int,
     ):
         """
         bert_config:    Used for the BERT Pooler
         ent_vocab_size: Necessary for the entity embeddings
-        ent_emb_size:   Dimension of entity embedding
+        ent_embed_size: Dimension of entity embedding
         """
         super().__init__()
-        self.ent_emb_size = ent_emb_size
+        self.ent_embed_size    = ent_embed_size
         self.word_embeddings   = BertEmbeddings(bert_config)
-        self.entity_embeddings = EntityEmbeddings(bert_config, ent_vocab_size, self.ent_emb_size)
+        self.entity_embeddings = EntityEmbeddings(bert_config, ent_vocab_size, self.ent_embed_size)
         self.encoder = nn.ModuleList(
             [EntityAwareLayer(bert_config) for _ in range(bert_config.num_hidden_layers)]
         )
+
+        self.pooler = BertPooler(bert_config)
 
     def forward(self, ex: BatchedExamples) -> tuple[torch.Tensor, torch.Tensor]:
         """
@@ -139,15 +142,15 @@ class EntityEmbeddings(nn.Module):
     """
     Embeds entitites from the entity vocabulary
     """
-    def __init__(self, bert_config: BertConfig, ent_vocab_size: int, ent_emb_size: int):
+    def __init__(self, bert_config: BertConfig, ent_vocab_size: int, ent_embed_size: int):
         super().__init__()
         h = bert_config.hidden_size
 
-        self.ent_embeds = nn.Embedding(ent_vocab_size, ent_emb_size, padding_idx=0)
+        self.ent_embeds = nn.Embedding(ent_vocab_size, ent_embed_size, padding_idx=0)
         self.pos_embeds = nn.Embedding(bert_config.max_position_embeddings, h)
         self.typ_embeds = nn.Embedding(bert_config.type_vocab_size, h)
 
-        self.ent_embeds_dense = nn.Linear(ent_emb_size, h) if ent_emb_size != h else None
+        self.ent_embeds_dense = nn.Linear(ent_embed_size, h) if ent_embed_size != h else None
 
         self.lnorm = nn.LayerNorm(h, eps=bert_config.layer_norm_eps)
         self.drop  = nn.Dropout(bert_config.hidden_dropout_prob)

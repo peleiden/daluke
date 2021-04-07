@@ -55,7 +55,7 @@ def load_jsonl(fpath: str, encoding=None) -> Generator:
                 yield json.loads(l)
 
 def load_entity_vocab(vocab_file: str) -> dict[str, dict[str, int]]:
-    """ Loads an entity vocab created by build-entity-vocab
+    """ Loads an entity vocab in .jsonl format created by build-entity-vocab
     { "entity": { "id": int, "count": int } } """
     entities = dict()
     for entity in load_jsonl(vocab_file):

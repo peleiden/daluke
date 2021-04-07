@@ -13,7 +13,6 @@ from daluke.pretrain.train import train, Hyperparams
 
 
 ARGUMENTS = {
-    "entity-vocab-file": { "default": "entity_vocab.json", "type": str, "help": "Location of entity vocabulary" },
     "epochs":            { "default": Hyperparams.epochs, "type": int, "help": "Number of passes through the entire data set"},
     "batch-size":        { "default": Hyperparams.batch_size, "type": int },
     "lr":                { "default": Hyperparams.lr, "type": float, "help": "Initial learning rate" },
@@ -28,12 +27,11 @@ def _run_training(rank: int, world_size: int, args: dict[str, Any]):
     return train(
         rank,
         world_size,
-        location        = args.pop("location"),
-        name            = args.pop("name"),
-        quiet           = args.pop("quiet"),
-        ent_vocab_file  = args.pop("entity_vocab_file"),
-        params          = Hyperparams(**args),
-    ),
+        location = args.pop("location"),
+        name     = args.pop("name"),
+        quiet    = args.pop("quiet"),
+        params   = Hyperparams(**args),
+    )
 
 def run(args: dict[str, Any]):
     """ Initializes training on multiple GPU's """

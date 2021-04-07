@@ -20,9 +20,10 @@ class DatasetBuilder:
 
     tokenizer_language = "da"
 
-    # Some of the files saved by the build method
-    metadata_file = "metadata.json"
-    data_file     = "data.jsonl"
+    # Files saved by the build method
+    metadata_file     = "metadata.json"
+    data_file         = "data.jsonl"
+    entity_vocab_file = "entity-vocab.json"
 
     def __init__(
         self,
@@ -80,7 +81,7 @@ class DatasetBuilder:
     def build(self):
         log("Saving tokenizer config and word token config to %s" % self.out_dir)
         self.tokenizer.save_pretrained(self.out_dir) # FIXME: Why do we do this? We don't alter it in any way?
-        with open(path := os.path.join(self.out_dir, "entity-vocab.json"), "w", encoding="utf-8") as ev:
+        with open(path := os.path.join(self.out_dir, self.entity_vocab_file), "w", encoding="utf-8") as ev:
             log("Saving entity vocab to %s" % path)
             json.dump(self.entity_vocab, ev, indent=2)
 
