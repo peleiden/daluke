@@ -37,8 +37,7 @@ def mask_ent_batch(ent: Entities, prob: float, mask_id: int) -> (torch.Tensor, t
         throw = torch.multinomial(torch.ones(n), t or 1)
         mask[i, throw] = True
 
-    labels = torch.full_like(ent.ids, -1)
-    labels[mask] = ent.ids[mask]
+    labels = ent.ids[mask]
     ent.ids[mask] = mask_id
     return labels, mask
 
@@ -66,8 +65,7 @@ def mask_word_batch(
             elif p > (1 - randword_prob):
                 randword_mask[i, start:end] = True
 
-    labels = torch.full_like(w.ids, -1)
-    labels[mask] = w.ids[mask]
+    labels = w.ids[mask]
     w.ids[mask & ~unmask_mask] = mask_id # Take unmasking into account
     w.ids[randword_mask] = torch.randint_like(w.ids[randword_mask], *word_id_range)
 

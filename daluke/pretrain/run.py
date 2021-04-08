@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from __future__ import annotations
 import os
 from typing import Any
@@ -14,7 +15,7 @@ from daluke.pretrain.train import train, Hyperparams
 
 ARGUMENTS = {
     "epochs":            { "default": Hyperparams.epochs, "type": int, "help": "Number of passes through the entire data set"},
-    "batch-size":        { "default": Hyperparams.batch_size, "type": int },
+    "batch-size":        { "default": Hyperparams.batch_size, "type": int, "help": "Number of sequences per forward pass" },
     "lr":                { "default": Hyperparams.lr, "type": float, "help": "Initial learning rate" },
     "ent-embed-size":    { "default": Hyperparams.ent_embed_size, "type": int, "help": "Dimension of the entity embeddings" },
     "weight-decay":      { "default": Hyperparams.weight_decay, "type": float, "help": "The decay factor in the AdamW optimizer" },

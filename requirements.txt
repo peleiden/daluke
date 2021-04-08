@@ -4,7 +4,7 @@ matplotlib
 pandas  # for danlp
 
 # ML stuff
-torch>=1.7.1
+torch>=1.8.0
 transformers>=4.0.0
 danlp
 conllu  # for danlp

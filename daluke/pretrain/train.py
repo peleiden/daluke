@@ -14,10 +14,9 @@ import numpy as np
 from transformers import AutoConfig, AutoModelForPreTraining, AdamW, get_linear_schedule_with_warmup
 from pelutils.logger import log, Levels
 
-from daluke import daBERT
 from .data import DataLoader, load_entity_vocab
 from .data.build import DatasetBuilder
-from .model import PretrainTaskDaLUKE
+from .model import PretrainTaskDaLUKE, load_base_model_weights
 
 PORT = "3090" # Are we sure this port is in stock?
 NO_DECAY =  {"bias", "LayerNorm.weight"}
@@ -31,10 +30,6 @@ def setup(rank: int, world_size: int):
 def cleanup(rank: int):
     if rank != -1:
         dist.destroy_process_group()
-
-def is_master(rank: int) -> bool:
-    """ Determine if master node """
-    return rank < 1
 
 def get_optimizer_params(params: list, do_decay: bool) -> list:
     """ Returns the parameters that should be tracked by optimizer with or without weight decay"""
@@ -77,12 +72,15 @@ def train(
     # Get filepath within path context
     fpath = lambda path: os.path.join(location, path)
 
+    is_master = rank < 1 # Are we on the main node?
+    is_distributed = rank != -1 # Are we performing distributed computing?
+
     # Setup logger
     log.configure(
         fpath(f"{name}{'-' + rank if rank != -1 else ''}.log"),
         "DaLUKE pretraining on node %i" % rank,
         log_commit  = True,
-        print_level = (Levels.INFO if quiet else Levels.DEBUG) if is_master(rank) else None,
+        print_level = (Levels.INFO if quiet else Levels.DEBUG) if is_master else None,
     )
     log("Starting pre-training with the following hyperparameters", params)
 
@@ -97,46 +95,78 @@ def train(
     # Setup multi-gpu if used and get device
     setup(rank, world_size)
 
-    log.info("Setting up model ...")
+    log.section("Setting up model ...")
 
-    bert_config = AutoConfig.from_pretrained(daBERT)
-    if rank == -1:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = PretrainTaskDaLUKE(
-            bert_config,
-            ent_vocab_size = len(entity_vocab),
-            ent_embed_size = Hyperparams.ent_embed_size,
+    bert_config = AutoConfig.from_pretrained(metadata["base-model"])
+    model = PretrainTaskDaLUKE(
+        bert_config,
+        ent_vocab_size = len(entity_vocab),
+        ent_embed_size = Hyperparams.ent_embed_size,
+    )
+    # TODO: Maybe Initialize model manually (they do)
+    if is_distributed:
+        device = torch.device("cuda", index=rank)
+        DDP(model,
+            device_ids=[rank],
+            # TODO: Understand reasoning behind following two flags that are copied from LUKE
+            broadcast_buffers=False,
+            find_unused_parameters=True,
         )
     else:
-        device = torch.device("cuda", index=rank)
-        raise NotImplementedError # TODO: Instantiate model and wrap in DDP with device_ids=[rank]
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
-
     # TODO: Only initialize model parameters if no existing model given (for resuming training)
+
     # Load parameters from base model
     # TODO: Does this require some .to(device) magic?
     base_model = AutoModelForPreTraining.from_pretrained(metadata["base-model"])
-    model.load_base_model_weights(base_model)
+    model = load_base_model_weights(model, base_model)
     del base_model  # Clear base model weights from memory
 
     dataloader = DataLoader(location, metadata)
-    sampler = RandomSampler if is_master(rank) else DistributedSampler # TODO: Is this a random sampler?
+    sampler = (DistributedSampler if is_distributed else RandomSampler)(dataloader.examples)
+    loader = dataloader.get_dataloader(params.batch_size, sampler)
 
-    # TODO: How to handle fixing of BERT parameters
-    # FIXME: Not enough dedotated WAM for the following 10-ish lines
     num_updates = int(np.ceil(len(dataloader) / params.batch_size * params.epochs))
     model_params = list(model.named_parameters())
+    # TODO: Fix weights (we could get the weights that load_base_model_weights did not change,
+    # these should be the only ones that should have gradients
+
+    # TODO: Consider whether this AdamW is sufficient or we should tune it in some way to LUKE
     optimizer = AdamW(
         [{"params": get_optimizer_params(model_params, do_decay=True),  "weight_decay": params.weight_decay},
          {"params": get_optimizer_params(model_params, do_decay=False), "weight_decay": 0}],
         lr = params.lr,
     )
     scheduler = get_linear_schedule_with_warmup(optimizer, int(params.warmup_prop * num_updates), num_updates)
-    loss = nn.CrossEntropyLoss(ignore_index=-1)
+    criterion = nn.CrossEntropyLoss(ignore_index=-1)
+
+    log.section(f"Training of daLUKE for {params.epochs} epochs")
     model.train()
+    accumulate_step = 0
     for i in range(params.epochs):
-        for batch in dataloader.get_dataloader(params.batch_size, sampler(dataloader.examples)):
-            preds = model(batch)
+        epoch_loss = 0
+        if is_distributed:
+            sampler.set_epoch(i)
+        for j, batch in enumerate(loader):
+            word_preds, ent_preds = model(batch)
+            # Compute and backpropagate loss
+            word_loss, ent_loss = criterion(word_preds, batch.word_mask_labels), criterion(ent_preds, batch.ent_mask_labels)
+            loss = word_loss + ent_loss
+            if params.grad_accumulate > 1:
+                loss /= params.grad_accumulate
+            loss.backward()
+            # Performs parameter update every for every `grad_accumulate`'th batch
+            accumulate_step += 1
+            if accumulate_step == params.grad_accumulate:
+                optimizer.step()
+                scheduler.step()
+                model.zero_grad()
+                accumulate_step = 0
+
+            epoch_loss += loss.item()
+            log.debug(f"Completed batch {j+1} with loss {loss.item()}")
+        log(f"Completed epoch {i+1} with mean loss {epoch_loss / (j+1)}")
 
     # Clean up multi-gpu if used
     cleanup(rank)

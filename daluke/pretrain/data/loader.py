@@ -56,6 +56,10 @@ class DataLoader:
         log.section("Creating examples ...")
         self.examples: list[Example] = list()
         for seq_data in load_jsonl(os.path.join(data_dir, DatasetBuilder.data_file)):
+            # FIXME: This below check should not really be here
+            # It is currently here as full-word masking fails when there are no full words.
+            if not seq_data["word_spans"]:
+                continue
             self.examples.append(Example(
                 words = Words.build(
                     torch.LongTensor(seq_data["word_ids"]),
@@ -77,7 +81,6 @@ class DataLoader:
         return len(self.examples)
 
     def get_dataloader(self, batch_size: int, sampler: torch.utils.data.Sampler) -> DataLoader:
-        # TODO: Maybe dataloader should be created in __init__?
         return torch.utils.data.DataLoader(list(enumerate(self.examples)), batch_size=batch_size, sampler=sampler, collate_fn=self.collate)
 
     def collate(self, batch: list[tuple[int, Example]]) -> MaskedBatchedExamples:

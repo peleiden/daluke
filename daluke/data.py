@@ -37,7 +37,7 @@ class Words:
         word_ids[:N+2] = torch.cat((torch.LongTensor([cls_id]), ids, torch.LongTensor([sep_id])))
 
         # Don't pad the spans as they are not given to model, but used for masking
-        if spans:
+        if spans is not None:
             spans = torch.LongTensor(spans)
 
         return cls(
