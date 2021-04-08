@@ -55,9 +55,7 @@ class DataLoader:
 
         log.section("Creating examples ...")
         self.examples: list[Example] = list()
-        # Build data in reverse order to pop more effeciently
         for seq_data in load_jsonl(os.path.join(data_dir, DatasetBuilder.data_file)):
-            # Pop to reduce memory usage
             self.examples.append(Example(
                 words = Words.build(
                     torch.LongTensor(seq_data["word_ids"]),

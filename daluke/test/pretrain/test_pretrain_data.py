@@ -6,6 +6,7 @@ from pelutils import MainTest
 
 from daluke.pretrain.data import load_entity_vocab, DataLoader
 from daluke.data import BatchedExamples
+from daluke import daBERT
 
 
 class TestData(MainTest):
@@ -29,17 +30,19 @@ class TestData(MainTest):
         }
 
     def test_dataloader(self):
-        path = os.path.join(self.test_dir, "data.json")
+        path = os.path.join(self.test_dir, "data.jsonl")
+        ex = {
+            "word_ids":     [[32, 59, 3], [42, 11]],
+            "word_spans":   [[[0, 2], [2, 3], [5, 7]], [[0, 1], [1, 2]]],
+            "entity_ids":   [[5], []],
+            "entity_spans": [[(0, 3)], []]
+        }
         with open(path, "w") as f:
-            json.dump(
-                {
-                    "word_ids":     [[32, 59, 3], [42, 11]],
-                    "word_spans":   [[[0, 2], [2, 3], [5, 7]], [[0, 1], [1, 2]]],
-                    "entity_ids":   [[5], []],
-                    "entity_spans": [[(0, 3)], []]
-                }, f
-            )
-        dl = DataLoader(self.test_dir)
+            for i in range(2):
+                f.write(json.dumps(
+                    {k: v[i] for k, v in ex.items()}
+                ) + "\n")
+        dl = DataLoader(self.test_dir, {"base-model": daBERT})
         assert len(dl.examples) == 2
         assert torch.all(dl.examples[1].entities.ids == 0)
         loader = dl.get_dataloader(1, torch.utils.data.RandomSampler(dl.examples))
