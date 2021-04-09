@@ -120,7 +120,7 @@ def train(
     # Load parameters from base model
     # TODO: Does this require some .to(device) magic?
     base_model = AutoModelForPreTraining.from_pretrained(metadata["base-model"])
-    model = load_base_model_weights(model, base_model)
+    new_weights = load_base_model_weights(model, base_model)
     del base_model  # Clear base model weights from memory
 
     dataloader = DataLoader(location, metadata)
@@ -129,8 +129,11 @@ def train(
 
     num_updates = int(np.ceil(len(dataloader) / params.batch_size * params.epochs))
     model_params = list(model.named_parameters())
-    # TODO: Fix weights (we could get the weights that load_base_model_weights did not change,
-    # these should be the only ones that should have gradients
+    # Fix BERT weights
+    # TODO: Re-enable training of BERT weights at some point during the training
+    for n, p in model_params:
+        if n not in new_weights:
+            p.requires_grad = False
 
     # TODO: Consider whether this AdamW is sufficient or we should tune it in some way to LUKE
     optimizer = AdamW(

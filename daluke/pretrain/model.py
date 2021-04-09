@@ -61,7 +61,10 @@ class EntityPreTrainingHeads(nn.Module):
         return self.decode(self.lnorm(self.act(self.transform(hidden)))) + self.bias
 
 def load_base_model_weights(daluke: PretrainTaskDaLUKE, base_model: nn.Module):
-    """ Load a base model into this model. Assumes BERT for now """
+    """
+    Load a base model into this model. Assumes BERT for now
+    Returns the set of keys that were not tansfered from base model
+    """
 
     # Mappings from bert to daLUKE naming scheme
     one2one_map = {
@@ -137,4 +140,5 @@ def load_base_model_weights(daluke: PretrainTaskDaLUKE, base_model: nn.Module):
     )
     if error_msgs:
         raise RuntimeError("Errors in loading state_dict for %s:\n" % daluke.__class__.__name__ + "\n\t".join(error_msgs))
-    return daluke
+
+    return set(missing_keys)
