@@ -18,6 +18,7 @@ class DataLoader:
         self,
         data_dir: str,
         metadata: dict,
+        device:   torch.device,
         word_mask_prob:     float = 0.15,
         word_unmask_prob:   float = 0.1,
         word_randword_prob: float = 0.1,
@@ -27,16 +28,10 @@ class DataLoader:
         max_mention:        int = 30,
     ):
         """
-        Loads a generated json dataset prepared by the preprocessing pipeline, e.g. like
-        ```
-        {
-            "word_ids":     [[32, 59, 3]], [42, 11]],
-            "word_spans":   [[[0, 2], [2, 3], [5, 7]], [[0, 1], [1, 2]]],
-            "entity_ids":   [[5], []],
-            "entity_spans": [[[0, 3]], []]
-        }
-        ```
+        Loads a generated json dataset prepared by the preprocessing pipeline
         """
+        self.device = device
+
         self.max_sentence_len = max_sentence_len
         self.max_entity_len = max_entity_len
         self.max_mention = max_mention
@@ -56,10 +51,6 @@ class DataLoader:
         log.section("Creating examples ...")
         self.examples: list[Example] = list()
         for seq_data in load_jsonl(os.path.join(data_dir, DatasetBuilder.data_file)):
-            # FIXME: This below check should not really be here
-            # It is currently here as full-word masking fails when there are no full words.
-            if not seq_data["word_spans"]:
-                continue
             self.examples.append(Example(
                 words = Words.build(
                     torch.LongTensor(seq_data["word_ids"]),
@@ -86,6 +77,7 @@ class DataLoader:
     def collate(self, batch: list[tuple[int, Example]]) -> MaskedBatchedExamples:
         return MaskedBatchedExamples.build(
             [ex for _, ex in batch],
+            self.device,
             word_mask_id       = self.word_mask_id,
             ent_mask_id        = self.ent_mask_id,
             word_mask_prob     = self.word_mask_prob,

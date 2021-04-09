@@ -86,8 +86,8 @@ class Entities(Words):
 
         ent_pos = torch.full((max_len, max_mention), -1, dtype=torch.long)
         # TODO: Make faster than for loop
-        for i, e in enumerate(spans):
-            ent_pos[i, :e[1]-e[0]] = torch.LongTensor(list(range(*e)))
+        for i, (start, end) in enumerate(spans):
+            ent_pos[i, :end-start] = torch.LongTensor(list(range(start, end)))
         ent_pos[ent_pos != -1] += 1 #+1 for [cls]
 
         return cls(
@@ -112,27 +112,28 @@ class BatchedExamples(Example):
     """
     Data to be forward passed to daLUKE
     """
+
     @staticmethod
-    def stack(ex: list[Example]) -> (Words, Entities):
+    def stack(ex: list[Example], device: torch.device) -> (Words, Entities):
         return Words(
-            ids             = torch.stack(tuple(e.words.ids for e in ex)),
-            segments        = torch.stack(tuple(e.words.segments for e in ex)),
-            attention_mask  = torch.stack(tuple(e.words.attention_mask for e in ex)),
-            N               = torch.tensor(tuple(e.words.N for e in ex)),
+            ids             = torch.stack(tuple(e.words.ids for e in ex)).to(device),
+            segments        = torch.stack(tuple(e.words.segments for e in ex)).to(device),
+            attention_mask  = torch.stack(tuple(e.words.attention_mask for e in ex)).to(device),
+            N               = torch.tensor(tuple(e.words.N for e in ex)).to(device),
             # Assume that if one of the word examples (1st one) in the batch has a span vector, all of them do
             spans           = [e.words.spans for e in ex] if ex[0].words.spans is not None else None,
         ), Entities(
-            ids             = torch.stack(tuple(e.entities.ids for e in ex)),
-            segments        = torch.stack(tuple(e.entities.segments for e in ex)),
-            attention_mask  = torch.stack(tuple(e.entities.attention_mask for e in ex)),
-            pos             = torch.stack(tuple(e.entities.pos for e in ex)),
+            ids             = torch.stack(tuple(e.entities.ids for e in ex)).to(device),
+            segments        = torch.stack(tuple(e.entities.segments for e in ex)).to(device),
+            attention_mask  = torch.stack(tuple(e.entities.attention_mask for e in ex)).to(device),
+            pos             = torch.stack(tuple(e.entities.pos for e in ex)).to(device),
             spans           = None,
-            N               = torch.tensor(tuple(e.entities.N for e in ex)),
+            N               = torch.tensor(tuple(e.entities.N for e in ex)).to(device),
         )
 
     @classmethod
-    def build(cls, ex: list[Example]):
-        return cls(*cls.stack(ex))
+    def build(cls, ex: list[Example], device: torch.device):
+        return cls(*cls.stack(ex, device=device))
 
 def get_special_ids(tokenizer: AutoTokenizer) -> (int, int, int):
     """ Returns seperator id, close id and pad id """

@@ -72,12 +72,12 @@ def train(
     # Get filepath within path context
     fpath = lambda path: os.path.join(location, path)
 
-    is_master = rank < 1 # Are we on the main node?
-    is_distributed = rank != -1 # Are we performing distributed computing?
+    is_master = rank < 1  # Are we on the main node?
+    is_distributed = rank != -1  # Are we performing distributed computing?
 
     # Setup logger
     log.configure(
-        fpath(f"{name}{'-' + rank if rank != -1 else ''}.log"),
+        fpath(f"{name}{'-%s' % rank if is_distributed else ''}.log"),
         "DaLUKE pretraining on node %i" % rank,
         log_commit  = True,
         print_level = (Levels.INFO if quiet else Levels.DEBUG) if is_master else None,
@@ -106,15 +106,16 @@ def train(
     # TODO: Maybe Initialize model manually (they do)
     if is_distributed:
         device = torch.device("cuda", index=rank)
-        DDP(model,
+        DDP(
+            model.to(device),
             device_ids=[rank],
             # TODO: Understand reasoning behind following two flags that are copied from LUKE
-            broadcast_buffers=False,
+            # broadcast_buffers=False,
             find_unused_parameters=True,
         )
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
+        model = model.to(device)
     # TODO: Only initialize model parameters if no existing model given (for resuming training)
 
     # Load parameters from base model
@@ -123,7 +124,7 @@ def train(
     new_weights = load_base_model_weights(model, base_model)
     del base_model  # Clear base model weights from memory
 
-    dataloader = DataLoader(location, metadata)
+    dataloader = DataLoader(location, metadata, device=device)
     sampler = (DistributedSampler if is_distributed else RandomSampler)(dataloader.examples)
     loader = dataloader.get_dataloader(params.batch_size, sampler)
 

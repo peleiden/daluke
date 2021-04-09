@@ -14,16 +14,19 @@ class MaskedBatchedExamples(BatchedExamples):
     ent_mask: torch.BoolTensor
 
     @classmethod
-    def build(cls, examples: list[Example],
-            word_mask_id: int,
-            ent_mask_id: int,
-            word_mask_prob: float,
-            word_unmask_prob: float,
-            word_randword_prob: float,
-            word_id_range: tuple[int],
-            ent_mask_prob: float,
-        ):
-        words, entities = cls.stack(examples)
+    def build(
+        cls,
+        examples: list[Example],
+        device:   torch.device,
+        word_mask_id: int,
+        ent_mask_id: int,
+        word_mask_prob: float,
+        word_unmask_prob: float,
+        word_randword_prob: float,
+        word_id_range: tuple[int],
+        ent_mask_prob: float,
+    ):
+        words, entities = cls.stack(examples, device=device)
         word_mask_labels, word_mask = mask_word_batch(words, word_mask_prob, word_unmask_prob, word_randword_prob, word_id_range, word_mask_id)
         ent_mask_labels, ent_mask = mask_ent_batch(entities, ent_mask_prob, ent_mask_id)
         return cls(words, entities, word_mask_labels, word_mask, ent_mask_labels, ent_mask)
@@ -42,13 +45,13 @@ def mask_ent_batch(ent: Entities, prob: float, mask_id: int) -> (torch.Tensor, t
     return labels, mask
 
 def mask_word_batch(
-        w: Words,
-        prob: float,
-        unmask_prob: float,
-        randword_prob: float,
-        word_id_range: tuple[int],
-        mask_id: int,
-        ) -> (torch.Tensor, torch.BoolTensor):
+    w: Words,
+    prob: float,
+    unmask_prob: float,
+    randword_prob: float,
+    word_id_range: tuple[int],
+    mask_id: int,
+) -> (torch.Tensor, torch.BoolTensor):
     mask = torch.zeros_like(w.ids, dtype=torch.bool)
     unmask_mask, randword_mask = torch.zeros_like(mask), torch.zeros_like(mask)
     masking_throws = torch.rand(w.ids.shape)

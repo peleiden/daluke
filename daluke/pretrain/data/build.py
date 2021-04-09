@@ -12,7 +12,7 @@ from tqdm import tqdm
 from transformers import AutoTokenizer, XLMRobertaTokenizer, RobertaTokenizer
 from wikipedia2vec.dump_db import DumpDB
 
-from . import ICUSentenceTokenizer, load_entity_vocab, calculate_spans
+from daluke.pretrain.data import ICUSentenceTokenizer, load_entity_vocab, calculate_spans
 
 TT = TickTock()
 
@@ -57,12 +57,10 @@ class DatasetBuilder:
         self.max_articles = max_articles
 
         # Filter titles so only real articles are included
-        # TODO: billed eller billede?
         self.target_titles = [
             title for title in self.dump_db.titles()
-            if not any(title.lower().startswith(word + ":") for word in ("billed", "fil", "kategori"))
+            if not any(title.lower().startswith(word + ":") for word in ("billede", "fil", "kategori"))
         ]
-        random.shuffle(self.target_titles)
 
     def _tokenize(self, text: str, paragraph_text: str, idx: int) -> list[str]:
         text = re.sub(r"\s+", " ", text).rstrip()
@@ -148,13 +146,13 @@ class DatasetBuilder:
 
                     link_text = paragraph_text[link_start:link_end]
                     link_words = self._tokenize(link_text, paragraph_text, link_start)
-                    sent_words += link_words
 
                     sent_links.append((
                         self.entity_vocab[link_title]["id"],
                         len(sent_words),
                         len(sent_words) + len(link_words),
                     ))
+                    sent_words += link_words
                     current = link_end
 
                 text = paragraph_text[current:sent_end]
@@ -193,6 +191,7 @@ class DatasetBuilder:
                     entity_ids = [id_ for id_, _, _ in links]
                     entity_spans = [(start, end) for _, start, end in links]
                     features = json.dumps({
+                        "page_title":   page_title,
                         "word_ids":     word_ids,
                         "word_spans":   word_spans,
                         "entity_ids":   entity_ids,
