@@ -17,6 +17,7 @@ from pelutils.logger import log, Levels
 from .data import DataLoader, load_entity_vocab
 from .data.build import DatasetBuilder
 from .model import PretrainTaskDaLUKE, load_base_model_weights
+from .analysis import TrainResults
 
 PORT = "3090" # Are we sure this port is in stock?
 NO_DECAY =  {"bias", "LayerNorm.weight"}
@@ -116,10 +117,8 @@ def train(
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = model.to(device)
-    # TODO: Only initialize model parameters if no existing model given (for resuming training)
 
     # Load parameters from base model
-    # TODO: Does this require some .to(device) magic?
     base_model = AutoModelForPreTraining.from_pretrained(metadata["base-model"])
     new_weights = load_base_model_weights(model, base_model)
     del base_model  # Clear base model weights from memory
@@ -128,7 +127,8 @@ def train(
     sampler = (DistributedSampler if is_distributed else RandomSampler)(dataloader.examples)
     loader = dataloader.get_dataloader(params.batch_size, sampler)
 
-    num_updates = int(np.ceil(len(dataloader) / params.batch_size * params.epochs))
+    num_batches = int(np.ceil(len(dataloader) / params.batch_size))
+    num_updates = num_batches * params.epochs
     model_params = list(model.named_parameters())
     # Fix BERT weights
     # TODO: Re-enable training of BERT weights at some point during the training
@@ -148,6 +148,9 @@ def train(
     log.section(f"Training of daLUKE for {params.epochs} epochs")
     model.train()
     accumulate_step = 0
+    res = TrainResults(
+        losses = np.zeros((params.epochs, num_batches))
+    )
     for i in range(params.epochs):
         epoch_loss = 0
         if is_distributed:
@@ -168,9 +171,8 @@ def train(
                 model.zero_grad()
                 accumulate_step = 0
 
-            epoch_loss += loss.item()
-            log.debug(f"Completed batch {j+1} with loss {loss.item()}")
-        log(f"Completed epoch {i+1} with mean loss {epoch_loss / (j+1)}")
-
+            res.losses[i, j] = loss.item()
+            log.debug(f"Completed batch {j+1} with loss {res.losses[i, j]}")
+        log(f"Completed epoch {i+1} with mean loss {res.losses[i].mean()}")
     # Clean up multi-gpu if used
     cleanup(rank)
