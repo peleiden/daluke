@@ -99,6 +99,8 @@ def train(
     log.section("Setting up model ...")
 
     bert_config = AutoConfig.from_pretrained(metadata["base-model"])
+    assert bert_config.max_position_embeddings == metadata["max-seq-length"], \
+        f"Model should respect sequence length; embeddings are of lenght {bert_config.max_position_embeddings}, but max. seq. len. is set to {metadata['max-seq-length']}"
     model = PretrainTaskDaLUKE(
         bert_config,
         ent_vocab_size = len(entity_vocab),
