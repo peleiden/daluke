@@ -25,8 +25,6 @@ class DataLoader:
         word_randword_prob: float = 0.1,
         ent_mask_prob:      float = 0.15,
         max_sentence_len:   int = 512,
-        max_entity_len:     int = 128,
-        max_mention:        int = 30,
     ):
         """
         Loads a generated json dataset prepared by the preprocessing pipeline
@@ -34,8 +32,8 @@ class DataLoader:
         self.device = device
 
         self.max_sentence_len = max_sentence_len
-        self.max_entity_len = max_entity_len
-        self.max_mention = max_mention
+        self.max_entities = metadata["max-entities"]
+        self.max_entity_span = metadata["max-entity-span"]
 
         self.word_mask_prob = word_mask_prob
         self.word_unmask_prob = word_unmask_prob
@@ -51,7 +49,10 @@ class DataLoader:
 
         log.section("Creating examples ...")
         self.examples: list[Example] = list()
-        for seq_data in log.tqdm(tqdm(load_jsonl(os.path.join(data_dir, DatasetBuilder.data_file)), total=metadata["number-of-items"])):
+        for seq_data in log.tqdm(tqdm(
+            load_jsonl(os.path.join(data_dir, DatasetBuilder.data_file)),
+            total=metadata["number-of-items"],
+        )):
             self.examples.append(Example(
                 words = Words.build(
                     torch.LongTensor(seq_data["word_ids"]),
@@ -64,8 +65,8 @@ class DataLoader:
                 entities = Entities.build(
                     torch.LongTensor(seq_data["entity_ids"]),
                     seq_data["entity_spans"],
-                    max_len     = self.max_entity_len,
-                    max_mention = self.max_mention,
+                    max_entities    = self.max_entities,
+                    max_entity_span = self.max_entity_span,
                 )
             ))
 

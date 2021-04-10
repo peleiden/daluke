@@ -32,8 +32,9 @@ class DatasetBuilder:
         entity_vocab_file: str,  # Build by build-entity-vocab
         out_dir:           str,  # Where to put finished dataset. All contents will be removed before saving dataset
         max_seq_length      = 512,  # Maximum length of any sequence
-        max_entities        = 128,  # Maximum number of entities in a sequence
-        min_sentence_length = 5,
+        max_entities        = 128,  # Only up to this many entities are included in each sequence
+        max_entity_span     = 30,   # Maximum number tokens an entity can span before sequence is discarded
+        min_sentence_length = 5,    # Minimum number of tokens a sentence must span to be included
         max_articles        = None,
     ):
         log("Reading dump database at %s" % dump_db_file)
@@ -50,6 +51,7 @@ class DatasetBuilder:
         self.out_dir             = out_dir
         self.max_seq_length      = max_seq_length
         self.max_entities        = max_entities
+        self.max_entity_span     = max_entity_span
         self.min_sentence_length = min_sentence_length
         self.tokenizer_name      = tokenizer_name
         # Get maximum number of tokens in a sequence excluding [CLS] and [SEP]
@@ -96,7 +98,8 @@ class DatasetBuilder:
             json.dump({
                 "number-of-items":     n_seqs,
                 "max-seq-length":      self.max_seq_length,
-                "max-entity-length":   self.max_entities,
+                "max-entities":        self.max_entities,
+                "max-entity-span":     self.max_entity_span,
                 "min-sentence-length": self.min_sentence_length,
                 "base-model":          self.tokenizer_name,
                 "tokenizer-class":     self.tokenizer.__class__.__name__,
@@ -121,7 +124,9 @@ class DatasetBuilder:
                 link_title: str = self.dump_db.resolve_redirect(link.title)
                 # Remove category links
                 if link_title.startswith("Kategori:") and link.text.lower().startswith("kategori:"):
-                    paragraph_text = paragraph_text[:link.start] + " " * (link.end - link.start) + paragraph_text[link.end:]
+                    paragraph_text = paragraph_text[:link.start]\
+                        + " " * (link.end - link.start)\
+                        + paragraph_text[link.end:]
                 elif link_title in self.entity_vocab:
                     paragraph_links.append((link_title, link.start, link.end))
             TT.end_profile()
@@ -134,6 +139,8 @@ class DatasetBuilder:
                 sent_words = list()  # Tokens in the given sentence
                 sent_links = list()  # Links in a given sentence in three-tuples: (id, start index, end index)
 
+                too_large_tokens = False
+
                 # Look for links that are within the tokenized sentence
                 # If a link is found, the sentences are seperated across the link and tokenized
                 for link_title, link_start, link_end in paragraph_links:
@@ -141,24 +148,31 @@ class DatasetBuilder:
                     if not (sent_start <= link_start < sent_end and link_end <= sent_end):
                         continue
 
+                    TT.profile("Tokenize")
                     text = paragraph_text[current:link_start]
                     sent_words += self._tokenize(text, paragraph_text, current)
 
                     link_text = paragraph_text[link_start:link_end]
                     link_words = self._tokenize(link_text, paragraph_text, link_start)
+                    TT.end_profile()
 
                     sent_links.append((
                         self.entity_vocab[link_title]["id"],
                         len(sent_words),
                         len(sent_words) + len(link_words),
                     ))
+                    if sent_links[-1][2] - sent_links[-1][1] > self.max_entity_span:
+                        too_large_tokens = True
+                        break
                     sent_words += link_words
                     current = link_end
 
                 text = paragraph_text[current:sent_end]
                 sent_words += self._tokenize(text, paragraph_text, current)
 
-                if len(sent_words) >= self.min_sentence_length and len(sent_words) <= self.max_num_tokens:
+                if len(sent_words) >= self.min_sentence_length\
+                    and len(sent_words) <= self.max_num_tokens\
+                    and not too_large_tokens:
                     sentences.append((sent_words, sent_links))
             TT.end_profile()
 

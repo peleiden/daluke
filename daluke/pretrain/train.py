@@ -19,7 +19,7 @@ from .data.build import DatasetBuilder
 from .model import PretrainTaskDaLUKE, load_base_model_weights
 from .analysis import TrainResults
 
-PORT = "3090" # Are we sure this port is in stock?
+PORT = "3090"  # Are we sure this port is in stock?
 NO_DECAY =  {"bias", "LayerNorm.weight"}
 
 def setup(rank: int, world_size: int):
@@ -113,7 +113,7 @@ def train(
             model.to(device),
             device_ids=[rank],
             # TODO: Understand reasoning behind following two flags that are copied from LUKE
-            # broadcast_buffers=False,
+            broadcast_buffers=False,
             find_unused_parameters=True,
         )
     else:

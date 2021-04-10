@@ -77,8 +77,8 @@ class Entities(Words):
         cls,
         ids: torch.Tensor,
         spans: list[tuple],
-        max_len: int=128,
-        max_mention: int=30,
+        max_entities: int,
+        max_entity_span: int,
     ):
         """
         For creating a single example
@@ -88,10 +88,10 @@ class Entities(Words):
         """
         # TODO: Is torch.long necessary?
         N = ids.shape[0]
-        ent_ids = torch.zeros(max_len, dtype=torch.long)
+        ent_ids = torch.zeros(max_entities, dtype=torch.long)
         ent_ids[:N] = ids
 
-        ent_pos = torch.full((max_len, max_mention), -1, dtype=torch.long)
+        ent_pos = torch.full((max_entities, max_entity_span), -1, dtype=torch.long)
         # TODO: Make faster than for loop
         for i, (start, end) in enumerate(spans):
             ent_pos[i, :end-start] = torch.arange(start, end)
@@ -99,8 +99,8 @@ class Entities(Words):
 
         return cls(
             ids            = ent_ids,
-            segments       = cls._build_segments(max_len),
-            attention_mask = cls._build_att_mask(N, max_len),
+            segments       = cls._build_segments(max_entities),
+            attention_mask = cls._build_att_mask(N, max_entities),
             N              = N,
             spans          = None, # We do not need to save the spans for masking as we do for words
             pos            = ent_pos,
