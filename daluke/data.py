@@ -2,8 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from transformers import AutoTokenizer
-
 import torch
+
 
 @dataclass
 class Words:
@@ -22,13 +22,15 @@ class Words:
     spans: torch.Tensor
 
     @classmethod
-    def build(cls, ids: torch.Tensor,
-            spans: list[list[int]]=None,
-            max_len: int=512,
-            sep_id: int=3,
-            cls_id: int=2,
-            pad_id: int=0,
-        ):
+    def build(
+        cls,
+        ids: torch.Tensor,
+        spans: list[list[int]]=None,
+        max_len: int=512,
+        sep_id:  int=3,
+        cls_id:  int=2,
+        pad_id:  int=0,
+    ):
         """
         For creating a single example: Pads and add special tokens.
         """
@@ -62,6 +64,7 @@ class Words:
 @dataclass
 class Entities(Words):
     """
+    TODO: Update docstring
     ids: Tensor of entity vocabulary ids for each entity, size: (B x ) M
     attention_mask: Mask showing where the actual content is and what is padding, size: (B x) M
     N: Number of entities
@@ -70,16 +73,20 @@ class Entities(Words):
     pos: torch.Tensor
 
     @classmethod
-    def build(cls, ids: torch.Tensor, spans: list[tuple],
-            max_len: int=128,
-            max_mention: int=30,
-        ):
+    def build(
+        cls,
+        ids: torch.Tensor,
+        spans: list[tuple],
+        max_len: int=128,
+        max_mention: int=30,
+    ):
         """
         For creating a single example
 
         ids: N ids found from entity vocab used to train the model
         spans: N long list containing start and end of entities
         """
+        # TODO: Is torch.long necessary?
         N = ids.shape[0]
         ent_ids = torch.zeros(max_len, dtype=torch.long)
         ent_ids[:N] = ids
@@ -87,7 +94,7 @@ class Entities(Words):
         ent_pos = torch.full((max_len, max_mention), -1, dtype=torch.long)
         # TODO: Make faster than for loop
         for i, (start, end) in enumerate(spans):
-            ent_pos[i, :end-start] = torch.LongTensor(list(range(start, end)))
+            ent_pos[i, :end-start] = torch.arange(start, end)
         ent_pos[ent_pos != -1] += 1 #+1 for [cls]
 
         return cls(

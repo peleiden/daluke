@@ -2,8 +2,9 @@ from __future__ import annotations
 import os
 import json
 
-from transformers import AutoTokenizer
 import torch
+from tqdm import tqdm
+from transformers import AutoTokenizer
 
 from pelutils import log
 
@@ -50,7 +51,7 @@ class DataLoader:
 
         log.section("Creating examples ...")
         self.examples: list[Example] = list()
-        for seq_data in load_jsonl(os.path.join(data_dir, DatasetBuilder.data_file)):
+        for seq_data in log.tqdm(tqdm(load_jsonl(os.path.join(data_dir, DatasetBuilder.data_file)), total=metadata["number-of-items"])):
             self.examples.append(Example(
                 words = Words.build(
                     torch.LongTensor(seq_data["word_ids"]),
