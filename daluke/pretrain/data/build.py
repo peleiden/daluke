@@ -186,7 +186,8 @@ class DatasetBuilder:
                     # Save features for this sequence
                     links = links[:self.max_entities]
                     word_ids = self.tokenizer.convert_tokens_to_ids(words)
-                    word_spans = calculate_spans(words)
+                    with TT.profile("Word spans"):
+                        word_spans = calculate_spans(words)
                     assert self.min_sentence_length <= len(word_ids) <= self.max_num_tokens
                     entity_ids = [id_ for id_, _, _ in links]
                     entity_spans = [(start, end) for _, start, end in links]
