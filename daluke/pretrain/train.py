@@ -24,9 +24,9 @@ from .analysis import TrainResults
 PORT = "3090"  # Are we sure this port is in stock?
 NO_DECAY =  {"bias", "LayerNorm.weight"}
 
-MODEL_OUT = "daluke_epoch{i}"
-OPTIMIZER_OUT = "optim_epoch{i}"
-SCHEDULER_OUT = "sheduler_epoch{i}"
+MODEL_OUT = "daluke_epoch{i}.pt"
+OPTIMIZER_OUT = "optim_epoch{i}.pt"
+SCHEDULER_OUT = "sheduler_epoch{i}.pt"
 
 
 def setup(rank: int, world_size: int):
@@ -213,8 +213,8 @@ def train(
 
             res.losses[i, j] = loss.item()
             res.epoch = i
-            log.debug(f"Batch {j}/{num_batches} (ep. {i}). Loss: {res.losses[i, j]}")
-        log(f"Completed epoch {i}/{params.epochs} with mean loss {res.losses[i].mean()}")
+            log.debug(f"Batch {j}/{num_batches-1} (ep. {i}). Loss: {res.losses[i, j]}")
+        log(f"Completed epoch {i}/{params.epochs-1} with mean loss {res.losses[i].mean()}")
         if is_master and (i+1) % save_every == 0:
             log.debug("Saving ...")
             paths = save_training(location, model, res, optimizer, scheduler)
