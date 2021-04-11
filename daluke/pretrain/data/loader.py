@@ -1,6 +1,7 @@
 from __future__ import annotations
 import os
 import json
+import pickle
 
 import torch
 from tqdm import tqdm
@@ -15,20 +16,25 @@ from .masking import MaskedBatchedExamples
 
 class DataLoader:
 
+    cached_examples_file = "cached_examples.pkl"
+
     def __init__(
         self,
         data_dir: str,
         metadata: dict,
         device:   torch.device,
-        word_mask_prob:     float = 0.15,
-        word_unmask_prob:   float = 0.1,
-        word_randword_prob: float = 0.1,
-        ent_mask_prob:      float = 0.15,
-        max_sentence_len:   int = 512,
+        use_cached_examples: bool,
+        word_mask_prob:      float = 0.15,
+        word_unmask_prob:    float = 0.1,
+        word_randword_prob:  float = 0.1,
+        ent_mask_prob:       float = 0.15,
+        max_sentence_len:    int = 512,
     ):
         """
         Loads a generated json dataset prepared by the preprocessing pipeline
         """
+        self.data_dir = data_dir
+        self.metadata = metadata
         self.device = device
 
         self.max_sentence_len = max_sentence_len
@@ -47,13 +53,28 @@ class DataLoader:
         # Don't insert ids that are special tokens when performing random word insertion in the masking
         self.random_word_id_range = (self.word_mask_id + 1, self.tokenizer.vocab_size)
 
-        log.section("Creating examples ...")
-        self.examples: list[Example] = list()
+        cache_path = os.path.join(self.data_dir, self.cached_examples_file)
+        if use_cached_examples:
+            log.section("Loading examples from cache at %s" % cache_path)
+            with open(cache_path, "rb") as cache_file:
+                self.examples: list[Example] = pickle.load(cache_file)
+        else:
+            log.section("Building examples ...")
+            self.examples: list[Example] = self.build_examples()
+            log("Saving examples to cache at %s" % cache_path)
+            with open(cache_path, "wb") as cache_file:
+                pickle.dump(self.examples, cache_file)
+
+    def __len__(self):
+        return len(self.examples)
+
+    def build_examples(self) -> list[Example]:
+        examples = list()
         for seq_data in log.tqdm(tqdm(
-            load_jsonl(os.path.join(data_dir, DatasetBuilder.data_file)),
-            total=metadata["number-of-items"],
+            load_jsonl(os.path.join(self.data_dir, DatasetBuilder.data_file)),
+            total=self.metadata["number-of-items"],
         )):
-            self.examples.append(Example(
+            examples.append(Example(
                 words = Words.build(
                     torch.IntTensor(seq_data["word_ids"]),
                     seq_data["word_spans"],
@@ -69,9 +90,7 @@ class DataLoader:
                     max_entity_span = self.max_entity_span,
                 )
             ))
-
-    def __len__(self):
-        return len(self.examples)
+        return examples
 
     def get_dataloader(self, batch_size: int, sampler: torch.utils.data.Sampler) -> DataLoader:
         return torch.utils.data.DataLoader(list(enumerate(self.examples)), batch_size=batch_size, sampler=sampler, collate_fn=self.collate)

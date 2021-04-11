@@ -15,6 +15,7 @@ import numpy as np
 
 from transformers import AutoConfig, AutoModelForPreTraining, AdamW, get_linear_schedule_with_warmup
 from pelutils.logger import log, Levels
+from pelutils.ds import reset_cuda
 
 from .data import DataLoader, load_entity_vocab
 from .data.build import DatasetBuilder
@@ -93,6 +94,7 @@ def train(
     quiet: bool,
     save_every: int,
     bert_attention: bool,
+    use_cached_examples: bool,
     params: Hyperparams,
 ):
     # Get filepath within path context
@@ -126,7 +128,7 @@ def train(
     device = torch.device("cuda", index=rank) if is_distributed else torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Load dataset and training results
-    dataloader = DataLoader(location, metadata, device=device)
+    dataloader = DataLoader(location, metadata, device, use_cached_examples)
     num_batches = int(np.ceil(len(dataloader) / params.batch_size))
     num_updates = num_batches * params.epochs
     res = TrainResults(
@@ -193,7 +195,12 @@ def train(
 
     log.section(f"Training of daLUKE for {params.epochs} epochs")
     model.train()
-    for i in range(res.epoch, params.epochs):
+    accumulate_step = 0
+    res = TrainResults(
+        losses = np.zeros((params.epochs, num_batches))
+    )
+    for i in range(params.epochs):
+        log("Starting epoch %i" % i)
         epoch_loss = 0
         if is_distributed:
             sampler.set_epoch(i)
@@ -221,5 +228,9 @@ def train(
             log.debug("Saving ...")
             paths = save_training(location, model, res, optimizer, scheduler)
             log.debug("Saved progress to", ", ".join(paths))
+            log.debug(f"Completed batch {j+1} with loss {res.losses[i, j]}")
+            reset_cuda()
+
+        log(f"Completed epoch {i+1} with mean loss {res.losses[i].mean()}")
     # Clean up multi-gpu if used
     cleanup(rank)
