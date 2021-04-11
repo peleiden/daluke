@@ -64,6 +64,7 @@ class DataLoader:
             log("Saving examples to cache at %s" % cache_path)
             with open(cache_path, "wb") as cache_file:
                 pickle.dump(self.examples, cache_file)
+        log("Got %i examples" % len(self.examples))
 
     def __len__(self):
         return len(self.examples)

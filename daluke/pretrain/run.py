@@ -38,7 +38,7 @@ def _run_training(rank: int, world_size: int, args: dict[str, Any]):
         quiet        = args.pop("quiet"),
         save_every   = args.pop("save_every"),
         bert_attention = args.pop("bert_attention"),
-        use_cached_examples = args.pop("use-cached_examples"),
+        use_cached_examples = args.pop("use_cached_examples"),
         params       = Hyperparams(**args),
     )
 

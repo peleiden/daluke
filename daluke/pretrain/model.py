@@ -95,7 +95,7 @@ class EntityPreTrainingHeads(nn.Module):
     def forward(self, hidden: torch.Tensor) -> torch.Tensor:
         return self.decode(self.lnorm(self.act(self.transform(hidden)))) + self.bias
 
-def load_base_model_weights(daluke: PretrainTaskDaLUKE, base_model: nn.Module):
+def load_base_model_weights(daluke: PretrainTaskDaLUKE, base_model: nn.Module) -> set:
     """
     Load a base model into this model. Assumes BERT for now
     Returns the set of keys that were not tansfered from base model

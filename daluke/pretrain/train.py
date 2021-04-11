@@ -17,6 +17,7 @@ from transformers import AutoConfig, AutoModelForPreTraining, AdamW, get_linear_
 from pelutils.logger import log, Levels
 from pelutils.ds import reset_cuda
 
+from daluke.pretrain.analysis import gpu_usage
 from .data import DataLoader, load_entity_vocab
 from .data.build import DatasetBuilder
 from .model import PretrainTaskDaLUKE, BertAttentionPretrainTaskDaLUKE, load_base_model_weights
@@ -144,6 +145,7 @@ def train(
     bert_config = AutoConfig.from_pretrained(metadata["base-model"])
     assert bert_config.max_position_embeddings == metadata["max-seq-length"], \
         f"Model should respect sequence length; embeddings are of lenght {bert_config.max_position_embeddings}, but max. seq. len. is set to {metadata['max-seq-length']}"
+    log("Bert config", bert_config)
 
     model_cls = BertAttentionPretrainTaskDaLUKE if bert_attention else PretrainTaskDaLUKE
     model = model_cls(
@@ -195,23 +197,22 @@ def train(
 
     log.section(f"Training of daLUKE for {params.epochs} epochs")
     model.train()
-    accumulate_step = 0
-    res = TrainResults(
-        losses = np.zeros((params.epochs, num_batches))
-    )
     for i in range(params.epochs):
         log("Starting epoch %i" % i)
-        epoch_loss = 0
         if is_distributed:
             sampler.set_epoch(i)
+
         for j, batch in enumerate(loader):
+            log.debug("Batch %i" % j)
             word_preds, ent_preds = model(batch)
+
             # Compute and backpropagate loss
             word_loss, ent_loss = criterion(word_preds, batch.word_mask_labels), criterion(ent_preds, batch.ent_mask_labels)
             loss = word_loss + ent_loss
             if params.grad_accumulate > 1:
                 loss /= params.grad_accumulate
             loss.backward()
+
             # Performs parameter update every for every `grad_accumulate`'th batch
             res.accumulate_step += 1
             if res.accumulate_step == params.grad_accumulate:

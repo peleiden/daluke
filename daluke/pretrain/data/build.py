@@ -27,15 +27,15 @@ class DatasetBuilder:
 
     def __init__(
         self,
-        dump_db_file:      str,  # Location of file build by build-dump-db
-        tokenizer_name:    str,  # Tokenizer to use, e.g. Maltehb/danish-bert-botxo for Danish BERT
-        entity_vocab_file: str,  # Build by build-entity-vocab
-        out_dir:           str,  # Where to put finished dataset. All contents will be removed before saving dataset
-        max_seq_length      = 512,  # Maximum length of any sequence
-        max_entities        = 128,  # Only up to this many entities are included in each sequence
-        max_entity_span     = 30,   # Maximum number tokens an entity can span before sequence is discarded
-        min_sentence_length = 5,    # Minimum number of tokens a sentence must span to be included
-        max_articles        = None,
+        dump_db_file:        str,  # Location of file build by build-dump-db
+        tokenizer_name:      str,  # Tokenizer to use, e.g. Maltehb/danish-bert-botxo for Danish BERT
+        entity_vocab_file:   str,  # Build by build-entity-vocab
+        out_dir:             str,  # Where to put finished dataset. All contents will be removed before saving dataset
+        max_seq_length:      int,  # Maximum length of any sequence
+        max_entities:        int,  # Only up to this many entities are included in each sequence
+        max_entity_span:     int,  # Maximum number tokens an entity can span before sequence is discarded
+        min_sentence_length: int,  # Minimum number of tokens a sentence must span to be included
+        max_articles:        int | None,
     ):
         log("Reading dump database at %s" % dump_db_file)
         self.dump_db = DumpDB(dump_db_file)

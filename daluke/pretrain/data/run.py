@@ -15,6 +15,7 @@ def run_build_dataset():
     parser.add_argument("out_dir", type=str)
     parser.add_argument("--max-seq-length", type=int, default=512)
     parser.add_argument("--max-entities", type=int, default=128)
+    parser.add_argument("--max-entity-span", type=int, default=30)
     parser.add_argument("--min-sentence-length", type=int, default=5)
     parser.add_argument("--max-articles", type=int, default=None)
     args = parser.parse_args()
