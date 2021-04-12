@@ -55,7 +55,7 @@ class DataLoader:
         )):
             self.examples.append(Example(
                 words = Words.build(
-                    torch.LongTensor(seq_data["word_ids"]),
+                    torch.IntTensor(seq_data["word_ids"]),
                     seq_data["word_spans"],
                     max_len = self.max_sentence_len,
                     sep_id  = self.sep_id,
@@ -63,7 +63,7 @@ class DataLoader:
                     pad_id  = self.pad_id,
                 ),
                 entities = Entities.build(
-                    torch.LongTensor(seq_data["entity_ids"]),
+                    torch.IntTensor(seq_data["entity_ids"]),
                     seq_data["entity_spans"],
                     max_entities    = self.max_entities,
                     max_entity_span = self.max_entity_span,

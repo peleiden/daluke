@@ -8,9 +8,9 @@ from daluke.data import Example, Words, Entities, get_special_ids, BatchedExampl
 
 @dataclass
 class MaskedBatchedExamples(BatchedExamples):
-    word_mask_labels: torch.Tensor
+    word_mask_labels: torch.LongTensor
     word_mask: torch.BoolTensor
-    ent_mask_labels: torch.Tensor
+    ent_mask_labels: torch.LongTensor
     ent_mask: torch.BoolTensor
 
     @classmethod
@@ -34,13 +34,13 @@ class MaskedBatchedExamples(BatchedExamples):
 def mask_ent_batch(ent: Entities, prob: float, mask_id: int) -> (torch.Tensor, torch.BoolTensor):
     mask = torch.zeros_like(ent.ids, dtype=torch.bool)
     # TODO: Can this be vectorized?
-    to_masks = (ent.N*prob).round().long()
+    to_masks = (ent.N*prob).round().int()
     for i, (n, t) in enumerate(zip(ent.N, to_masks)):
         if not n: continue
         throw = torch.multinomial(torch.ones(n), t or 1)
         mask[i, throw] = True
 
-    labels = ent.ids[mask]
+    labels = ent.ids[mask].long() # Labels should be longs for criterion
     ent.ids[mask] = mask_id
     return labels, mask
 
@@ -68,7 +68,7 @@ def mask_word_batch(
             elif p > (1 - randword_prob):
                 randword_mask[i, start:end] = True
 
-    labels = w.ids[mask]
+    labels = w.ids[mask].long() # Labels should be 64-bit for criterion
     w.ids[mask & ~unmask_mask] = mask_id # Take unmasking into account
     w.ids[randword_mask] = torch.randint_like(w.ids[randword_mask], *word_id_range)
 

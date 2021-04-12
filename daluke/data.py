@@ -15,16 +15,16 @@ class Words:
     N: Number of tokens
     spans: Optional; M x 2 vector showing token positions corresponding to full words; necessary for full-word masking
     """
-    ids: torch.Tensor
-    segments: torch.Tensor
-    attention_mask: torch.Tensor
+    ids: torch.IntTensor
+    segments: torch.IntTensor
+    attention_mask: torch.IntTensor
     N: int
-    spans: torch.Tensor
+    spans: torch.IntTensor
 
     @classmethod
     def build(
         cls,
-        ids: torch.Tensor,
+        ids: torch.IntTensor,
         spans: list[list[int]]=None,
         max_len: int=512,
         sep_id:  int=3,
@@ -35,12 +35,12 @@ class Words:
         For creating a single example: Pads and add special tokens.
         """
         N = ids.shape[0]
-        word_ids = torch.full((max_len,), pad_id, dtype=torch.long)
-        word_ids[:N+2] = torch.cat((torch.LongTensor([cls_id]), ids, torch.LongTensor([sep_id])))
+        word_ids = torch.full((max_len,), pad_id, dtype=torch.int)
+        word_ids[:N+2] = torch.cat((torch.IntTensor([cls_id]), ids, torch.IntTensor([sep_id])))
 
         # Don't pad the spans as they are not given to model, but used for masking
         if spans is not None:
-            spans = torch.LongTensor(spans)
+            spans = torch.IntTensor(spans)
 
         return cls(
             ids            = word_ids,
@@ -52,14 +52,14 @@ class Words:
 
     @staticmethod
     def _build_att_mask(fill: int, max_size: int):
-        att_mask = torch.zeros(max_size, dtype=torch.long)
+        att_mask = torch.zeros(max_size, dtype=torch.int)
         att_mask[:fill] = 1
         return att_mask
 
     @staticmethod
     def _build_segments(max_size: int):
         # TODO: Is this really correct? Seems stupid ...
-        return torch.zeros(max_size, dtype=torch.long)
+        return torch.zeros(max_size, dtype=torch.int)
 
 @dataclass
 class Entities(Words):
@@ -70,7 +70,7 @@ class Entities(Words):
     N: Number of entities
     pos: Saves position spans in each row for each entity as these are used for positional embeddings, size: (B x) M x max mention size
     """
-    pos: torch.Tensor
+    pos: torch.IntIntTensor
 
     @classmethod
     def build(
@@ -86,12 +86,11 @@ class Entities(Words):
         ids: N ids found from entity vocab used to train the model
         spans: N long list containing start and end of entities
         """
-        # TODO: Is torch.long necessary?
         N = ids.shape[0]
-        ent_ids = torch.zeros(max_entities, dtype=torch.long)
+        ent_ids = torch.zeros(max_entities, dtype=torch.int)
         ent_ids[:N] = ids
 
-        ent_pos = torch.full((max_entities, max_entity_span), -1, dtype=torch.long)
+        ent_pos = torch.full((max_entities, max_entity_span), -1, dtype=torch.int)
         # TODO: Make faster than for loop
         for i, (start, end) in enumerate(spans):
             ent_pos[i, :end-start] = torch.arange(start, end)
@@ -157,10 +156,10 @@ def features_from_str(words: list[str], entity_spans: list[tuple[int, int]], ent
     tokenizer: tokenizer used for word id computation
     """
     sep, cls_, pad = get_special_ids(tokenizer)
-    word_ids = torch.LongTensor(tokenizer.convert_tokens_to_ids(words))
+    word_ids = torch.IntTensor(tokenizer.convert_tokens_to_ids(words))
     ents = (" ".join(words[e[0]:e[1]]) for e in entity_spans)
         # FIXME: Handle tokenization, e.g.: What if the entity is subword?
-    ent_ids = torch.LongTensor([entity_vocab.get(ent, entity_vocab["[UNK]"]) for ent in ents])
+    ent_ids = torch.IntTensor([entity_vocab.get(ent, entity_vocab["[UNK]"]) for ent in ents])
         # FIXME: Make a class for entity vocab
         # FIXME: Consider entity casing
     return Example(

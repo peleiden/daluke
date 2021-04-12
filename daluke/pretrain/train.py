@@ -171,7 +171,7 @@ def train(
     if resume:
         mpath = fpath(MODEL_OUT.format(i=res.epoch))
         model.load_state_dict(torch.load(mpath))
-        log.debug(f"Resuming training saved at epoch {res.epoch} and loaded model from {mpath}")
+        log(f"Resuming training saved at epoch {res.epoch} and loaded model from {mpath}")
     # TODO: Consider whether this AdamW is sufficient or we should tune it in some way to LUKE
     optimizer = AdamW(
         [{"params": get_optimizer_params(model_params, do_decay=True),  "weight_decay": params.weight_decay},
