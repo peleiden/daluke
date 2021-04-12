@@ -11,6 +11,7 @@ from transformers.activations import get_activation
 from transformers.models.bert.modeling_bert import (
     BertConfig,
     BertLMPredictionHead,
+    BertEncoder,
 )
 
 from daluke.model import DaLUKE
@@ -42,6 +43,40 @@ class PretrainTaskDaLUKE(DaLUKE):
         word_hidden_masked = word_hidden[ex.word_mask].view(-1, self.hiddsize)
         word_scores = self.mask_word_scorer(word_hidden_masked).view(-1, self.wsize)
 
+        ent_hidden_masked = ent_hidden[ex.ent_mask].view(-1, self.hiddsize)
+        ent_scores = self.mask_entity_scorer(ent_hidden_masked).view(-1, self.esize)
+
+        return word_scores, ent_scores
+
+class BertAttentionPretrainTaskDaLUKE(PretrainTaskDaLUKE):
+    """
+    DaLUKE using the normal attention from BERT instead of the Entity-Aware Attention.
+    """
+    def __init__(self,
+        bert_config: BertConfig,
+        ent_vocab_size: int,
+        ent_embed_size: int,
+    ):
+        super().__init__(bert_config, ent_vocab_size, ent_embed_size)
+
+        self.encoder = BertEncoder(bert_config)
+
+    def forward(self, ex: MaskedBatchedExamples) -> tuple[torch.Tensor, torch.Tensor]:
+        word_size = ex.words.ids.size(1)
+
+        # Exactly same as in DaLUKE
+        word_hidden    = self.word_embeddings(ex.words.ids, ex.words.segments)
+        entity_hidden  = self.entity_embeddings(ex.entities.ids, ex.entities.pos, ex.entities.segments)
+        attention_mask = torch.cat((ex.words.attention_mask, ex.entities.attention_mask), dim=1).unsqueeze(1).unsqueeze(2)
+        attention_mask = 10_000.0 * (attention_mask - 1.0)
+
+        # BERT encoder
+        encodings = self.encoder(torch.cat([word_hidden, entity_hidden], dim=1), attention_mask)
+        word_hidden, ent_hidden = encodings[0][:, :word_size, :], encodings[0][:, word_size:, :]
+
+        # Exactly same as in PretrainTaskDaLUKE
+        word_hidden_masked = word_hidden[ex.word_mask].view(-1, self.hiddsize)
+        word_scores = self.mask_word_scorer(word_hidden_masked).view(-1, self.wsize)
         ent_hidden_masked = ent_hidden[ex.ent_mask].view(-1, self.hiddsize)
         ent_scores = self.mask_entity_scorer(ent_hidden_masked).view(-1, self.esize)
 

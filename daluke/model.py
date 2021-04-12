@@ -8,7 +8,6 @@ import torch.nn.functional as F
 from transformers.models.bert.modeling_bert import (
     BertConfig,
     BertEmbeddings,
-    BertPooler,
     BertSelfOutput,
     BertOutput,
     BertIntermediate,
@@ -38,8 +37,6 @@ class DaLUKE(nn.Module):
         self.encoder = nn.ModuleList(
             [EntityAwareLayer(bert_config) for _ in range(bert_config.num_hidden_layers)]
         )
-
-        self.pooler = BertPooler(bert_config)
 
     def forward(self, ex: BatchedExamples) -> tuple[torch.Tensor, torch.Tensor]:
         """

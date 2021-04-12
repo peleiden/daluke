@@ -18,7 +18,7 @@ from pelutils.logger import log, Levels
 
 from .data import DataLoader, load_entity_vocab
 from .data.build import DatasetBuilder
-from .model import PretrainTaskDaLUKE, load_base_model_weights
+from .model import PretrainTaskDaLUKE, BertAttentionPretrainTaskDaLUKE, load_base_model_weights
 from .analysis import TrainResults
 
 PORT = "3090"  # Are we sure this port is in stock?
@@ -92,6 +92,7 @@ def train(
     name: str,
     quiet: bool,
     save_every: int,
+    bert_attention: bool,
     params: Hyperparams,
 ):
     # Get filepath within path context
@@ -142,7 +143,8 @@ def train(
     assert bert_config.max_position_embeddings == metadata["max-seq-length"], \
         f"Model should respect sequence length; embeddings are of lenght {bert_config.max_position_embeddings}, but max. seq. len. is set to {metadata['max-seq-length']}"
 
-    model = PretrainTaskDaLUKE(
+    model_cls = BertAttentionPretrainTaskDaLUKE if bert_attention else PretrainTaskDaLUKE
+    model = model_cls(
         bert_config,
         ent_vocab_size = len(entity_vocab),
         ent_embed_size = Hyperparams.ent_embed_size,

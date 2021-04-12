@@ -22,6 +22,7 @@ ARGUMENTS = {
     "weight-decay":      { "default": Hyperparams.weight_decay, "type": float, "help": "The decay factor in the AdamW optimizer" },
     "warmup-prop":       { "default": Hyperparams.warmup_prop, "type": float, "help": "Proportion of training steps used for optimizer warmup" },
     "save-every":        { "default": 1, "type": int, "help": "" },
+    "bert-attention":    { "action": "store_true", "help": "Use the original BERT attention mechanism instead of the entity aware LUKE variant" },
     "quiet":             { "action": "store_true", "help": "Don't show debug logging" },
 }
 
@@ -30,12 +31,13 @@ def _run_training(rank: int, world_size: int, args: dict[str, Any]):
     return train(
         rank,
         world_size,
-        resume      = args.pop("resume"),
-        location    = args.pop("location"),
-        name        = args.pop("name"),
-        quiet       = args.pop("quiet"),
-        save_every  = args.pop("save_every"),
-        params      = Hyperparams(**args),
+        resume       = args.pop("resume"),
+        location     = args.pop("location"),
+        name         = args.pop("name"),
+        quiet        = args.pop("quiet"),
+        save_every   = args.pop("save_every"),
+        bert_attention = args.pop("bert_attention"),
+        params       = Hyperparams(**args),
     )
 
 def run(args: dict[str, Any]):
