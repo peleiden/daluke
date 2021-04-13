@@ -16,9 +16,9 @@ from daluke.pretrain.train import train, Hyperparams
 ARGUMENTS = {
     "resume":            { "action": "store_true", "help": "Continue a previous training" },
     "epochs":            { "default": Hyperparams.epochs, "type": int, "help": "Number of passes through the entire data set"},
-    "batch-size":        { "default": Hyperparams.batch_size, "type": int, "help": "Number of sequences per forward pass" },
+    "batch-size":        { "default": Hyperparams.batch_size, "type": int, "help": "Number of sequences per parameter update" },
     "lr":                { "default": Hyperparams.lr, "type": float, "help": "Initial learning rate" },
-    "grad-accumulate":   { "default": Hyperparams.grad_accumulate, "type": int, "help": "Number of batches to use for accumulation of gradients before performing parameter update" },
+    "grad-accumulate":   { "default": Hyperparams.grad_accumulate, "type": int, "help": "Number of forward passes to use for accumulation of gradients before performing parameter update" },
     "ent-embed-size":    { "default": Hyperparams.ent_embed_size, "type": int, "help": "Dimension of the entity embeddings" },
     "weight-decay":      { "default": Hyperparams.weight_decay, "type": float, "help": "The decay factor in the AdamW optimizer" },
     "warmup-prop":       { "default": Hyperparams.warmup_prop, "type": float, "help": "Proportion of training steps used for optimizer warmup" },
