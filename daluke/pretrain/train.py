@@ -132,10 +132,10 @@ def train(
     # Load dataset and training results
     dataloader = DataLoader(location, metadata, device)
     # Update batch size to account for gradient accumulation and number of gpus used
-    params.batch_size = ceil(params.batch_size / (params.grad_accumulate * num_workers))
-    log("Forward pass batch size: %i" % params.batch_size)
-    num_batches = ceil(len(dataloader) / (params.batch_size * num_workers))
-    num_updates = num_batches * params.epochs
+    worker_batch_size = ceil(params.batch_size / (params.grad_accumulate * num_workers))
+    log("Forward pass batch size for this worker: %i" % worker_batch_size)
+    num_batches = ceil(len(dataloader) / (worker_batch_size * num_workers))
+    num_updates_all = num_batches * params.epochs
     res = TrainResults(
         losses = np.zeros((params.epochs, num_batches)),
         epoch = 0,
@@ -188,7 +188,7 @@ def train(
          {"params": get_optimizer_params(model_params, do_decay=False), "weight_decay": 0}],
         lr = params.lr,
     )
-    scheduler = get_linear_schedule_with_warmup(optimizer, int(params.warmup_prop * num_updates), num_updates)
+    scheduler = get_linear_schedule_with_warmup(optimizer, int(params.warmup_prop * num_updates_all), num_updates_all)
     if resume:
         optimizer.load_state_dict(torch.load(fpath(OPTIMIZER_OUT.format(i=res.epoch))))
         scheduler.load_state_dict(torch.load(fpath(SCHEDULER_OUT.format(i=res.epoch))))
@@ -197,7 +197,7 @@ def train(
     criterion = nn.CrossEntropyLoss(ignore_index=-1)
 
     sampler = (DistributedSampler if is_distributed else RandomSampler)(dataloader.examples)
-    loader = dataloader.get_dataloader(params.batch_size, sampler)
+    loader = dataloader.get_dataloader(worker_batch_size, sampler)
 
     log.section(f"Training of daLUKE for {params.epochs} epochs")
     model.train()
@@ -236,7 +236,5 @@ def train(
         if is_master and (i+1) % save_every == 0:
             paths = save_training(location, model, res, optimizer, scheduler)
             log.debug("Saved progress to", ", ".join(paths))
-
-        log(f"Completed epoch {i+1} with mean loss {res.losses[i].mean()}")
     # Clean up multi-gpu if used
     cleanup(rank)
