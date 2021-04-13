@@ -15,7 +15,6 @@ from transformers.models.bert.modeling_bert import (
 
 from pelutils import log
 
-from daluke.pretrain.analysis import gpu_usage
 from daluke.data import BatchedExamples
 
 
@@ -106,21 +105,17 @@ class EntitySelfAttention(nn.Module):
         Query and key is divided into the four cases (word2word, entity2entity, word2entity, entity2word), but is otherwise
         used in normal transformer way to compute attention from which context is returned
         """
-        log("forward", gpu_usage())
         word_size = word_hidden.size(1)
         total_hidden = torch.cat((word_hidden, entity_hidden), dim=1)
 
-        # Queries are given input dependant on the domain FROM which they map
-        log("queries", gpu_usage())
+        # Queries are given input dependant on the domain from which they map
         queries = self.Q_w(word_hidden), self.Q_e(entity_hidden), self.Q_w2e(word_hidden), self.Q_e2w(entity_hidden)
         # Key layers divided dependant on domain TO which they map
-        log("keys", gpu_usage())
         key = self.reshape_to_matrix(self.K(total_hidden))
         key_2w = key[:, :, :word_size, :].transpose(-1, -2)
         key_2e = key[:, :, word_size:, :].transpose(-1, -2)
 
         # Attention matrices computed as query*key and then concatenated
-        log("attention", gpu_usage())
         A_w, A_e, A_w2e, A_e2w = (self.reshape_to_matrix(q) @ k for q, k in zip(queries, (key_2w, key_2e, key_2e, key_2w)))
         attention = torch.cat(
             [torch.cat(a, dim=3) for a in ((A_w, A_w2e), (A_e2w, A_e))],
@@ -128,14 +123,11 @@ class EntitySelfAttention(nn.Module):
         )
 
         # Attention is transformed to probability and matmul'ed with value layer, creating context
-        log("context", gpu_usage())
         attention = self.dropout(
             F.softmax(attention/self.num_heads**0.5 + attention_mask, dim=-1)
         )
         value = self.reshape_to_matrix(self.V(total_hidden))
-        log("context2", gpu_usage())
         context = (attention @ value).permute(0, 2, 1, 3).contiguous()
-        log("done", gpu_usage())
         return context.view(
             *context.size()[:-2], self.num_heads*self.head_size
         )

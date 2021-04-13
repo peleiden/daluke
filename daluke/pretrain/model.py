@@ -52,6 +52,7 @@ class BertAttentionPretrainTaskDaLUKE(PretrainTaskDaLUKE):
     """
     DaLUKE using the normal attention from BERT instead of the Entity-Aware Attention.
     """
+    # TODO: Load bert weights
     def __init__(self,
         bert_config: BertConfig,
         ent_vocab_size: int,

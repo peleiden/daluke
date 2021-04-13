@@ -1,7 +1,8 @@
 from __future__ import annotations
 import os
-from dataclasses import dataclass
 import json
+from dataclasses import dataclass
+from math import ceil
 
 import torch
 import torch.distributed as dist
@@ -17,14 +18,13 @@ from transformers import AutoConfig, AutoModelForPreTraining, AdamW, get_linear_
 from pelutils.logger import log, Levels
 from pelutils.ds import reset_cuda
 
-from daluke.pretrain.analysis import gpu_usage
 from .data import DataLoader, load_entity_vocab
 from .data.build import DatasetBuilder
 from .model import PretrainTaskDaLUKE, BertAttentionPretrainTaskDaLUKE, load_base_model_weights
 from .analysis import TrainResults
 
 PORT = "3090"  # Are we sure this port is in stock?
-NO_DECAY =  {"bias", "LayerNorm.weight"}
+NO_DECAY =  { "bias", "LayerNorm.weight" }
 
 MODEL_OUT = "daluke_epoch{i}.pt"
 OPTIMIZER_OUT = "optim_epoch{i}.pt"
@@ -103,6 +103,7 @@ def train(
 
     is_master = rank < 1  # Are we on the main node?
     is_distributed = rank != -1  # Are we performing distributed computing?
+    num_workers = torch.distributed.get_world_size() if is_distributed else 1
 
     # Setup logger
     log.configure(
@@ -130,6 +131,8 @@ def train(
 
     # Load dataset and training results
     dataloader = DataLoader(location, metadata, device, use_cached_examples)
+    # Update batch size to account for gradient accumulation and number of gpus used
+    params.batch_size = ceil(params.batch_size / params.grad_accumulate / num_workers)
     num_batches = int(np.ceil(len(dataloader) / params.batch_size))
     num_updates = num_batches * params.epochs
     res = TrainResults(
@@ -145,7 +148,7 @@ def train(
     bert_config = AutoConfig.from_pretrained(metadata["base-model"])
     assert bert_config.max_position_embeddings == metadata["max-seq-length"], \
         f"Model should respect sequence length; embeddings are of lenght {bert_config.max_position_embeddings}, but max. seq. len. is set to {metadata['max-seq-length']}"
-    log("Bert config", bert_config)
+    log("Bert config", bert_config.to_json_string())
 
     model_cls = BertAttentionPretrainTaskDaLUKE if bert_attention else PretrainTaskDaLUKE
     model = model_cls(
