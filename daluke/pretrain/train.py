@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+import contextlib
 import json
 from dataclasses import dataclass
 from math import ceil
@@ -211,12 +212,17 @@ def train(
             # Compute and backpropagate loss
             word_loss, ent_loss = criterion(word_preds, batch.word_mask_labels), criterion(ent_preds, batch.ent_mask_labels)
             loss = word_loss + ent_loss
-            if params.grad_accumulate > 1:
-                loss /= params.grad_accumulate
-            loss.backward()
+            loss /= params.grad_accumulate
+
+            res.accumulate_step += 1
+            if is_distributed and res.accumulate_step != params.grad_accumulate:
+                sync_context = model.no_sync()
+            else:
+                sync_context = contextlib.ExitStack()
+            with sync_context:
+                loss.backward()
 
             # Performs parameter update every for every `grad_accumulate`'th batch
-            res.accumulate_step += 1
             if res.accumulate_step == params.grad_accumulate:
                 optimizer.step()
                 scheduler.step()
