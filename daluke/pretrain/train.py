@@ -95,11 +95,13 @@ def train(
     quiet: bool,
     save_every: int,
     bert_attention: bool,
-    use_cached_examples: bool,
     params: Hyperparams,
 ):
     # Get filepath within path context
     fpath = lambda path: os.path.join(location, path)
+
+    # Setup multi-gpu if used and get device
+    setup(rank, world_size)
 
     is_master = rank < 1  # Are we on the main node?
     is_distributed = rank != -1  # Are we performing distributed computing?
@@ -123,17 +125,15 @@ def train(
     log("Loaded metadata:", json.dumps(metadata, indent=4))
     log(f"Loaded entity vocabulary of {len(entity_vocab)} entities")
 
-    # Setup multi-gpu if used and get device
-    setup(rank, world_size)
-
     # Device should be cuda:rank or just cuda if single gpu, else cpu
     device = torch.device("cuda", index=rank) if is_distributed else torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Load dataset and training results
-    dataloader = DataLoader(location, metadata, device, use_cached_examples)
+    dataloader = DataLoader(location, metadata, device)
     # Update batch size to account for gradient accumulation and number of gpus used
-    params.batch_size = ceil(params.batch_size / params.grad_accumulate / num_workers)
-    num_batches = int(np.ceil(len(dataloader) / params.batch_size))
+    params.batch_size = ceil(params.batch_size / (params.grad_accumulate * num_workers))
+    log("Forward pass batch size: %i" % params.batch_size)
+    num_batches = ceil(len(dataloader) / (params.batch_size * num_workers))
     num_updates = num_batches * params.epochs
     res = TrainResults(
         losses = np.zeros((params.epochs, num_batches)),
@@ -156,19 +156,10 @@ def train(
         ent_vocab_size = len(entity_vocab),
         ent_embed_size = Hyperparams.ent_embed_size,
     ).to(device)
-    if is_distributed:
-        model = DDP(
-            model,
-            device_ids=[rank],
-            # TODO: Understand reasoning behind following two flags that are copied from LUKE
-            broadcast_buffers=False,
-            find_unused_parameters=True,
-        )
     # TODO: Maybe init fresh model weights manually (they do)
     # Load parameters from base model
     base_model = AutoModelForPreTraining.from_pretrained(metadata["base-model"])
     new_weights = load_base_model_weights(model, base_model)
-    del base_model  # Clear base model weights from memory
 
     model_params = list(model.named_parameters())
     # TODO: Re-enable training of BERT weights at some point during the training
@@ -176,6 +167,15 @@ def train(
     for n, p in model_params:
         if n not in new_weights:
             p.requires_grad = False
+    del base_model  # Clear base model weights from memory
+    if is_distributed:
+        model = DDP(
+            model,
+            device_ids=[rank],
+            # TODO: Understand reasoning behind following two flags that are copied from LUKE
+            broadcast_buffers=False,
+            # find_unused_parameters=True,
+        )
 
     if resume:
         mpath = fpath(MODEL_OUT.format(i=res.epoch))
@@ -206,7 +206,6 @@ def train(
             sampler.set_epoch(i)
 
         for j, batch in enumerate(loader):
-            log.debug("Batch %i" % j)
             word_preds, ent_preds = model(batch)
 
             # Compute and backpropagate loss
@@ -229,11 +228,8 @@ def train(
             log.debug(f"Batch {j}/{num_batches-1} (ep. {i}). Loss: {res.losses[i, j]}")
         log(f"Completed epoch {i}/{params.epochs-1} with mean loss {res.losses[i].mean()}")
         if is_master and (i+1) % save_every == 0:
-            log.debug("Saving ...")
             paths = save_training(location, model, res, optimizer, scheduler)
             log.debug("Saved progress to", ", ".join(paths))
-            log.debug(f"Completed batch {j+1} with loss {res.losses[i, j]}")
-            reset_cuda()
 
         log(f"Completed epoch {i+1} with mean loss {res.losses[i].mean()}")
     # Clean up multi-gpu if used

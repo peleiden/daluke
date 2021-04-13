@@ -16,14 +16,11 @@ from .masking import MaskedBatchedExamples
 
 class DataLoader:
 
-    cached_examples_file = "cached_examples.pkl"
-
     def __init__(
         self,
         data_dir: str,
         metadata: dict,
         device:   torch.device,
-        use_cached_examples: bool,
         word_mask_prob:      float = 0.15,
         word_unmask_prob:    float = 0.1,
         word_randword_prob:  float = 0.1,
@@ -53,17 +50,8 @@ class DataLoader:
         # Don't insert ids that are special tokens when performing random word insertion in the masking
         self.random_word_id_range = (self.word_mask_id + 1, self.tokenizer.vocab_size)
 
-        cache_path = os.path.join(self.data_dir, self.cached_examples_file)
-        if use_cached_examples:
-            log.section("Loading examples from cache at %s" % cache_path)
-            with open(cache_path, "rb") as cache_file:
-                self.examples: list[Example] = pickle.load(cache_file)
-        else:
-            log.section("Building examples ...")
-            self.examples: list[Example] = self.build_examples()
-            log("Saving examples to cache at %s" % cache_path)
-            with open(cache_path, "wb") as cache_file:
-                pickle.dump(self.examples, cache_file)
+        log.section("Building examples ...")
+        self.examples: list[Example] = self.build_examples()
         log("Got %i examples" % len(self.examples))
 
     def __len__(self):

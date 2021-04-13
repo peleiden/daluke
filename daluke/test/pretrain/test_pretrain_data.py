@@ -5,12 +5,8 @@ import torch
 from pelutils import MainTest
 
 from daluke.data import BatchedExamples
-<<<<<<< Updated upstream
-from daluke import daBERT
-=======
 from daluke.pretrain.data import load_entity_vocab, DataLoader, calculate_spans
 from daluke.pretrain.data.build import DatasetBuilder
->>>>>>> Stashed changes
 
 
 class TestData(MainTest):
