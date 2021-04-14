@@ -14,5 +14,5 @@ seqeval
 pyicu
 
 # Misc
-pelutils[ds]>=0.5.7
+pelutils[ds]>=0.5.9
 click

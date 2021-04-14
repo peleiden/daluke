@@ -9,6 +9,7 @@ from transformers import AutoTokenizer
 
 from pelutils import log
 
+from .. import TT
 from daluke.data import Example, Words, Entities, get_special_ids, Words, Entities
 from daluke.pretrain.data import load_jsonl
 from daluke.pretrain.data.build import DatasetBuilder
@@ -51,7 +52,8 @@ class DataLoader:
         self.random_word_id_range = (self.word_mask_id + 1, self.tokenizer.vocab_size)
 
         log.section("Building examples ...")
-        self.examples: list[Example] = self.build_examples()
+        with TT.profile("Building examples"):
+            self.examples: list[Example] = self.build_examples()
         log("Got %i examples" % len(self.examples))
 
     def __len__(self):
@@ -82,17 +84,24 @@ class DataLoader:
         return examples
 
     def get_dataloader(self, batch_size: int, sampler: torch.utils.data.Sampler) -> DataLoader:
-        return torch.utils.data.DataLoader(list(enumerate(self.examples)), batch_size=batch_size, sampler=sampler, collate_fn=self.collate)
+        return torch.utils.data.DataLoader(
+            list(enumerate(self.examples)),
+            batch_size  = batch_size,
+            sampler     = sampler,
+            collate_fn  = self.collate,
+            drop_last   = True,
+        )
 
     def collate(self, batch: list[tuple[int, Example]]) -> MaskedBatchedExamples:
-        return MaskedBatchedExamples.build(
-            [ex for _, ex in batch],
-            self.device,
-            word_mask_id       = self.word_mask_id,
-            ent_mask_id        = self.ent_mask_id,
-            word_mask_prob     = self.word_mask_prob,
-            word_unmask_prob   = self.word_unmask_prob,
-            word_randword_prob = self.word_randword_prob,
-            word_id_range      = self.random_word_id_range,
-            ent_mask_prob      = self.ent_mask_prob,
-        )
+        with TT.profile("Masking words and entities"):
+            return MaskedBatchedExamples.build(
+                [ex for _, ex in batch],
+                self.device,
+                word_mask_id       = self.word_mask_id,
+                ent_mask_id        = self.ent_mask_id,
+                word_mask_prob     = self.word_mask_prob,
+                word_unmask_prob   = self.word_unmask_prob,
+                word_randword_prob = self.word_randword_prob,
+                word_id_range      = self.random_word_id_range,
+                ent_mask_prob      = self.ent_mask_prob,
+            )

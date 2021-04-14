@@ -10,7 +10,5 @@ from pelutils import log, DataStorage
 class TrainResults(DataStorage):
     losses: np.ndarray
     epoch: int
-    accumulate_step: int
-
 
     subfolder = "train_results"

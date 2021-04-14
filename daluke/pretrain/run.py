@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from pelutils import EnvVars
 from pelutils.parse import Parser
 from pelutils.logger import log
 
@@ -51,7 +52,7 @@ def run(args: dict[str, Any]):
     )
 
 if __name__ == '__main__':
-    with log.log_errors:
+    with log.log_errors, EnvVars(OMP_NUM_THREADS=1):
         parser = Parser(ARGUMENTS, name="daluke-pretrain", multiple_jobs=False)
         args = parser.parse()[0]
         parser.document_settings()

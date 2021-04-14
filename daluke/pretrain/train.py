@@ -19,6 +19,7 @@ from transformers import AutoConfig, AutoModelForPreTraining, AdamW, get_linear_
 from pelutils.logger import log, Levels
 from pelutils.ds import reset_cuda
 
+from . import TT
 from .data import DataLoader, load_entity_vocab
 from .data.build import DatasetBuilder
 from .model import PretrainTaskDaLUKE, BertAttentionPretrainTaskDaLUKE, load_base_model_weights
@@ -50,16 +51,15 @@ def get_optimizer_params(params: list, do_decay: bool) -> list:
 
 def save_training(loc: str, model: PretrainTaskDaLUKE, res: TrainResults, optimizer: Optimizer, scheduler) -> list[str]:
     paths = list()
-    i = res.epoch
     # Save tracked statistics
     paths.extend(res.save(loc))
     # Save model
-    paths.append(os.path.join(loc, MODEL_OUT.format(i=i)))
+    paths.append(os.path.join(loc, TrainResults.subfolder, MODEL_OUT.format(i=res.epoch)))
     torch.save(model.state_dict(), paths[-1])
     # Save optimizer and scheduler states (these are dymanic over time)
-    paths.append(os.path.join(loc, OPTIMIZER_OUT.format(i=i)))
+    paths.append(os.path.join(loc, TrainResults.subfolder, OPTIMIZER_OUT.format(i=res.epoch)))
     torch.save(optimizer.state_dict(), paths[-1])
-    paths.append(os.path.join(loc, SCHEDULER_OUT.format(i=i)))
+    paths.append(os.path.join(loc, TrainResults.subfolder, SCHEDULER_OUT.format(i=res.epoch)))
     torch.save(scheduler.state_dict(), paths[-1])
     return paths
 
@@ -80,6 +80,8 @@ class Hyperparams:
         assert isinstance(self.ent_embed_size, int) and self.ent_embed_size > 0
         assert isinstance(self.batch_size, int) and self.batch_size > 0
         assert isinstance(self.grad_accumulate, int) and self.grad_accumulate > 0
+        # assert self.batch_size % self.grad_accumulate == 0,\
+        #     "Batch size (%i) must be divisible by gradient accumulation steps (%i)" % (self.batch_size, self.grad_accumulate)
         assert 1 > self.weight_decay >= 0
         assert 1 > self.warmup_prop >= 0
 
@@ -114,9 +116,9 @@ def train(
         "DaLUKE pretraining on node %i" % rank,
         log_commit  = True,
         print_level = (Levels.INFO if quiet else Levels.DEBUG) if is_master else None,
-        append = resume, # Append to existing log file if we are resuming training
+        append      = resume,  # Append to existing log file if we are resuming training
     )
-    log("Starting pre-training with the following hyperparameters", params)
+    log.section("%s pretraining with the following hyperparameters" % ("Resuming" if resume else "Starting"), params)
 
     log.section("Reading metadata and entity vocabulary")
     with open(fpath(DatasetBuilder.metadata_file)) as f:
@@ -127,7 +129,11 @@ def train(
     log(f"Loaded entity vocabulary of {len(entity_vocab)} entities")
 
     # Device should be cuda:rank or just cuda if single gpu, else cpu
-    device = torch.device("cuda", index=rank) if is_distributed else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if is_distributed:
+        device = torch.device("cuda", index=rank)
+        torch.cuda.set_device(rank)
+    else:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Load dataset and training results
     dataloader = DataLoader(location, metadata, device)
@@ -136,13 +142,13 @@ def train(
     log("Forward pass batch size for this worker: %i" % worker_batch_size)
     num_batches = ceil(len(dataloader) / (worker_batch_size * num_workers))
     num_updates_all = num_batches * params.epochs
-    res = TrainResults(
-        losses = np.zeros((params.epochs, num_batches)),
-        epoch = 0,
-        accumulate_step = 0,
-    )
     if resume:
-        res = res.load(location)
+        res = TrainResults.load(location)
+    else:
+        res = TrainResults(
+            losses = list(),
+            epoch = 0,
+        )
 
     # Build model, possibly by loading previous weights
     log.section("Setting up model ...")
@@ -159,8 +165,9 @@ def train(
     ).to(device)
     # TODO: Maybe init fresh model weights manually (they do)
     # Load parameters from base model
-    base_model = AutoModelForPreTraining.from_pretrained(metadata["base-model"])
-    new_weights = load_base_model_weights(model, base_model)
+    with TT.profile("Loading base model parameters from %s" % metadata["base-model"]):
+        base_model = AutoModelForPreTraining.from_pretrained(metadata["base-model"])
+        new_weights = load_base_model_weights(model, base_model)
 
     model_params = list(model.named_parameters())
     # TODO: Re-enable training of BERT weights at some point during the training
@@ -169,6 +176,7 @@ def train(
         if n not in new_weights:
             p.requires_grad = False
     del base_model  # Clear base model weights from memory
+
     if is_distributed:
         model = DDP(
             model,
@@ -202,11 +210,23 @@ def train(
     log.section(f"Training of daLUKE for {params.epochs} epochs")
     model.train()
     for i in range(params.epochs):
+        TT.profile("Epoch")
         log("Starting epoch %i" % i)
+        res.epoch = i
         if is_distributed:
             sampler.set_epoch(i)
 
+        accumulate_step = 0
+        grad_updates = 0
+        batch_loss = 0
+        losses = list()
+        # Drop last batch if not divisible by gradient accumulation steps
+        n_batches = len(loader) - len(loader) % params.grad_accumulate
         for j, batch in enumerate(loader):
+            if j == n_batches:
+                break
+            TT.profile("Batch")
+
             word_preds, ent_preds = model(batch)
 
             # Compute and backpropagate loss
@@ -214,27 +234,42 @@ def train(
             loss = word_loss + ent_loss
             loss /= params.grad_accumulate
 
-            res.accumulate_step += 1
-            if is_distributed and res.accumulate_step != params.grad_accumulate:
+            accumulate_step += 1
+            # Only sync parameters on grad updates
+            if is_distributed and accumulate_step != params.grad_accumulate:
                 sync_context = model.no_sync()
             else:
                 sync_context = contextlib.ExitStack()
             with sync_context:
                 loss.backward()
+                batch_loss += loss.item()
 
             # Performs parameter update every for every `grad_accumulate`'th batch
-            if res.accumulate_step == params.grad_accumulate:
+            if accumulate_step == params.grad_accumulate:
                 optimizer.step()
                 scheduler.step()
                 model.zero_grad()
-                res.accumulate_step = 0
 
-            res.losses[i, j] = loss.item()
-            res.epoch = i
-            log.debug(f"Batch {j}/{num_batches-1} (ep. {i}). Loss: {res.losses[i, j]}")
-        log(f"Completed epoch {i}/{params.epochs-1} with mean loss {res.losses[i].mean()}")
+            reset_cuda()
+            log.debug(f"Batch {j}/{n_batches-1} (ep. {i}). Loss: {loss.item()}")
+            if accumulate_step == params.grad_accumulate:
+                losses.append(batch_loss)
+                res.losses.append(batch_loss)  # Note: This only saves loss from main node
+                grad_updates += 1
+                log.debug("Performed gradient update. Loss: %f" % batch_loss)
+                batch_loss = 0
+                accumulate_step = 0
+            TT.end_profile()
+
+        log(f"Completed epoch {i}/{params.epochs-1} with mean loss {np.mean(losses)}")
+        # Save results and model
         if is_master and (i+1) % save_every == 0:
             paths = save_training(location, model, res, optimizer, scheduler)
-            log.debug("Saved progress to", ", ".join(paths))
+            log.debug("Saved progress to", *paths)
+
+        TT.end_profile()
+
+    log.debug("Time distribution", TT)
+
     # Clean up multi-gpu if used
     cleanup(rank)
