@@ -9,11 +9,12 @@ from pelutils import log, DataStorage, get_timestamp
 @dataclass
 class TrainResults(DataStorage):
     losses: np.ndarray
-    # w_losses: np.ndarray  # TODO
-    # e_losses: np.ndarray
+    w_losses: np.ndarray
+    e_losses: np.ndarray
     epoch: int
 
     w_accuracies: np.ndarray
     e_accuracies: np.ndarray
 
     subfolder = get_timestamp(for_file=True) + "_pretrain_results"
+    json_name = "pretrain_results.json"
