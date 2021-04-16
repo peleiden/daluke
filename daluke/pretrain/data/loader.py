@@ -22,11 +22,12 @@ class DataLoader:
         data_dir: str,
         metadata: dict,
         device:   torch.device,
+        ent_mask_id:         int = 2,
+        max_sentence_len:    int = 512,
         word_mask_prob:      float = 0.15,
         word_unmask_prob:    float = 0.1,
         word_randword_prob:  float = 0.1,
         ent_mask_prob:       float = 0.15,
-        max_sentence_len:    int = 512,
     ):
         """
         Loads a generated json dataset prepared by the preprocessing pipeline
@@ -47,7 +48,7 @@ class DataLoader:
         self.tokenizer = AutoTokenizer.from_pretrained(metadata["base-model"])
         self.sep_id, self.cls_id, self.pad_id = get_special_ids(self.tokenizer)
         self.word_mask_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.mask_token)
-        self.ent_mask_id = 2  # FIXME: Load entity vocab and dont hardcode this!
+        self.ent_mask_id = ent_mask_id
         # Don't insert ids that are special tokens when performing random word insertion in the masking
         self.random_word_id_range = (self.word_mask_id + 1, self.tokenizer.vocab_size)
 

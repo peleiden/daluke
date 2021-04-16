@@ -5,6 +5,8 @@ from typing import Generator
 from icu import Locale, BreakIterator
 
 
+ENTITY_MASK_TOKEN = "[MASK]"
+
 class ICUSentenceTokenizer:
     """ Segment text to sentences. """
 

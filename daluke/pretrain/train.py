@@ -20,7 +20,7 @@ from pelutils.logger import log, Levels
 from pelutils.ds import reset_cuda
 
 from . import TT
-from .data import DataLoader, load_entity_vocab
+from .data import DataLoader, load_entity_vocab, ENTITY_MASK_TOKEN
 from .data.build import DatasetBuilder
 from .model import PretrainTaskDaLUKE, BertAttentionPretrainTaskDaLUKE, load_base_model_weights
 from .analysis import TrainResults
@@ -141,7 +141,10 @@ def train(
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Load dataset and training results
-    data = DataLoader(location, metadata, device)
+    data = DataLoader(location, metadata, device,
+            ent_mask_id=entity_vocab[ENTITY_MASK_TOKEN]["id"],
+            max_sentence_len=metadata["max-seq-length"],
+    )
     # Update batch size to account for gradient accumulation and number of gpus used
     # Number of examples given at forward pass
     worker_batch_size = ceil(params.batch_size / (params.grad_accumulate * num_workers))
@@ -180,7 +183,7 @@ def train(
         ent_vocab_size = len(entity_vocab),
         ent_embed_size = Hyperparams.ent_embed_size,
     ).to(device)
-    # TODO: Maybe init fresh model weights manually (they do)
+    # TODO: Maybe init fresh model weights manually (yamada et al. does so)
     # Load parameters from base model
     with TT.profile("Loading base model parameters from %s" % metadata["base-model"]):
         base_model = AutoModelForPreTraining.from_pretrained(metadata["base-model"])
@@ -198,9 +201,8 @@ def train(
         model = DDP(
             model,
             device_ids=[rank],
-            # TODO: Understand reasoning behind following two flags that are copied from LUKE
+            # TODO: Understand reasoning behind following flag that are copied from LUKE
             broadcast_buffers=False,
-            # find_unused_parameters=True,
         )
 
     if resume_from:
