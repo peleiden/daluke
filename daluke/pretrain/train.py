@@ -30,7 +30,7 @@ NO_DECAY =  { "bias", "LayerNorm.weight" }
 
 MODEL_OUT = "daluke_epoch{i}.pt"
 OPTIMIZER_OUT = "optim_epoch{i}.pt"
-SCHEDULER_OUT = "sheduler_epoch{i}.pt"
+SCHEDULER_OUT = "scheduler_epoch{i}.pt"
 
 
 def setup(rank: int, world_size: int):
@@ -230,7 +230,8 @@ def train(
             word_preds, ent_preds = model(batch)
 
             # Compute and backpropagate loss
-            word_loss, ent_loss = criterion(word_preds, batch.word_mask_labels), criterion(ent_preds, batch.ent_mask_labels)
+            word_loss = criterion(word_preds, batch.word_mask_labels)
+            ent_loss = criterion(ent_preds, batch.ent_mask_labels)
             loss = word_loss + ent_loss
             loss /= params.grad_accumulate
 

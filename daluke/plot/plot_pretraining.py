@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 
 from daluke.pretrain.analysis import TrainResults
 
+TrainResults.subfolder = ""
+
 
 def _save(location: str, name: str):
     plt.tight_layout()
