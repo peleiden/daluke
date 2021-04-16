@@ -136,12 +136,17 @@ def train(
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Load dataset and training results
-    dataloader = DataLoader(location, metadata, device)
+    data = DataLoader(location, metadata, device)
     # Update batch size to account for gradient accumulation and number of gpus used
     worker_batch_size = ceil(params.batch_size / (params.grad_accumulate * num_workers))
     log("Forward pass batch size for this worker: %i" % worker_batch_size)
-    num_batches = ceil(len(dataloader) / (worker_batch_size * num_workers))
-    num_updates_all = num_batches * params.epochs
+    sampler = (DistributedSampler if is_distributed else RandomSampler)(data.examples)
+
+    loader = data.get_dataloader(worker_batch_size, sampler)
+    num_updates_epoch = ceil(len(data) / (worker_batch_size * num_workers))
+    num_updates_all = num_updates_epoch * params.epochs
+    # Drop last batch if not divisible by gradient accumulation steps
+    num_batches = len(loader) - len(loader) % params.grad_accumulate
     if resume:
         res = TrainResults.load(location)
     else:
@@ -204,9 +209,6 @@ def train(
 
     criterion = nn.CrossEntropyLoss(ignore_index=-1)
 
-    sampler = (DistributedSampler if is_distributed else RandomSampler)(dataloader.examples)
-    loader = dataloader.get_dataloader(worker_batch_size, sampler)
-
     log.section(f"Training of daLUKE for {params.epochs} epochs")
     model.train()
     for i in range(params.epochs):
@@ -220,10 +222,8 @@ def train(
         grad_updates = 0
         batch_loss = 0
         losses = list()
-        # Drop last batch if not divisible by gradient accumulation steps
-        n_batches = len(loader) - len(loader) % params.grad_accumulate
         for j, batch in enumerate(loader):
-            if j == n_batches:
+            if j == num_batches:
                 break
             TT.profile("Batch")
 
@@ -252,7 +252,7 @@ def train(
                 model.zero_grad()
 
             reset_cuda()
-            log.debug(f"Batch {j}/{n_batches-1} (ep. {i}). Loss: {loss.item()}")
+            log.debug(f"Batch {j}/{num_batches-1} (ep. {i}). Loss: {loss.item()}")
             if accumulate_step == params.grad_accumulate:
                 losses.append(batch_loss)
                 res.losses.append(batch_loss)  # Note: This only saves loss from main node
