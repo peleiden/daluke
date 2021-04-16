@@ -23,7 +23,8 @@ ARGUMENTS = {
     "ent-embed-size":  { "default": Hyperparams.ent_embed_size, "type": int, "help": "Dimension of the entity embeddings" },
     "weight-decay":    { "default": Hyperparams.weight_decay, "type": float, "help": "The decay factor in the AdamW optimizer" },
     "warmup-prop":     { "default": Hyperparams.warmup_prop, "type": float, "help": "Proportion of training steps used for optimizer warmup" },
-    "save-every":      { "default": 1, "type": int, "help": "" },
+    "word-ent-weight": { "default": Hyperparams.word_ent_weight, "type": float, "help": "0 for only entities, 1 for only words, 0.5 for equal weighting" },
+    "save-every":      { "default": 1, "type": int, "help": "Save progress after this many epochs" },
     "bert-attention":  { "action": "store_true", "help": "Use the original BERT attention mechanism instead of the entity aware LUKE variant" },
     "quiet":           { "action": "store_true", "help": "Don't show debug logging" },
 }

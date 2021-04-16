@@ -72,6 +72,7 @@ class Hyperparams:
     ent_embed_size: int = 256
     weight_decay: float = 0.1
     warmup_prop: float = 0.06
+    word_ent_weight: float = 0.5
 
     def __post__init(self):
         # Test input correctness
@@ -82,8 +83,9 @@ class Hyperparams:
         assert isinstance(self.grad_accumulate, int) and self.grad_accumulate > 0
         # assert self.batch_size % self.grad_accumulate == 0,\
         #     "Batch size (%i) must be divisible by gradient accumulation steps (%i)" % (self.batch_size, self.grad_accumulate)
-        assert 1 > self.weight_decay >= 0
-        assert 1 > self.warmup_prop >= 0
+        assert 0 <= self.weight_decay < 1
+        assert 0 <= self.warmup_prop < 1
+        assert 0 <= self.word_ent_weight <= 1
 
     def __str__(self):
         return json.dumps(self.__dict__, indent=4)
@@ -239,7 +241,7 @@ def train(
             # Compute and backpropagate loss
             word_loss = criterion(word_preds, batch.word_mask_labels)
             ent_loss = criterion(ent_preds, batch.ent_mask_labels)
-            loss = word_loss + ent_loss
+            loss = 2 * (params.word_ent_weight *  word_loss + (1 - params.word_ent_weight) * ent_loss)
             loss /= params.grad_accumulate
 
             accumulate_step += 1
