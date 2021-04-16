@@ -16,7 +16,6 @@ class Words:
     spans: Optional; M x 2 vector showing token positions corresponding to full words; necessary for full-word masking
     """
     ids: torch.IntTensor
-    segments: torch.IntTensor
     attention_mask: torch.IntTensor
     N: int
     spans: torch.IntTensor
@@ -44,7 +43,6 @@ class Words:
 
         return cls(
             ids            = word_ids,
-            segments       = cls._build_segments(max_len),
             attention_mask = cls._build_att_mask(N+2, max_len),
             N              = N,
             spans          = spans,
@@ -55,11 +53,6 @@ class Words:
         att_mask = torch.zeros(max_size, dtype=torch.int)
         att_mask[:fill] = 1
         return att_mask
-
-    @staticmethod
-    def _build_segments(max_size: int):
-        # TODO: Is this really correct? Seems stupid ...
-        return torch.zeros(max_size, dtype=torch.int)
 
 @dataclass
 class Entities(Words):
@@ -98,7 +91,6 @@ class Entities(Words):
 
         return cls(
             ids            = ent_ids,
-            segments       = cls._build_segments(max_entities),
             attention_mask = cls._build_att_mask(N, max_entities),
             N              = N,
             spans          = None, # We do not need to save the spans for masking as we do for words
@@ -131,14 +123,12 @@ class BatchedExamples(Example):
         ent_limit = max(ent_N) if cut else len(ex[0].entities.ids)
         return Words(
             ids             = tensor_collate("words", "ids", word_limit),
-            segments        = tensor_collate("words", "segments", word_limit),
             attention_mask  = tensor_collate("words", "attention_mask", word_limit),
             N               = word_N,
             # Assume that if one of the word examples (1st one) in the batch has a span vector, all of them do
             spans           = [e.words.spans for e in ex] if ex[0].words.spans is not None else None,
         ), Entities(
             ids             = tensor_collate("entities", "ids", ent_limit),
-            segments        = tensor_collate("entities", "segments", ent_limit),
             attention_mask  = tensor_collate("entities", "attention_mask", ent_limit),
             pos             = tensor_collate("entities", "pos", ent_limit),
             N               = ent_N,

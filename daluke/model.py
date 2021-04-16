@@ -45,8 +45,8 @@ class DaLUKE(nn.Module):
         """
         Given a data class of word and entity ids and other tokens, return embeddings of both
         """
-        word_hidden    = self.word_embeddings(ex.words.ids, ex.words.segments)
-        entity_hidden  = self.entity_embeddings(ex.entities.ids, ex.entities.pos, ex.entities.segments)
+        word_hidden    = self.word_embeddings(ex.words.ids)
+        entity_hidden  = self.entity_embeddings(ex.entities.ids, ex.entities.pos)
 
         attention_mask = torch.cat((ex.words.attention_mask, ex.entities.attention_mask), dim=1)\
             .unsqueeze(1)\
@@ -157,7 +157,7 @@ class EntityEmbeddings(nn.Module):
         self.lnorm = nn.LayerNorm(h, eps=bert_config.layer_norm_eps)
         self.drop  = nn.Dropout(bert_config.hidden_dropout_prob)
 
-    def forward(self, entity_ids: torch.Tensor, pos_ids: torch.Tensor, typ_ids: torch.Tensor):
+    def forward(self, entity_ids: torch.Tensor, pos_ids: torch.Tensor, typ_ids: torch.Tensor=None):
         """
         Takes
         entity_ids: Vector of length X holding the vocab. ids of entities
@@ -173,5 +173,7 @@ class EntityEmbeddings(nn.Module):
         pos_embed_mask = (pos_ids != -1).type_as(pos_embeds).unsqueeze(-1)
         pos_embeds = (pos_embeds*pos_embed_mask).sum(dim=-2) / pos_embed_mask.sum(dim=-2).clamp(min=1e-7)
 
+        if typ_ids is None:
+            typ_ids = torch.zeros_like(entity_ids)
         typ_embeds = self.typ_embeds(typ_ids)
         return self.drop(self.lnorm(ent_embeds + pos_embeds + typ_embeds))
