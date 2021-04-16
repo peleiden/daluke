@@ -8,9 +8,10 @@ from pelutils import log, DataStorage, get_timestamp
 
 @dataclass
 class TrainResults(DataStorage):
-    losses: np.ndarray
-    w_losses: np.ndarray
-    e_losses: np.ndarray
+    losses: np.ndarray    # Total loss, epochs x param updates
+    w_losses: np.ndarray  # Word pred. loss, epochs x param updates
+    e_losses: np.ndarray  # Entity pred. loss, epochs x param updates
+    runtime: np.ndarray   # Runtime, epochs x param updates
     epoch: int
 
     w_accuracies: np.ndarray

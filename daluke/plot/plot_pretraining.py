@@ -8,8 +8,6 @@ import matplotlib.pyplot as plt
 
 from daluke.pretrain.analysis import TrainResults
 
-TrainResults.subfolder = ""
-
 
 def _save(location: str, name: str):
     plt.tight_layout()
@@ -17,11 +15,14 @@ def _save(location: str, name: str):
     plt.close()
 
 def loss_plot(location: str):
-    res = TrainResults.load(location)
-    plt.figure(figsize=figsize_std)
+    res = TrainResults.load()
+    fig, ax1 = plt.subplots(figsize=figsize_std)
+    ax1.plot(res.losses.ravel(), label="Weighted loss")
+    ax1.plot(res.w_losses.ravel(), label="Word loss")
+    ax1.plot(res.e_losses.ravel(), label="Entity loss")
     plt.plot(res.losses)
     plt.ylim([0, 1.1 * max(res.losses)])
-    plt.title("Pretraining loss")
+    plt.title("Pretraining loss and accuracy")
     plt.xlabel("Number of parameter updates")
     plt.ylabel("Loss")
     plt.grid()
@@ -31,6 +32,7 @@ def loss_plot(location: str):
 @click.argument("location")
 def make_pretraining_plots(location: str):
     log.configure(os.path.join(location, "plots", "plots.log"), "Pretraining plots")
+    TrainResults.subfolder = location
     loss_plot(location)
 
 if __name__ == "__main__":

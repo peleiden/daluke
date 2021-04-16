@@ -38,8 +38,8 @@ SCHEDULER_OUT = "scheduler_epoch{i}.pt"
 class Hyperparams(DataStorage):
     epochs: int = 20
     batch_size: int = 2048
-    lr: float = 1e-4
-    grad_accumulate: int = 1024
+    lr: float = 1e-5
+    ff_size: int = 16
     ent_embed_size: int = 256
     weight_decay: float = 0.1
     warmup_prop: float = 0.06
@@ -48,15 +48,13 @@ class Hyperparams(DataStorage):
     subfolder = TrainResults.subfolder
     json_name = "params.json"
 
-    def __post__init(self):
+    def __post_init__(self):
         # Test input correctness
         assert self.epochs > 0
         assert self.lr > 0, "Learning rate must be larger than 0"
         assert isinstance(self.ent_embed_size, int) and self.ent_embed_size > 0
         assert isinstance(self.batch_size, int) and self.batch_size > 0
-        assert isinstance(self.grad_accumulate, int) and self.grad_accumulate > 0
-        # assert self.batch_size % self.grad_accumulate == 0,\
-        #     "Batch size (%i) must be divisible by gradient accumulation steps (%i)" % (self.batch_size, self.grad_accumulate)
+        assert isinstance(self.ff_size, int) and self.ff_size > 0
         assert 0 <= self.weight_decay < 1
         assert 0 <= self.warmup_prop < 1
         assert 0 <= self.word_ent_weight <= 1
@@ -83,8 +81,8 @@ def get_optimizer_params(params: list, do_decay: bool) -> list:
 def save_training(loc: str, params: Hyperparams, model: PretrainTaskDaLUKE, res: TrainResults, optimizer: Optimizer, scheduler) -> list[str]:
     paths = list()
     # Save tracked statistics
-    paths.extend(res.save(loc))
-    paths.extends(params.save(loc))
+    paths.extend += res.save(loc)
+    paths.extend += params.save(loc)
     # Save model
     paths.append(os.path.join(loc, TrainResults.subfolder, MODEL_OUT.format(i=res.epoch)))
     torch.save(model.state_dict(), paths[-1])
@@ -126,6 +124,7 @@ def train(
         append      = resume_from,  # Append to existing log file if we are resuming training
     )
     log.section("Starting pretraining with the following hyperparameters", params)
+    log("Training using %i workers" % num_workers)
     if resume_from:
         log("Resuming from %s" % resume_from)
 
@@ -146,22 +145,15 @@ def train(
 
     # Load dataset and training results
     data = DataLoader(location, metadata, device)
-    # Make sure that a entire batch can be split evenly over grad accumulation steps and workers
-    assert params.batch_size % (params.grad_accumulate * num_workers) == 0
-    # Update batch size to account for gradient accumulation and number of gpus used
-    # Number of examples given at forward pass
-    worker_batch_size = params.batch_size // (params.grad_accumulate * num_workers)
-    log("Forward pass batch size for this worker: %i" % worker_batch_size)
     sampler = (DistributedSampler if is_distributed else RandomSampler)(data.examples)
 
-    loader = data.get_dataloader(worker_batch_size, sampler)
+    loader = data.get_dataloader(params.ff_size, sampler)
     # Number of parameter updates each epoch
-    num_updates_epoch = len(loader) // params.grad_accumulate
+    grad_accumulation_steps = params.batch_size // (params.ff_size * num_workers)
+    num_updates_epoch = len(loader) // grad_accumulation_steps
     # Total number of parameter updates
     num_updates_all = num_updates_epoch * params.epochs
-    # Number of feed forwards each epoch
-    # Drop last batch if not divisible by gradient accumulation steps
-    num_batches = len(loader) - len(loader) % params.grad_accumulate
+
     if resume_from:
         # Update folders and load results from last training
         TrainResults.subfolder = resume_from
@@ -170,19 +162,21 @@ def train(
         res.epoch += 1  # We saved the data at epoch i, but should now commence epoch i+1
     else:
         res = TrainResults(
-            losses = np.zeros((0, num_updates_epoch)),
-            w_losses = np.zeros((0, num_updates_epoch)),
-            e_losses = np.zeros((0, num_updates_epoch)),
+            losses       = np.zeros((0, num_updates_epoch)),
+            w_losses     = np.zeros((0, num_updates_epoch)),
+            e_losses     = np.zeros((0, num_updates_epoch)),
             e_accuracies = np.zeros((0, num_updates_epoch)),
             w_accuracies = np.zeros((0, num_updates_epoch)),
-            epoch = 0,
+            runtime      = np.zeros((0, num_updates_epoch)),
+            epoch        = 0,
         )
 
     # Build model, possibly by loading previous weights
     log.section("Setting up model ...")
     bert_config = AutoConfig.from_pretrained(metadata["base-model"])
-    assert bert_config.max_position_embeddings == metadata["max-seq-length"], \
-        f"Model should respect sequence length; embeddings are of lenght {bert_config.max_position_embeddings}, but max. seq. len. is set to {metadata['max-seq-length']}"
+    assert bert_config.max_position_embeddings == metadata["max-seq-length"],\
+        f"Model should respect sequence length; embeddings are of lenght {bert_config.max_position_embeddings}, "\
+        f"but max. seq. len. is set to {metadata['max-seq-length']}"
     log("Bert config", bert_config.to_json_string())
 
     model_cls = BertAttentionPretrainTaskDaLUKE if bert_attention else PretrainTaskDaLUKE
@@ -246,6 +240,7 @@ def train(
         res.e_losses     = np.vstack((res.e_losses, np.zeros(num_updates_epoch)))
         res.w_accuracies = np.vstack((res.w_accuracies, np.zeros(num_updates_epoch)))
         res.e_accuracies = np.vstack((res.e_accuracies, np.zeros(num_updates_epoch)))
+        res.runtime      = np.vstack((res.runtime, np.zeros(num_updates_epoch)))
 
         batch_iter = iter(loader)
 
@@ -253,16 +248,13 @@ def train(
         for j in range(num_updates_epoch):
             TT.profile("Parameter update")
 
-            accumulate_step = 0
-            grad_updates = 0  # Number of gradient updates this epoch
-            batch_loss = 0
             # Losses and accuracies for each parameter update
             t_loss, w_loss, e_loss = 0, 0, 0
             w_accuracies, e_accuracies = list(), list()
 
             # Loop over enough batches to make a parameter update
-            for k in range(params.grad_accumulate):
-                TT.profile("Batch")
+            for k in range(grad_accumulation_steps):
+                TT.profile("Forward pass")
                 batch = next(batch_iter)
 
                 TT.profile("Gradients")
@@ -270,11 +262,10 @@ def train(
                 # Compute and backpropagate loss
                 word_loss = criterion(word_preds, batch.word_mask_labels)
                 ent_loss = criterion(ent_preds, batch.ent_mask_labels)
-                loss = 2 * (params.word_ent_weight *  word_loss + (1 - params.word_ent_weight) * ent_loss)
-                loss /= params.grad_accumulate
+                loss = params.word_ent_weight *  word_loss + (1 - params.word_ent_weight) * ent_loss
 
                 # Only sync parameters on grad updates, aka last pass of this loop
-                with model.no_sync() if is_distributed and k < params.grad_accumulate - 1 else contextlib.ExitStack():
+                with model.no_sync() if is_distributed and k < grad_accumulation_steps - 1 else contextlib.ExitStack():
                     loss.backward()
                     t_loss += loss.item()
                     w_loss += word_loss.item()
@@ -289,8 +280,8 @@ def train(
                     e_accuracies.append(e_accuracy)
 
                 log.debug(
-                    f"    Batch {k: 5}/{num_batches-1} (ep. {i: 2}). Loss: {loss.item(): 9.5f}. "
-                    f"Word, entity accuracy: {100*w_accuracy: 7.3f} %, {100*e_accuracy: 7.3f} %"
+                    f"    Forward pass {k:5} / {grad_accumulation_steps-1} (ep. {i:2}, pu. {j:3}). Loss: {loss.item():9.5f}. "
+                    f"Word, entity accuracy: {100*w_accuracy:7.3f} %, {100*e_accuracy:7.3f} %"
                 )
                 TT.end_profile()
 
@@ -306,21 +297,21 @@ def train(
             res.w_accuracies[i, j] = np.mean(w_accuracies)
             res.e_accuracies[i, j] = np.mean(e_accuracies)
             log.debug(
-                "Performed gradient update %i/%i" % (j, num_updates_epoch),
-                f"Loss (total, word, entity): {t_loss: 10.5f}, {w_loss: 10.5f}, {e_loss: 10.5f}",
-                f"Accuracy (word, entity):     {100*res.w_accuracies[i, j]: 7.3f} %,  {100*res.e_accuracies[i, j]: 7.3f} %",
+                "Performed gradient update %i / %i" % (j, num_updates_epoch-1),
+                f"Loss (total, word, entity): {t_loss:10.5f}, {w_loss:10.5f}, {e_loss:10.5f}",
+                f"Accuracy (word, entity):     {100*res.w_accuracies[i, j]:7.3f} %,  {100*res.e_accuracies[i, j]:7.3f} %",
             )
 
-            TT.end_profile()
+            res.runtime[i, j] = TT.end_profile()
 
         log(
-            f"Completed epoch {i: 2}/{params.epochs-1}",
-            f"Mean loss (total, word, entity): {res.losses[i].mean(): 10.5f}, {res.w_losses[i].mean(): 10.5f}, {res.e_losses[i].mean(): 10.5f}",
-            f"Mean accuracy (word, entity):     {100*res.w_accuracies[i].mean(): 7.3f} %,  {100*res.e_accuracies[i].mean(): 7.3f} %",
+            f"Completed epoch {i:2} / {params.epochs-1}",
+            f"Mean loss (total, word, entity): {res.losses[i].mean():10.5f}, {res.w_losses[i].mean():10.5f}, {res.e_losses[i].mean():10.5f}",
+            f"Mean accuracy (word, entity):     {100*res.w_accuracies[i].mean():7.3f} %,  {100*res.e_accuracies[i].mean():7.3f} %",
         )
         # Save results and model
         if is_master and (i+1) % save_every == 0:
-            paths = save_training(location, model, res, optimizer, scheduler)
+            paths = save_training(location, params, model, res, optimizer, scheduler)
             log.debug("Saved progress to", *paths)
 
         TT.end_profile()
