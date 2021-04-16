@@ -105,4 +105,5 @@ class DataLoader:
                 word_randword_prob = self.word_randword_prob,
                 word_id_range      = self.random_word_id_range,
                 ent_mask_prob      = self.ent_mask_prob,
+                cut_extra_padding  = True,
             )

@@ -25,8 +25,9 @@ class MaskedBatchedExamples(BatchedExamples):
         word_randword_prob: float,
         word_id_range: tuple[int],
         ent_mask_prob: float,
+        cut_extra_padding: bool=True,
     ):
-        words, entities = cls.stack(examples, device=device)
+        words, entities = cls.collate(examples, device=device, cut=cut_extra_padding)
         word_mask_labels, word_mask = mask_word_batch(words, word_mask_prob, word_unmask_prob, word_randword_prob, word_id_range, word_mask_id)
         ent_mask_labels, ent_mask = mask_ent_batch(entities, ent_mask_prob, ent_mask_id)
         return cls(words, entities, word_mask_labels, word_mask, ent_mask_labels, ent_mask)
