@@ -56,6 +56,16 @@ class DaLUKE(nn.Module):
             word_hidden, entity_hidden = encode(word_hidden, entity_hidden, attention_mask)
         return word_hidden, entity_hidden
 
+    def init_queries(self):
+        """
+        As the attention layers of DaLUKE have four query matrices and the BERT-based transformers only have one,
+        we might want to init the other three to this one word-to-word query matrix.
+        """
+        for layer in self.encoder:
+            layer.attention.Q_e.weight.data = layer.attention.Q_w.weight.data
+            layer.attention.Q_w2e.weight.data = layer.attention.Q_w.weight.data
+            layer.attention.Q_e2w.weight.data = layer.attention.Q_w.weight.data
+
 class EntityAwareLayer(nn.Module):
     """
     Transformer layer where the attention is replaced by the entity-aware method

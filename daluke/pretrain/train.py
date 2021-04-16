@@ -196,6 +196,8 @@ def train(
     with TT.profile("Loading base model parameters from %s" % metadata["base-model"]):
         base_model = AutoModelForPreTraining.from_pretrained(metadata["base-model"])
         new_weights = load_base_model_weights(model, base_model)
+    # Initialize self-attention query matrices to BERT word query matrix
+    model.init_queries()
 
     model_params = list(model.named_parameters())
     # TODO: Re-enable training of BERT weights at some point during the training
@@ -236,6 +238,7 @@ def train(
     criterion = nn.CrossEntropyLoss(ignore_index=-1)
 
     log.section(f"Training of daLUKE for {params.epochs} epochs")
+    model.zero_grad() # To avoid tracking of model parameter manipulation
     model.train()
     for i in range(res.epoch, params.epochs):
         TT.profile("Epoch")
