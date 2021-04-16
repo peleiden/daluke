@@ -92,7 +92,7 @@ def train(
     rank: int,
     world_size: int,
     *,
-    resume: bool,
+    resume_from: str,
     location: str,
     name: str,
     quiet: bool,
@@ -116,9 +116,11 @@ def train(
         "DaLUKE pretraining on node %i" % rank,
         log_commit  = True,
         print_level = (Levels.INFO if quiet else Levels.DEBUG) if is_master else None,
-        append      = resume,  # Append to existing log file if we are resuming training
+        append      = resume_from,  # Append to existing log file if we are resuming training
     )
-    log.section("%s pretraining with the following hyperparameters" % ("Resuming" if resume else "Starting"), params)
+    log.section("Starting pretraining with the following hyperparameters", params)
+    if resume_from:
+        log("Resuming from %s" % resume_from)
 
     log.section("Reading metadata and entity vocabulary")
     with open(fpath(DatasetBuilder.metadata_file)) as f:
@@ -138,16 +140,21 @@ def train(
     # Load dataset and training results
     data = DataLoader(location, metadata, device)
     # Update batch size to account for gradient accumulation and number of gpus used
+    # Number of examples given at forward pass
     worker_batch_size = ceil(params.batch_size / (params.grad_accumulate * num_workers))
     log("Forward pass batch size for this worker: %i" % worker_batch_size)
     sampler = (DistributedSampler if is_distributed else RandomSampler)(data.examples)
 
     loader = data.get_dataloader(worker_batch_size, sampler)
+    # Number of parameter updates each epoch
     num_updates_epoch = ceil(len(data) / (worker_batch_size * num_workers))
+    # Total number of parameter updates
     num_updates_all = num_updates_epoch * params.epochs
+    # Number of feed forwards each epoch
     # Drop last batch if not divisible by gradient accumulation steps
     num_batches = len(loader) - len(loader) % params.grad_accumulate
-    if resume:
+    if resume_from:
+        TrainResults.subfolder = resume_from
         res = TrainResults.load(location)
     else:
         res = TrainResults(
@@ -191,7 +198,7 @@ def train(
             # find_unused_parameters=True,
         )
 
-    if resume:
+    if resume_from:
         mpath = fpath(MODEL_OUT.format(i=res.epoch))
         model.load_state_dict(torch.load(mpath))
         log(f"Resuming training saved at epoch {res.epoch} and loaded model from {mpath}")
@@ -202,7 +209,7 @@ def train(
         lr = params.lr,
     )
     scheduler = get_linear_schedule_with_warmup(optimizer, int(params.warmup_prop * num_updates_all), num_updates_all)
-    if resume:
+    if resume_from:
         optimizer.load_state_dict(torch.load(fpath(OPTIMIZER_OUT.format(i=res.epoch))))
         scheduler.load_state_dict(torch.load(fpath(SCHEDULER_OUT.format(i=res.epoch))))
         res.epoch += 1 # We saved the data at epoch i, but should now commence epoch i+1

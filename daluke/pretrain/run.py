@@ -15,7 +15,7 @@ from daluke.pretrain.train import train, Hyperparams
 
 
 ARGUMENTS = {
-    "resume":          { "action": "store_true", "help": "Continue a previous training" },
+    "resume-from":     { "default": "", "type": str, "help": "Resume training from given directory" },
     "epochs":          { "default": Hyperparams.epochs, "type": int, "help": "Number of passes through the entire data set"},
     "batch-size":      { "default": Hyperparams.batch_size, "type": int, "help": "Number of sequences per parameter update" },
     "lr":              { "default": Hyperparams.lr, "type": float, "help": "Initial learning rate" },
@@ -33,7 +33,7 @@ def _run_training(rank: int, world_size: int, args: dict[str, Any]):
     return train(
         rank,
         world_size,
-        resume         = args.pop("resume"),
+        resume_from    = args.pop("resume_from"),
         location       = args.pop("location"),
         name           = args.pop("name"),
         quiet          = args.pop("quiet"),
