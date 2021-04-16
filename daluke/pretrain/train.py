@@ -24,6 +24,7 @@ from .data import DataLoader, load_entity_vocab
 from .data.build import DatasetBuilder
 from .model import PretrainTaskDaLUKE, BertAttentionPretrainTaskDaLUKE, load_base_model_weights
 from .analysis import TrainResults
+from .eval import accuracy_from_preds
 
 PORT = "3090"  # Are we sure this port is in stock?
 NO_DECAY =  { "bias", "LayerNorm.weight" }
@@ -161,6 +162,8 @@ def train(
     else:
         res = TrainResults(
             losses = list(),
+            e_accuracies = np.zeros((params.epochs, num_updates_epoch)),
+            w_accuracies = np.zeros((params.epochs, num_updates_epoch)),
             epoch = 0,
         )
 
@@ -231,6 +234,7 @@ def train(
         grad_updates = 0
         batch_loss = 0
         losses = list()
+        w_accuracies, e_accuracies = list(), list()
         for j, batch in enumerate(loader):
             if j == num_batches:
                 break
@@ -253,6 +257,10 @@ def train(
             with sync_context:
                 loss.backward()
                 batch_loss += loss.item()
+            # Save accuracy for statistics
+            w_accuracy, e_accuracy = accuracy_from_preds(word_preds, ent_preds, batch)
+            w_accuracies.append(w_accuracy)
+            e_accuracies.append(e_accuracy)
 
             # Performs parameter update every for every `grad_accumulate`'th batch
             if accumulate_step == params.grad_accumulate:
@@ -261,17 +269,18 @@ def train(
                 model.zero_grad()
 
             reset_cuda()
-            log.debug(f"Batch {j}/{num_batches-1} (ep. {i}). Loss: {loss.item()}")
+            log.debug(f"    Batch {j}/{num_batches-1} (ep. {i}). Loss: {loss.item():.5f}. Word/entity accuracy: {w_accuracy:.3f}, {e_accuracy:.3f}")
             if accumulate_step == params.grad_accumulate:
                 losses.append(batch_loss)
                 res.losses.append(batch_loss)  # Note: This only saves loss from main node
+                res.w_accuracies[i, grad_updates], res.e_accuracies[i, grad_updates] = np.mean(w_accuracies), np.mean(e_accuracies)
+                log.debug(f"Performed gradient update. Loss: {batch_loss:.5f}, Accuracies {res.w_accuracies[i, grad_updates]:.3f}, {res.e_accuracies[i, grad_updates]:.3f}")
                 grad_updates += 1
-                log.debug("Performed gradient update. Loss: %f" % batch_loss)
                 batch_loss = 0
                 accumulate_step = 0
             TT.end_profile()
 
-        log(f"Completed epoch {i}/{params.epochs-1} with mean loss {np.mean(losses)}")
+        log(f"Completed epoch {i}/{params.epochs-1} with mean loss {np.mean(losses):.5f} and mean word/entity accuracies {res.w_accuracies[i].mean():.3f}, {res.e_accuracies[i].mean():.3f}")
         # Save results and model
         if is_master and (i+1) % save_every == 0:
             paths = save_training(location, model, res, optimizer, scheduler)
