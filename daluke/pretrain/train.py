@@ -81,8 +81,8 @@ def get_optimizer_params(params: list, do_decay: bool) -> list:
 def save_training(loc: str, params: Hyperparams, model: PretrainTaskDaLUKE, res: TrainResults, optimizer: Optimizer, scheduler) -> list[str]:
     paths = list()
     # Save tracked statistics
-    paths.extend += res.save(loc)
-    paths.extend += params.save(loc)
+    paths += res.save(loc)
+    paths += params.save(loc)
     # Save model
     paths.append(os.path.join(loc, TrainResults.subfolder, MODEL_OUT.format(i=res.epoch)))
     torch.save(model.state_dict(), paths[-1])
