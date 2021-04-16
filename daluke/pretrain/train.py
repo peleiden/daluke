@@ -5,6 +5,7 @@ import json
 from dataclasses import dataclass
 
 import torch
+import torch.cuda.amp as amp
 import torch.distributed as dist
 import torch.nn as nn
 from torch.optim import Optimizer
@@ -15,7 +16,7 @@ from torch.utils.data.distributed import DistributedSampler
 import numpy as np
 
 from transformers import AutoConfig, AutoModelForPreTraining, AdamW, get_linear_schedule_with_warmup
-from pelutils.datahandler import DataStorage
+from pelutils import DataStorage
 from pelutils.logger import log, Levels
 from pelutils.ds import reset_cuda
 
@@ -32,18 +33,20 @@ NO_DECAY =  { "bias", "LayerNorm.weight" }
 MODEL_OUT = "daluke_epoch{i}.pt"
 OPTIMIZER_OUT = "optim_epoch{i}.pt"
 SCHEDULER_OUT = "scheduler_epoch{i}.pt"
+SCALER_OUT = "scaler_epoch{i}.pt"
 
 
 @dataclass
 class Hyperparams(DataStorage):
     epochs: int = 20
     batch_size: int = 2048
-    lr: float = 1e-5
+    lr: float = 1e-4
     ff_size: int = 16
     ent_embed_size: int = 256
     weight_decay: float = 0.1
     warmup_prop: float = 0.06
     word_ent_weight: float = 0.5
+    fp16: bool = False  # Note: If default is changed, change fp16 arg to fp32
 
     subfolder = TrainResults.subfolder
     json_name = "params.json"
@@ -54,10 +57,13 @@ class Hyperparams(DataStorage):
         assert self.lr > 0, "Learning rate must be larger than 0"
         assert isinstance(self.ent_embed_size, int) and self.ent_embed_size > 0
         assert isinstance(self.batch_size, int) and self.batch_size > 0
-        assert isinstance(self.ff_size, int) and self.ff_size > 0
+        assert isinstance(self.ff_size, int) and 0 < self.ff_size <= self.batch_size
         assert 0 <= self.weight_decay < 1
         assert 0 <= self.warmup_prop < 1
         assert 0 <= self.word_ent_weight <= 1
+        assert isinstance(self.fp16, bool)
+        if self.fp16:
+            assert torch.cuda.is_available(), "Half-precision cannot be used without CUDA access"
 
     def __str__(self):
         return json.dumps(self.__dict__, indent=4)
@@ -218,10 +224,14 @@ def train(
          {"params": get_optimizer_params(model_params, do_decay=False), "weight_decay": 0}],
         lr = params.lr,
     )
+    scaler = amp.GradScaler() if params.fp16 else None
     scheduler = get_linear_schedule_with_warmup(optimizer, int(params.warmup_prop * num_updates_all), num_updates_all)
     if resume_from:
+        # TODO: Does this even work? res.epoch is probably set one too large earlier
         optimizer.load_state_dict(torch.load(fpath(OPTIMIZER_OUT.format(i=res.epoch))))
         scheduler.load_state_dict(torch.load(fpath(SCHEDULER_OUT.format(i=res.epoch))))
+        if params.fp16:
+            scaler.load_state_dict(torch.load(fpath(SCALER_OUT.format(i=res.epoch))))
 
     criterion = nn.CrossEntropyLoss(ignore_index=-1)
 
@@ -258,18 +268,23 @@ def train(
                 batch = next(batch_iter)
 
                 TT.profile("Gradients")
-                word_preds, ent_preds = model(batch)
-                # Compute and backpropagate loss
-                word_loss = criterion(word_preds, batch.word_mask_labels)
-                ent_loss = criterion(ent_preds, batch.ent_mask_labels)
-                loss = params.word_ent_weight *  word_loss + (1 - params.word_ent_weight) * ent_loss
+                with amp.autocast() if params.fp16 else contextlib.ExitStack():
+                    word_preds, ent_preds = model(batch)
+                    # Compute and backpropagate loss
+                    word_loss = criterion(word_preds, batch.word_mask_labels)
+                    ent_loss = criterion(ent_preds, batch.ent_mask_labels)
+                    loss = params.word_ent_weight *  word_loss + (1 - params.word_ent_weight) * ent_loss
+                    loss /= grad_accumulation_steps
 
                 # Only sync parameters on grad updates, aka last pass of this loop
                 with model.no_sync() if is_distributed and k < grad_accumulation_steps - 1 else contextlib.ExitStack():
-                    loss.backward()
+                    if params.fp16:
+                        scaler.scale(loss).backward()
+                    else:
+                        loss.backward()
                     t_loss += loss.item()
-                    w_loss += word_loss.item()
-                    e_loss += ent_loss.item()
+                    w_loss += word_loss.item() / grad_accumulation_steps
+                    e_loss += ent_loss.item() / grad_accumulation_steps
                 reset_cuda()
                 TT.end_profile()
 
@@ -287,7 +302,11 @@ def train(
 
             # Update model parameters
             with TT.profile("Parameter updates"):
-                optimizer.step()
+                if params.fp16:
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    optimizer.step()
                 scheduler.step()
                 model.zero_grad()
 
