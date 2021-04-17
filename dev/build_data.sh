@@ -1,8 +1,14 @@
 # Run from LUKE repo
-DATA_PATH=/work3/$USER/data
+DATA_PATH=/work3/$USER/pdata2
 DUMP_FILE=da-dump-db.dump
 TOKENIZER="Maltehb/danish-bert-botxo"
-# ^ One of xlm-roberta-base, xlm-roberta-large, xlm-roberta-large-finetuned-conll02-dutch, xlm-roberta-large-finetuned-conll02-spanish, xlm-roberta-large-finetuned-conll03-english, xlm-roberta-large-finetuned-conll03-german
+# ^ One of xlm-roberta-base, xlm-roberta-large, xlm-roberta-large-finetuned-conll02-dutch,
+# xlm-roberta-large-finetuned-conll02-spanish, xlm-roberta-large-finetuned-conll03-english,
+# xlm-roberta-large-finetuned-conll03-german, Maltehb/danish-bert-botxo, etc.
+LUKE="$HOME/pluke"
+DALUKE="$HOME/daluke"
+export PYTHONPATH=$PYTHONPATH:$LUKE:$DALUKE
+module load python3/3.8.4
 
 P=$(pwd)
 mkdir -p $DATA_PATH
@@ -10,26 +16,26 @@ cd $DATA_PATH
 # wget https://dumps.wikimedia.org/dawiki/latest/dawiki-latest-pages-articles.xml.bz2
 cd $P
 
+echo "PREPROCESSING WIKIDATA"
+cd $DALUKE
+#python3 daluke/pretrain/data/preprocess.py $DATA_PATH/../dawiki-20210301-pages-articles.xml.bz2 --func repeat-entities
+
 echo "BUILD DUMP DATABASE"
+cd $LUKE
 python3 -m luke.cli build-dump-db\
-    $DATA_PATH/dawiki-20210301-pages-articles.xml.bz2\
-    $DATA_PATH/$DUMP_FILE
+    $DATA_PATH/../dawiki-20210301-pages-articles.xml.preprocessed.bz2\
+    $DATA_PATH/../$DUMP_FILE
 
 echo "BUILD ENTITY VOCAB"
 python3 -m luke.cli build-entity-vocab\
-    $DATA_PATH/$DUMP_FILE\
-    $DATA_PATH/entity-vocab.jsonl
+    $DATA_PATH/../$DUMP_FILE\
+    $DATA_PATH/../entity-vocab.jsonl
 
 echo "BUILD PRETRAINING DATASET"
-python3 -m luke.cli build-wikipedia-pretraining-dataset\
-    $DATA_PATH/$DUMP_FILE\
-    $TOKENIZER\
-    $DATA_PATH/entity-vocab.jsonl\
-    $DATA_PATH/da-pretrain-dataset\
-    --sentence-tokenizer da
+cd $DALUKE
+python3 daluke/pretrain/data/run.py\
+    $DATA_PATH/../da-dump-db.dump\
+    $DATA_PATH/../entity-vocab.jsonl\
+    Maltehb/danish-bert-botxo\
+    $DATA_PATH
 
-# echo "BUILD INTERWIKI DATABASE"
-# python3 -m luke.cli build-interwiki-db\
-#     data/$DUMP_FILE\
-#     data/interwiki-db\
-#     --language da  # This one failed

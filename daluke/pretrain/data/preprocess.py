@@ -6,7 +6,9 @@ import click
 from pelutils import log
 from tqdm import tqdm
 
-def repeat_entities(article: str) -> str:
+MIN_ENT_LEN = 3
+
+def repeat_entities(article: str, title: str=None) -> str:
     start_indices = list()
     hyperlinks = list()
     skip = 0
@@ -19,9 +21,11 @@ def repeat_entities(article: str) -> str:
             skip = 1
         elif article[i:].startswith("]]") and start_indices:
             hl = article[start_indices.pop():i]
-            if "[[" not in hl:
+            if "[[" not in hl and len(hl) >= MIN_ENT_LEN:
                 hyperlinks.append(hl)
             skip = 1
+    if title and len(title) >= MIN_ENT_LEN:
+        hyperlinks.append(title)
 
     # [ (text, hyperlink) ]
     links = list()
@@ -73,7 +77,7 @@ def repeat_entities(article: str) -> str:
     return s
 
 PREPROCESS_FUNCS = {
-    "default": lambda x: x,
+    "default": lambda x, _: x,
     "repeat-entities": repeat_entities,
 }
 
@@ -81,6 +85,7 @@ def _get_lineblocks(filepath: str) -> Generator:
 
     with bz2.BZ2File(filepath) as xmlfile:
         current_lines = list()
+        title = None
         while True:
             try:
                 line = next(xmlfile)
@@ -88,19 +93,22 @@ def _get_lineblocks(filepath: str) -> Generator:
                 break
             decoded = line.decode("utf8")
             current_lines.append(decoded)
+            if decoded.strip().startswith("<title>") and decoded.strip().endswith("</title>"):
+                title = decoded.strip()[7:-8]
             if decoded.strip().startswith("<text"):
                 # Yield non-text
-                yield False, "".join(current_lines[:-1])
+                yield False, "".join(current_lines[:-1]), title
                 # Read until end of text is reached
                 lines = list()
                 while True:
                     lines.append(decoded)
                     if decoded.endswith("</text>\n"):
-                        yield True, "".join(lines)
+                        yield True, "".join(lines), title
+                        title = None
                         break
                     decoded = next(xmlfile).decode("utf8")
                 current_lines = list()
-        yield False, "".join(current_lines)
+        yield False, "".join(current_lines), None
 
 def _replace_bytes(tag: str, nbytes: int) -> str:
     bytes_index = tag.index("bytes=\"")
@@ -124,13 +132,13 @@ def preprocess(wikidownload: str, func: str):
     log.section("Beginning preprocessing")
     log("Saving to %s" % dump_file)
     with bz2.BZ2File(dump_file, "a") as dump:
-        for is_text, text in tqdm(_get_lineblocks(wikidownload), unit=" blocks"):
+        for is_text, text, title in tqdm(_get_lineblocks(wikidownload), unit=" blocks"):
             if is_text:
                 text_start = text.index(">") + 1
                 text_end = -len("</text>\n")
                 start_tag = text[:text_start].encode()
                 end_tag = text[text_end:].encode()
-                text = func(text[text_start:text_end]).encode()
+                text = func(text[text_start:text_end], title).encode()
                 # start_tag = _replace_bytes(start_tag, len(text)).encode()
                 text = start_tag + text + end_tag
             else:

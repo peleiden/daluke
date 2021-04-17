@@ -86,17 +86,20 @@ class DatasetBuilder:
             json.dump(self.entity_vocab, ev, indent=2)
 
         log.section("Processing pages")
-        n_seqs = 0
+        n_seqs, n_ents = 0, 0
         for title in log.tqdm(tqdm(self.target_titles[:self.max_articles])):
             log("Processing %s" % title)
             with TT.profile("Process page"):
-                n_seqs += self._process_page(title)
+                s, e = self._process_page(title)
+                n_seqs += s
+                n_ents += e
 
         # Save metadata
         with open(path := os.path.join(self.out_dir, self.metadata_file), "w") as f:
             log("Saving metadata to %s" % path)
             json.dump({
                 "number-of-items":     n_seqs,
+                "number-of-entities":  n_ents,
                 "max-seq-length":      self.max_seq_length,
                 "max-entities":        self.max_entities,
                 "max-entity-span":     self.max_entity_span,
@@ -189,7 +192,7 @@ class DatasetBuilder:
         # Construct features to be saved - word tokens, entities, and entity spans
         words = list()
         links: list[tuple[int, 3]] = list()
-        n_seqs = 0
+        n_seqs, n_ents = 0, 0
         TT.profile("Get features")
         for i, (sent_words, sent_links) in enumerate(sentences):
             links += [(id_, start + len(words), end + len(words)) for id_, start, end in sent_links]
@@ -199,6 +202,7 @@ class DatasetBuilder:
                     n_seqs += 1
                     # Save features for this sequence
                     links = links[:self.max_entities]
+                    n_ents += len(links)
                     word_ids = self.tokenizer.convert_tokens_to_ids(words)
                     with TT.profile("Word spans"):
                         word_spans = calculate_spans(words)
@@ -218,4 +222,4 @@ class DatasetBuilder:
                 links = list()
         TT.end_profile()
 
-        return n_seqs
+        return n_seqs, n_ents
