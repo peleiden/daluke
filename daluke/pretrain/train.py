@@ -43,7 +43,7 @@ class Hyperparams(DataStorage):
     lr: float = 1e-4
     ff_size: int = 16
     ent_embed_size: int = 256
-    weight_decay: float = 0.1
+    weight_decay: float = 0.01
     warmup_prop: float = 0.06
     word_ent_weight: float = 0.5
     fp16: bool = False  # Note: If default is changed, change fp16 arg to fp32
