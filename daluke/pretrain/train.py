@@ -123,7 +123,7 @@ def train(
 
     # Setup logger
     log.configure(
-        fpath(f"{name}{'-%s' % rank if is_distributed else ''}.log"),
+        os.path.join(location, resume_from or TrainResults.subfolder, f"{name}{'-%s' % rank if is_distributed else ''}.log"),
         "DaLUKE pretraining on node %i" % rank,
         log_commit  = True,
         print_level = (Levels.INFO if quiet else Levels.DEBUG) if is_master else None,
