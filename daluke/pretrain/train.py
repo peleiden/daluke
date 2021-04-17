@@ -165,7 +165,6 @@ def train(
         TrainResults.subfolder = resume_from
         Hyperparams.subfolder = resume_from
         res = TrainResults.load(location)
-        res.epoch += 1  # We saved the data at epoch i, but should now commence epoch i+1
     else:
         res = TrainResults(
             losses       = np.zeros((0, num_updates_epoch)),
@@ -234,6 +233,7 @@ def train(
         scheduler.load_state_dict(torch.load(fpath(SCHEDULER_OUT.format(i=res.epoch))))
         if params.fp16:
             scaler.load_state_dict(torch.load(fpath(SCALER_OUT.format(i=res.epoch))))
+        res.epoch += 1  # We saved the data at epoch i, but should now commence epoch i+1
 
     criterion = nn.CrossEntropyLoss(ignore_index=-1)
 
