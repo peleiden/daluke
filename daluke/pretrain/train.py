@@ -46,6 +46,7 @@ class Hyperparams(DataStorage):
     weight_decay: float = 0.01
     warmup_prop: float = 0.06
     word_ent_weight: float = 0.5
+    bert_fix_prop: float = 0.5
     fp16: bool = False  # Note: If default is changed, change fp16 arg to fp32
 
     subfolder = TrainResults.subfolder
@@ -199,12 +200,17 @@ def train(
     model.init_queries()
 
     model_params = list(model.named_parameters())
-    # TODO: Re-enable training of BERT weights at some point during the training
     # Fix BERT weights during training
-    for n, p in model_params:
-        if n not in new_weights:
-            p.requires_grad = False
+    def fix_base_model_params(fix: bool):
+        """ Fixes or unfixes base model parameters """
+        for n, p in model_params:
+            if n not in new_weights:
+                p.requires_grad = not fix
+    fix_base_model_params(True)
     del base_model  # Clear base model weights from memory
+    # Unfixes params at this epoch
+    unfix_base_model_params_epoch = round(params.bert_fix_prop * params.epochs)
+    log("Unfixing base model params after %i epochs" % unfix_base_model_params_epoch)
 
     if is_distributed:
         model = DDP(
@@ -240,20 +246,24 @@ def train(
     log.section(f"Training of daLUKE for {params.epochs} epochs")
     model.zero_grad() # To avoid tracking of model parameter manipulation
     model.train()
+
     for i in range(res.epoch, params.epochs):
         TT.profile("Epoch")
         log("Starting epoch %i" % i)
         res.epoch = i
+        if i == unfix_base_model_params_epoch:
+            log("Unfixing base model params")
+            fix_base_model_params(False)
         if is_distributed:
             sampler.set_epoch(i)
 
         # Allocate room for results for this epoch
-        res.losses       = np.vstack((res.losses, np.zeros(num_updates_epoch)))
-        res.w_losses     = np.vstack((res.w_losses, np.zeros(num_updates_epoch)))
-        res.e_losses     = np.vstack((res.e_losses, np.zeros(num_updates_epoch)))
+        res.losses       = np.vstack((res.losses,       np.zeros(num_updates_epoch)))
+        res.w_losses     = np.vstack((res.w_losses,     np.zeros(num_updates_epoch)))
+        res.e_losses     = np.vstack((res.e_losses,     np.zeros(num_updates_epoch)))
         res.w_accuracies = np.vstack((res.w_accuracies, np.zeros(num_updates_epoch)))
         res.e_accuracies = np.vstack((res.e_accuracies, np.zeros(num_updates_epoch)))
-        res.runtime      = np.vstack((res.runtime, np.zeros(num_updates_epoch)))
+        res.runtime      = np.vstack((res.runtime,      np.zeros(num_updates_epoch)))
 
         batch_iter = iter(loader)
 

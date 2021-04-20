@@ -24,6 +24,7 @@ ARGUMENTS = {
     "weight-decay":    { "default": Hyperparams.weight_decay, "type": float, "help": "The decay factor in the AdamW optimizer" },
     "warmup-prop":     { "default": Hyperparams.warmup_prop, "type": float, "help": "Proportion of training steps used for optimizer warmup" },
     "word-ent-weight": { "default": Hyperparams.word_ent_weight, "type": float, "help": "0 for only entities, 1 for only words, 0.5 for equal weighting" },
+    "bert-fix-prop":   { "default": Hyperparams.bert_fix_prop, "type": float, "help": "Share of epochs for which to fix base model weights" },
     "fp16":            { "action": "store_true", "help": "Use automatic mixed precision" },
     "save-every":      { "default": 1, "type": int, "help": "Save progress after this many epochs" },
     "bert-attention":  { "action": "store_true", "help": "Use the original BERT attention mechanism instead of the entity aware LUKE variant" },
