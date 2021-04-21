@@ -39,7 +39,7 @@ class Words:
 
         # Don't pad the spans as they are not given to model, but used for masking
         if spans is not None:
-            spans = torch.IntTensor(spans)
+            spans = torch.IntTensor(spans) + 1 # For [CLS]
 
         return cls(
             ids            = word_ids,
