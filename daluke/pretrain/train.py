@@ -16,7 +16,7 @@ from torch.utils.data.distributed import DistributedSampler
 import numpy as np
 
 from transformers import AutoConfig, AutoModelForPreTraining, AdamW, get_linear_schedule_with_warmup
-from pelutils import DataStorage
+from pelutils import DataStorage, thousand_seps
 from pelutils.logger import log, Levels
 from pelutils.ds import reset_cuda
 
@@ -189,7 +189,7 @@ def train(
     model = model_cls(
         bert_config,
         ent_vocab_size = len(entity_vocab),
-        ent_embed_size = Hyperparams.ent_embed_size,
+        ent_embed_size = params.ent_embed_size,
     ).to(device)
     # TODO: Maybe init fresh model weights manually (they do)
     # Load parameters from base model
@@ -198,6 +198,7 @@ def train(
         new_weights = load_base_model_weights(model, base_model)
     # Initialize self-attention query matrices to BERT word query matrix
     model.init_queries()
+    log("Pretraining model initialized with %s parameters" % thousand_seps(len(model)))
 
     model_params = list(model.named_parameters())
     # Fix BERT weights during training
