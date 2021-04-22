@@ -12,6 +12,7 @@ import torch.multiprocessing as mp
 
 from daluke import daBERT
 from daluke.pretrain.train import train, Hyperparams
+from daluke.pretrain.analysis import TrainResults
 
 
 ARGUMENTS = {
@@ -58,7 +59,7 @@ if __name__ == '__main__':
     with log.log_errors, EnvVars(OMP_NUM_THREADS=1):
         parser = Parser(ARGUMENTS, name="daluke-pretrain", multiple_jobs=False)
         args = parser.parse()[0]
-        parser.document_settings()
+        parser.document_settings(TrainResults.subfolder)
         if torch.cuda.device_count() > 1:
             run(args)
         else:
