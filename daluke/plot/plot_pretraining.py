@@ -60,12 +60,22 @@ def runtime_plot(location: str):
     runtime = res.runtime.ravel()
     x = np.arange(runtime.size+1)
 
-    plt.figure(figsize=figsize_std)
-    plt.plot(x[1:], runtime, label="Time per parameter update")
-    # plt.plot(x, [0, *np.cumsum(runtime)], label="Cumulative time spent")
-    plt.ylim(bottom=0)
-    plt.xlabel("Batches")
-    plt.ylabel("Runtime [s]")
+    fig, ax1 = plt.subplots(figsize=figsize_std)
+
+    ax1.plot(x[1:], runtime, color=tab_colours[0], label="Runtime")
+    ax1.set_ylim(bottom=0)
+    ax1.set_xlabel("Batches")
+    ax1.set_ylabel("Runtime [s]")
+
+    # Accuracy axis
+    ax2 = ax1.twinx()
+    ax2.plot(x, [0, *res.param_diff.ravel()], color=tab_colours[1], label="Distance to original parameters")
+    ax2.set_ylabel("Accuracy [%]")
+
+    h1, l1 = ax1.get_legend_handles_labels()
+    h2, l2 = ax2.get_legend_handles_labels()
+    ax1.legend(h1+h2, l1+l2)
+    plt.title("Runtime and parameter change")
     plt.legend()
     plt.grid()
     _save(location, "runtime.png")

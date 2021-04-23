@@ -66,6 +66,10 @@ class DaLUKE(nn.Module):
             layer.attention.Q_w2e.weight.data = layer.attention.Q_w.weight.data
             layer.attention.Q_e2w.weight.data = layer.attention.Q_w.weight.data
 
+    def all_params(self) -> np.ndarray:
+        """ Returns an array of all model parameters """
+        return np.concatenate([x.detach().cpu().numpy().flat for x in self.state_dict().values()])
+
     def __len__(self):
         """ Number of model parameters """
         return sum(x.numel() for x in self.state_dict().values())

@@ -173,6 +173,8 @@ def train(
             e_losses     = np.zeros((0, num_updates_epoch)),
             e_accuracies = np.zeros((0, num_updates_epoch)),
             w_accuracies = np.zeros((0, num_updates_epoch)),
+            orig_params  = None,  # Set later
+            param_diff   = np.zeros((0, num_updates_epoch)),
             runtime      = np.zeros((0, num_updates_epoch)),
             epoch        = 0,
         )
@@ -198,6 +200,8 @@ def train(
         new_weights = load_base_model_weights(model, base_model)
     # Initialize self-attention query matrices to BERT word query matrix
     model.init_queries()
+    if not resume_from:
+        res.orig_params = model.all_params()
     log("Pretraining model initialized with %s parameters" % thousand_seps(len(model)))
 
     model_params = list(model.named_parameters())
@@ -264,6 +268,7 @@ def train(
         res.e_losses     = np.vstack((res.e_losses,     np.zeros(num_updates_epoch)))
         res.w_accuracies = np.vstack((res.w_accuracies, np.zeros(num_updates_epoch)))
         res.e_accuracies = np.vstack((res.e_accuracies, np.zeros(num_updates_epoch)))
+        res.param_diff   = np.vstack((res.param_diff,   np.zeros(num_updates_epoch)))
         res.runtime      = np.vstack((res.runtime,      np.zeros(num_updates_epoch)))
 
         batch_iter = iter(loader)
@@ -272,9 +277,10 @@ def train(
         for j in range(num_updates_epoch):
             TT.profile("Parameter update")
 
-            # Losses and accuracies for each parameter update
+            # Losses, accuracies, and grad changes for each parameter update
             t_loss, w_loss, e_loss = 0, 0, 0
             w_accuracies, e_accuracies = list(), list()
+            param_diff = list()
 
             # Loop over enough batches to make a parameter update
             for k in range(grad_accumulation_steps):
@@ -310,7 +316,7 @@ def train(
 
                 log.debug(
                     f"    Forward pass {k:5} / {grad_accumulation_steps-1} (ep. {i:2}, pu. {j:3}). Loss: {loss.item():9.5f}. "
-                    f"Word, entity accuracy: {100*w_accuracy:7.3f} %, {100*e_accuracy:7.3f} %"
+                    f"Word, entity accuracy: {100*w_accuracy:7.3f} %, {100*e_accuracy:7.3f}"
                 )
                 TT.end_profile()
 
@@ -323,12 +329,16 @@ def train(
                     optimizer.step()
                 scheduler.step()
                 model.zero_grad()
+            # Calculate how much gradient has changed
+            with TT.profile("Gradient diff"):
+                param_diff.append(np.sqrt(np.sum((model.all_params()-res.orig_params)**2)))
 
             res.losses[i, j] = t_loss
             res.w_losses[i, j] = w_loss
             res.e_losses[i, j] = e_loss
             res.w_accuracies[i, j] = np.mean(w_accuracies)
             res.e_accuracies[i, j] = np.mean(e_accuracies)
+            res.param_diff[i, j] = np.mean(param_diff)
             log.debug(
                 "Performed gradient update %i / %i" % (j, num_updates_epoch-1),
                 f"Loss (total, word, entity): {t_loss:10.5f}, {w_loss:10.5f}, {e_loss:10.5f}",
@@ -342,6 +352,8 @@ def train(
             f"Mean loss (total, word, entity): {res.losses[i].mean():10.5f}, {res.w_losses[i].mean():10.5f}, {res.e_losses[i].mean():10.5f}",
             f"Mean accuracy (word, entity):     {100*res.w_accuracies[i].mean():7.3f} %,  {100*res.e_accuracies[i].mean():7.3f} %",
             "Runtime: %s" % thousand_seps(res.runtime[-1].sum()),
+            "Time distribution so far",
+            TT,
         )
         # Save results and model
         if is_master and (i+1) % save_every == 0:

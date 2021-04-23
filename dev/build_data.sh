@@ -10,11 +10,10 @@ LUKE=$DALUKE/pluke
 export PYTHONPATH=$PYTHONPATH:$DALUKE:$LUKE
 module load python3/3.8.4
 
-P=$(pwd)
 mkdir -p $DATA_PATH
 cd $DATA_PATH
 # wget https://dumps.wikimedia.org/dawiki/latest/dawiki-latest-pages-articles.xml.bz2
-cd $P
+cd $DALUKE
 
 echo "PREPROCESSING WIKIDATA"
 cd $DALUKE
