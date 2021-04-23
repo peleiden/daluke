@@ -22,29 +22,29 @@ def loss_plot(location: str):
     fig, ax1 = plt.subplots(figsize=figsize_std)
 
     # Positions of epoch ends on x axis
-    epochs = (np.arange(res.epoch+1) + 1) * res.losses.shape[1]
+    epochs = np.arange(res.epoch+1) * res.losses.shape[1]
 
     lw = 2
-    dot_size = 25
+    dot_size = 30
 
     # Loss axis
     x = np.arange(res.losses.size) + 1
     ax1.plot(x, res.losses.ravel(),   color=tab_colours[0], label="Weighted loss", lw=lw)
     ax1.plot(x, res.w_losses.ravel(), color=tab_colours[1], label="Word loss",     lw=lw, ls="--")
     ax1.plot(x, res.e_losses.ravel(), color=tab_colours[2], label="Entity loss",   lw=lw, ls="--")
-    ax1.scatter(epochs, res.losses.mean(axis=1),   s=dot_size, color=tab_colours[0])
-    ax1.scatter(epochs, res.w_losses.mean(axis=1), s=dot_size, color=tab_colours[1])
-    ax1.scatter(epochs, res.e_losses.mean(axis=1), s=dot_size, color=tab_colours[2])
-    ax1.set_ylim([0, 1.1 * max(res.w_losses.max(), res.e_losses.max())])
-    ax1.set_xlabel("Number of batches")
+    ax1.scatter(epochs, res.losses[:, 0],   s=dot_size, color=tab_colours[0])
+    ax1.scatter(epochs, res.w_losses[:, 0], s=dot_size, color=tab_colours[1])
+    ax1.scatter(epochs, res.e_losses[:, 0], s=dot_size, color=tab_colours[2])
+    ax1.set_ylim(bottom=0)
+    ax1.set_xlabel("Batches")
     ax1.set_ylabel("Loss")
 
     # Accuracy axis
     ax2 = ax1.twinx()
     ax2.plot(x, 100*res.w_accuracies.ravel(), color=tab_colours[3], label="Masked word accuracy",   lw=lw, ls="-.")
     ax2.plot(x, 100*res.e_accuracies.ravel(), color=tab_colours[4], label="Masked entity accuracy", lw=lw, ls="-.")
-    ax2.scatter(epochs, 100*res.w_accuracies.mean(axis=1), s=dot_size, color=tab_colours[3])
-    ax2.scatter(epochs, 100*res.e_accuracies.mean(axis=1), s=dot_size, color=tab_colours[4])
+    ax2.scatter(epochs, 100*res.w_accuracies[:, 0], s=dot_size, color=tab_colours[3])
+    ax2.scatter(epochs, 100*res.e_accuracies[:, 0], s=dot_size, color=tab_colours[4])
     ax2.set_ylim([0, 110])
     ax2.set_ylabel("Accuracy [%]")
 
@@ -55,12 +55,30 @@ def loss_plot(location: str):
     plt.grid()
     _save(location, "loss.png")
 
+def runtime_plot(location: str):
+    res = TrainResults.load()
+    runtime = res.runtime.ravel()
+    x = np.arange(runtime.size+1)
+
+    plt.figure(figsize=figsize_std)
+    plt.plot(x[1:], runtime, label="Time per parameter update")
+    # plt.plot(x, [0, *np.cumsum(runtime)], label="Cumulative time spent")
+    plt.ylim(bottom=0)
+    plt.xlabel("Batches")
+    plt.ylabel("Runtime [s]")
+    plt.legend()
+    plt.grid()
+    _save(location, "runtime.png")
+
 @click.command()
 @click.argument("location")
 def make_pretraining_plots(location: str):
     log.configure(os.path.join(location, "plots", "plots.log"), "Pretraining plots")
     TrainResults.subfolder = location
+    log("Loss plot")
     loss_plot(location)
+    log("Runtime plot")
+    runtime_plot(location)
 
 if __name__ == "__main__":
     with log.log_errors:

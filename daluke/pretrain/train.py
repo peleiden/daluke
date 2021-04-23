@@ -341,6 +341,7 @@ def train(
             f"Completed epoch {i:2} / {params.epochs-1}",
             f"Mean loss (total, word, entity): {res.losses[i].mean():10.5f}, {res.w_losses[i].mean():10.5f}, {res.e_losses[i].mean():10.5f}",
             f"Mean accuracy (word, entity):     {100*res.w_accuracies[i].mean():7.3f} %,  {100*res.e_accuracies[i].mean():7.3f} %",
+            "Runtime: %s" % thousand_seps(res.runtime[-1].sum()),
         )
         # Save results and model
         if is_master and (i+1) % save_every == 0:

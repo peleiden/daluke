@@ -1,5 +1,6 @@
 import os
 import bz2
+import re as reee
 from typing import Generator
 
 import click
@@ -129,6 +130,8 @@ def preprocess(wikidownload: str, func: str):
 
     dump_file = os.path.splitext(wikidownload)[0] + ".preprocessed.bz2"
 
+    title_pattern = reee.compile(r"<title>.*<\/title>", reee.IGNORECASE)
+
     log.section("Beginning preprocessing")
     log("Saving to %s" % dump_file)
     with bz2.BZ2File(dump_file, "a") as dump:
@@ -138,10 +141,12 @@ def preprocess(wikidownload: str, func: str):
                 text_end = -len("</text>\n")
                 start_tag = text[:text_start].encode()
                 end_tag = text[text_end:].encode()
-                text = func(text[text_start:text_end], title).encode()
+                text = func(text[text_start:text_end].lower(), title.lower()).encode()
                 # start_tag = _replace_bytes(start_tag, len(text)).encode()
                 text = start_tag + text + end_tag
             else:
+                # Replace titles with lower case
+                text = title_pattern.sub(lambda m: m.group(0).lower(), text)
                 text = text.encode()
             dump.write(text)
 
