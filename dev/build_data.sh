@@ -5,9 +5,9 @@ TOKENIZER="Maltehb/danish-bert-botxo"
 # ^ One of xlm-roberta-base, xlm-roberta-large, xlm-roberta-large-finetuned-conll02-dutch,
 # xlm-roberta-large-finetuned-conll02-spanish, xlm-roberta-large-finetuned-conll03-english,
 # xlm-roberta-large-finetuned-conll03-german, Maltehb/danish-bert-botxo, etc.
-LUKE="$HOME/pluke"
-DALUKE="$HOME/daluke"
-export PYTHONPATH=$PYTHONPATH:$LUKE:$DALUKE
+DALUKE=$HOME/daluke
+LUKE=$DALUKE/pluke
+export PYTHONPATH=$PYTHONPATH:$DALUKE:$LUKE
 module load python3/3.8.4
 
 P=$(pwd)
@@ -18,7 +18,7 @@ cd $P
 
 echo "PREPROCESSING WIKIDATA"
 cd $DALUKE
-#python3 daluke/pretrain/data/preprocess.py $DATA_PATH/../dawiki-20210301-pages-articles.xml.bz2 --func repeat-entities
+python3 daluke/pretrain/data/preprocess.py $DATA_PATH/../dawiki-20210301-pages-articles.xml.bz2 --func repeat-entities
 
 echo "BUILD DUMP DATABASE"
 cd $LUKE

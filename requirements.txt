@@ -5,7 +5,7 @@ pandas  # for danlp
 
 # ML stuff
 torch>=1.8.0
-transformers>=4.0.0
+transformers>=4.3.3
 danlp
 conllu  # for danlp
 seqeval
@@ -16,3 +16,4 @@ pyicu
 # Misc
 pelutils[ds]>=0.6.1
 click
+tqdm
