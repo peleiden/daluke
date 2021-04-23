@@ -2,11 +2,12 @@
 DATA_PATH=/work3/$USER/pdata2
 DUMP_FILE=da-dump-db.dump
 TOKENIZER="Maltehb/danish-bert-botxo"
+PREPROCESS=repeat-entities
 # ^ One of xlm-roberta-base, xlm-roberta-large, xlm-roberta-large-finetuned-conll02-dutch,
 # xlm-roberta-large-finetuned-conll02-spanish, xlm-roberta-large-finetuned-conll03-english,
 # xlm-roberta-large-finetuned-conll03-german, Maltehb/danish-bert-botxo, etc.
 DALUKE=$HOME/daluke
-LUKE=$DALUKE/pluke
+LUKE=$DALUKE/luke
 export PYTHONPATH=$PYTHONPATH:$DALUKE:$LUKE
 module load python3/3.8.4
 
@@ -17,12 +18,12 @@ cd $DALUKE
 
 echo "PREPROCESSING WIKIDATA"
 cd $DALUKE
-python3 daluke/pretrain/data/preprocess.py $DATA_PATH/../dawiki-20210301-pages-articles.xml.bz2 --func repeat-entities
+python3 daluke/pretrain/data/preprocess.py $DATA_PATH/../dawiki-20210301-pages-articles.xml.bz2 --func $PREPROCESS
 
 echo "BUILD DUMP DATABASE"
 cd $LUKE
 python3 -m luke.cli build-dump-db\
-    $DATA_PATH/../dawiki-20210301-pages-articles.xml.preprocessed.bz2\
+    $DATA_PATH/../dawiki-20210301-pages-articles.xml.$PREPROCESS.bz2\
     $DATA_PATH/../$DUMP_FILE
 
 echo "BUILD ENTITY VOCAB"

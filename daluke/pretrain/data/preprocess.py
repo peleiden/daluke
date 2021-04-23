@@ -93,9 +93,11 @@ def _get_lineblocks(filepath: str) -> Generator:
             except StopIteration:
                 break
             decoded = line.decode("utf8")
-            current_lines.append(decoded)
+            # Extract title and make sure it is lower cased
             if decoded.strip().startswith("<title>") and decoded.strip().endswith("</title>"):
+                decoded = decoded.lower()
                 title = decoded.strip()[7:-8]
+            current_lines.append(decoded)
             if decoded.strip().startswith("<text"):
                 # Yield non-text
                 yield False, "".join(current_lines[:-1]), title
@@ -126,15 +128,12 @@ def preprocess(wikidownload: str, func: str):
         "Wikidump path: %s" % wikidownload,
         "Function:      %s" % func,
     )
+    dump_file = os.path.splitext(wikidownload)[0] + ".%s.bz2" % func
     func = PREPROCESS_FUNCS[func]
-
-    dump_file = os.path.splitext(wikidownload)[0] + ".preprocessed.bz2"
-
-    title_pattern = reee.compile(r"<title>.*<\/title>", reee.IGNORECASE)
 
     log.section("Beginning preprocessing")
     log("Saving to %s" % dump_file)
-    with bz2.BZ2File(dump_file, "a") as dump:
+    with bz2.BZ2File(dump_file, "w") as dump:
         for is_text, text, title in tqdm(_get_lineblocks(wikidownload), unit=" blocks"):
             if is_text:
                 text_start = text.index(">") + 1
@@ -145,8 +144,6 @@ def preprocess(wikidownload: str, func: str):
                 # start_tag = _replace_bytes(start_tag, len(text)).encode()
                 text = start_tag + text + end_tag
             else:
-                # Replace titles with lower case
-                text = title_pattern.sub(lambda m: m.group(0).lower(), text)
                 text = text.encode()
             dump.write(text)
 
