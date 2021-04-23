@@ -11,8 +11,7 @@ from argparse import ArgumentParser
 from pelutils import log, Levels
 
 from daluke.serialize import OUT_FILE, MODEL_OUT, VOCAB_FILE, METADATA_FILE
-
-MODEL_FILE = "model_epoch{i}.bin"
+from daluke.pretrain.train import MODEL_OUT as MODEL_FILE
 
 def _natural_sort(L: list) -> list:
     """ Natural sorting from https://stackoverflow.com/a/37036428 """
@@ -38,7 +37,7 @@ def _get_newest_model(path: str) -> str:
 def main():
     parser = ArgumentParser(description=\
         "Standalone convenience script used to collect the results from the pretraining of daLUKE "\
-        "performed by the \"pretrain\" module in in https://github.com/peleiden/luke")
+        "performed by the pretraining module")
     parser.add_argument("inpath", type=str,
             help= "Path to the output folder of the pretraining containing the model file, entity vocab. and metadata"
     )
