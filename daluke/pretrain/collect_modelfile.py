@@ -39,13 +39,14 @@ def main():
         "Standalone convenience script used to collect the results from the pretraining of daLUKE "\
         "performed by the pretraining module")
     parser.add_argument("inpath", type=str,
-            help= "Path to the output folder of the pretraining containing the model file, entity vocab. and metadata"
+            help= "Path to the output folder of the pretraining containing the model file. "\
+            "Entity vocab. and metadata are assumed to be in parent folder of this"
     )
     parser.add_argument("outpath", type=str, help="Folder in which the collected model is to be placed")
     args = parser.parse_args()
     log.configure(os.path.join(args.outpath, "collect.log"), "Collector", print_level=Levels.DEBUG)
 
-    vocabfile, metafile = os.path.join(args.inpath, VOCAB_FILE), os.path.join(args.inpath, METADATA_FILE)
+    vocabfile, metafile = os.path.join(args.inpath, "..", VOCAB_FILE), os.path.join(args.inpath, "..", METADATA_FILE)
     modelfile = os.path.join(args.inpath, _get_newest_model(args.inpath))
 
     outfile = os.path.join(args.outpath, OUT_FILE)

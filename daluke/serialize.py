@@ -12,7 +12,7 @@ from pelutils import log
 OUT_FILE  = "daluke.tar.gz"
 MODEL_OUT = "model.bin"
 
-VOCAB_FILE    = "entity_vocab.jsonl"
+VOCAB_FILE    = "entity-vocab.json"
 METADATA_FILE = "metadata.json"
 
 def load_from_archive(model: str) -> (list[dict], dict, dict):
@@ -30,7 +30,7 @@ def load_from_archive(model: str) -> (list[dict], dict, dict):
     with tarfile.open(model, "r:gz") as tar:
         log.debug(f"Extracting {VOCAB_FILE} and {METADATA_FILE} ...")
         with tar.extractfile(tar.getmember(VOCAB_FILE)) as vfile:
-            entity_vocab = [json.loads(l) for l in vfile.read().splitlines()]
+            entity_vocab = json.load(vfile)
         with tar.extractfile(tar.getmember(METADATA_FILE)) as metafile:
             metadata = json.load(metafile)
         log.debug(f"Extracting {MODEL_OUT} ...")
@@ -42,8 +42,7 @@ def save_to_archive(outfile: str, entity_vocab: list[dict], metadata: dict, mode
     log.debug(f"Compressing {VOCAB_FILE} and {METADATA_FILE} ...")
     with tarfile.open(outfile, "w:gz") as tar:
         with tempfile.NamedTemporaryFile("w+") as tmp:
-            for l in entity_vocab:
-                tmp.write(json.dumps(l) + "\n")
+            tmp.write(json.dumps(entity_vocab))
             tmp.seek(0)
             tar.add(tmp.name, arcname=VOCAB_FILE)
         with tempfile.NamedTemporaryFile("w+") as tmp:

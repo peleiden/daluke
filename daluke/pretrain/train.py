@@ -234,7 +234,6 @@ def train(
     scaler = amp.GradScaler() if params.fp16 else None
     scheduler = get_linear_schedule_with_warmup(optimizer, int(params.warmup_prop * num_updates_all), num_updates_all)
     if resume_from:
-        # TODO: Does this even work? res.epoch is probably set one too large earlier
         optimizer.load_state_dict(torch.load(fpath(OPTIMIZER_OUT.format(i=res.epoch))))
         scheduler.load_state_dict(torch.load(fpath(SCHEDULER_OUT.format(i=res.epoch))))
         if params.fp16:
