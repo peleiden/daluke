@@ -93,7 +93,7 @@ class Entities(Words):
             ids            = ent_ids,
             attention_mask = cls._build_att_mask(N, max_entities),
             N              = N,
-            spans          = None, # We do not need to save the spans for masking as we do for words
+            spans          = spans,
             pos            = ent_pos,
         )
 
@@ -132,7 +132,7 @@ class BatchedExamples(Example):
             attention_mask  = tensor_collate("entities", "attention_mask", ent_limit),
             pos             = tensor_collate("entities", "pos", ent_limit),
             N               = ent_N,
-            spans           = None,
+            spans           = [e.entities.spans for e in ex] if ex[0].entities.spans is not None else None,
         )
 
     @classmethod

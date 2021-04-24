@@ -13,19 +13,31 @@ from torch.utils.data import DataLoader, RandomSampler
 from transformers import AutoTokenizer
 from danlp.datasets import DDT
 
-from daluke.data import Entities, BatchedExamples
+from daluke.data import Entities, Example, BatchedExamples, Words
 
 @dataclass
 class NEREntities(Entities):
     start_pos: torch.Tensor
     end_pos: torch.Tensor
 
+    @classmethod
+    def build_from_entities(cls, ent: Entities):
+        return cls(ent.ids, ent.attention_mask, ent.N, ent.spans, ent.pos)
+
+@dataclass
+class NERExample(Example):
+    """
+    A single data example for Named Entity Recognition
+    """
+    entities: NEREntities
+    text_num: int
+
 @dataclass
 class NERBatchedExamples(BatchedExamples):
     @classmethod
     def build(
         cls,
-        examples: list[Example],
+        examples: list[NERExample],
         device:   torch.device,
         cut_extra_padding: bool=True,
     ):
@@ -57,9 +69,9 @@ class NERDataset(ABC):
         self.max_entity_span = max_entity_span
 
         self.tokenizer = AutoTokenizer.from_pretrained(base_model)
+
         self.texts: list[list[str]] = None
         self.annotations: list[list[str]] = None
-        self.current_split: Split = None
 
     @abstractmethod
     def build(self, split: Split, batch_size: int) -> DataLoader:
@@ -78,9 +90,7 @@ class NERDataset(ABC):
             for j, end in enumerate(bounds):
                 start = bounds[j-1] if j else 0
                 word_ids = list(chain(*text_token_ids[start: end]))
-
                 entity_full_word_spans = self._segment_entities(annotation[start: end])
-
                 # Save the spans of entities as they are in the token list
                 cumlength = np.cumsum([len(t) for t in text_token_ids[start: end]])
                 entity_spans = list([cumlength[entstart]-1, cumlength[entend-1]] for entstart, entend in entity_full_word_spans)
@@ -88,6 +98,20 @@ class NERDataset(ABC):
                         f"Example {i}, sentence {j} contains an entity longer than limit of {self.max_entity_span} tokens. Text:\n{text}"
                 assert len(entity_spans) < self.max_entities,\
                         f"Example {i}, sentence {j} contains {len(entity_spans)} entities, but only {self.max_entities} are allowed. Text:\n{text}"
+
+                # We dont use the entity id: We just mark that it is an entity
+                entity_ids = [self.entity_vocab["[UNK]"]["id"] for _ in range(len(entity_spans))]
+
+                entities = Entities.build(entity_ids, spans, max_entitie=self.max_entities, max_entity_span=self.max_entity_span)
+                words = Words.build(word_ids, max_len=self.max_seq_length) # TODO: Give special ids from tokenizer
+
+
+    def collate(self, batch: list[tuple[int, NERExample]]]):
+        return NERBatchedExamples.build(
+            [ex for _, ex in batch],
+            self.device,
+            cut_extra_padding = True,
+        )
 
     def _segment_entities(self, annotation: list[str]) -> list[tuple[int]]:
         """
@@ -123,7 +147,7 @@ class NERDataset(ABC):
                 if sentence_cumlength[-1] + 2 > self.max_seq_length: # +2 for start and end tokens
                     # Use bool cast to int to find the number of words that give a sum under the limit.
                     split_candidate = (sentence_cumlength + 2 < self.max_seq_length).sum()
-                    # TODO: Split more intelligently: Check whether this split candidate breaks up an entity
+                    # TODO: Maybe split more intelligently: Check whether this split candidate breaks up an entity
                     bounds.insert(i, sent_start + split_candidate)
                     break
             else:
@@ -169,7 +193,6 @@ class DaNE(NERDataset):
     labels = ("LOC", "PER", "ORG", "MISC")
 
     def build(self, split: Split, batch_size: int) -> DataLoader:
-        self.current_split = split
         self.texts, self.annotations = DDT().load_as_simple_ner(predefined_splits=True)[split.value]
         # Sadly, we do not have access to where the DaNE sentences are divided into articles, so we let each sentence be an entire text.
         sentence_boundaries = [[len(s)] for s in self.texts]
