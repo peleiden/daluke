@@ -21,7 +21,7 @@ def load_from_archive(model: str) -> (list[dict], dict, dict):
     """
     if os.path.isdir(model):
         with open(os.path.join(model, VOCAB_FILE), "r") as vfile:
-            entity_vocab = [json.loads(l) for l in vfile.readlines()]
+            entity_vocab = json.load(vfile)
         with open(os.path.join(model, METADATA_FILE), "r") as metafile:
             metadata = json.load(metafile)
         with open(os.path.join(model, MODEL_OUT), "rb") as mfile:

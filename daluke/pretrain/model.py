@@ -48,6 +48,19 @@ class PretrainTaskDaLUKE(DaLUKE):
 
         return word_scores, ent_scores
 
+class EntityPreTrainingHeads(nn.Module):
+    def __init__(self, bert_config: BertConfig, ent_vocab_size: int, ent_embed_size: int):
+        super().__init__()
+        self.transform = nn.Linear(bert_config.hidden_size, ent_embed_size)
+        self.act = get_activation(bert_config.hidden_act)
+        self.lnorm = nn.LayerNorm(ent_embed_size, eps=bert_config.layer_norm_eps)
+
+        self.decode = nn.Linear(ent_embed_size, ent_vocab_size, bias=False)
+        self.bias = nn.Parameter(torch.zeros(ent_vocab_size))
+
+    def forward(self, hidden: torch.Tensor) -> torch.Tensor:
+        return self.decode(self.lnorm(self.act(self.transform(hidden)))) + self.bias
+
 class BertAttentionPretrainTaskDaLUKE(PretrainTaskDaLUKE):
     """
     DaLUKE using the normal attention from BERT instead of the Entity-Aware Attention.
@@ -82,19 +95,6 @@ class BertAttentionPretrainTaskDaLUKE(PretrainTaskDaLUKE):
         ent_scores = self.mask_entity_scorer(ent_hidden_masked).view(-1, self.esize)
 
         return word_scores, ent_scores
-
-class EntityPreTrainingHeads(nn.Module):
-    def __init__(self, bert_config: BertConfig, ent_vocab_size: int, ent_embed_size: int):
-        super().__init__()
-        self.transform = nn.Linear(bert_config.hidden_size, ent_embed_size)
-        self.act = get_activation(bert_config.hidden_act)
-        self.lnorm = nn.LayerNorm(ent_embed_size, eps=bert_config.layer_norm_eps)
-
-        self.decode = nn.Linear(ent_embed_size, ent_vocab_size, bias=False)
-        self.bias = nn.Parameter(torch.zeros(ent_vocab_size))
-
-    def forward(self, hidden: torch.Tensor) -> torch.Tensor:
-        return self.decode(self.lnorm(self.act(self.transform(hidden)))) + self.bias
 
 def load_base_model_weights(daluke: PretrainTaskDaLUKE, base_model: nn.Module) -> set:
     """

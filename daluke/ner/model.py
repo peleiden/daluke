@@ -16,36 +16,29 @@ from transformers.models.bert.modeling_bert import (
 
 from pelutils import log
 
+from daluke.model import DaLUKE
 from daluke.collect_modelfile import VOCAB_FILE, METADATA_FILE, MODEL_OUT
-from daluke.luke import EntityEmbeddings, EntityAwareEncoder
-from daluke.data import NERDataset
+from daluke.ner.data import NERDataset
 
+ENTITY_EMBEDDING_KEY = "module.entity_embeddings.ent_embeds.weight"
 
-#FIXME: Inherit from DaLUKE
-class DaLukeNER(nn.Module):
+class NERDaLUKE(DaLUKE):
     """
-    The BERT based model LUKE using Entity Aware Attention
+    Named Entity Recognition using the BERT based model LUKE using Entity Aware Attention
     """
-    def __init__(self, config_dict: dict, output_shape: int):
+    def __init__(self,
+        output_shape: int,
+        bert_config: BertConfig,
+        ent_vocab_size: int,
+        ent_embed_size: int,
+    ):
         """
         Build the architecture and setup the config
         """
-        super().__init__()
+        super().__init__(bert_config, ent_vocab_size, ent_embed_size)
         self.output_shape = output_shape
-        self.config = BertConfig(**config_dict)
-        self.config.entity_emb_size   = config_dict["entity_emb_size"]
-        self.config.entity_vocab_size = 2
-
-        # The general architecture
-        self.encoder    = EntityAwareEncoder(self.config)
-        self.pooler     = BertPooler(self.config)
-        self.embeddings = BertEmbeddings(self.config)
-        self.entity_embeddings = EntityEmbeddings(self.config)
-
-        # For NER
         self.drop = nn.Dropout(self.config.hidden_dropout_prob)
         self.classifier = nn.Linear(self.config.hidden_size*3, self.output_shape)
-        self.apply(self._init_weights)
 
     def forward(self,
         ent_start_pos: torch.tensor,
@@ -100,21 +93,6 @@ class DaLukeNER(nn.Module):
 
         return self.encoder(w_embeds, ent_embeds, att_mask)
 
-    def _init_weights(self, module: nn.Module):
-        #FIXME: Document and rewrite. Follows luke completely atm.
-        if isinstance(module, nn.Linear):
-            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
-        elif isinstance(module, nn.Embedding):
-            if module.embedding_dim == 1:  # embedding for bias parameters
-                module.weight.data.zero_()
-            else:
-                module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
-        elif isinstance(module, nn.LayerNorm):
-            module.bias.data.zero_()
-            module.weight.data.fill_(1.0)
-        if isinstance(module, nn.Linear) and module.bias is not None:
-            module.bias.data.zero_()
-
 def span_probs_to_preds(span_probs: dict[tuple[int], np.ndarray], seq_len: int, dataset: NERDataset) -> list[str]:
     positives = list()
     for span, probs in span_probs.items():
@@ -131,13 +109,11 @@ def span_probs_to_preds(span_probs: dict[tuple[int], np.ndarray], seq_len: int, 
             preds[span[0]] = f"B-{label}"
     return preds
 
-def mutate_for_ner(state_dict: dict, entity_vocab: list[dict]) -> dict:
+def mutate_for_ner(state_dict: dict, mask_id: int) -> dict:
     """
-    For NER, we don't need the entity vocabulary layer: Only entity and not entity are considered
+    For NER, we don't need the entire entity vocabulary layer: Only entity and not entity are considered
     """
-    ent_embed_key = "entity_embeddings.entity_embeddings.weight"
-    ent_embed = state_dict[ent_embed_key]
-    mask_id = next(e["id"] for e in entity_vocab if e["entities"][0][0] == "[MASK]")
+    ent_embed = state_dict[ENTITY_EMBEDDING_KEY]
     mask_embed = ent_embed[mask_id].unsqueeze(0)
-    state_dict[ent_embed_key] = torch.cat((ent_embed[:1], mask_embed))
+    state_dict[ENTITY_EMBEDDING_KEY] = torch.cat((ent_embed[:1], mask_embed))
     return state_dict

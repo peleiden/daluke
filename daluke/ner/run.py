@@ -5,13 +5,13 @@ import os
 import torch
 from pelutils import log, Levels, Parser
 
-import daluke.data as datasets
+import daluke.ner.data as datasets
 
-from daluke import cuda
 from daluke.collect_modelfile import OUT_FILE as collect_out
-from daluke.model import load_from_archive, save_to_archive, DaLukeNER, mutate_for_ner
-from daluke.train import TrainNER
-from daluke.data import NERDataset, Split
+from daluke.serialize import load_from_archive, save_to_archive
+from daluke.ner.model import NERDaLUKE, mutate_for_ner
+from daluke.ner.training import TrainNER
+from daluke.ner.data import NERDataset, Split
 
 OUT_FILE = "daluke_ner.tar.gz"
 
@@ -23,8 +23,6 @@ ARGUMENTS = {
     "lr":              {"default": 5e-5, "type": float},
     "epochs":          {"default": 5, "type": int},
     "batch-size":      {"default": 2, "type": int},
-    "adam-b1":         {"default": 0.9, "type": float},
-    "adam-b2":         {"default": 0.98, "type": float},
     "warmup-prop":     {"default": 0.06, "type": float},
     "grad-accumulate": {"default": 2, "type": int},
     "weight-decay":    {"default": 0.01, "type": float},
@@ -35,28 +33,33 @@ ARGUMENTS = {
 }
 
 def run_experiment(args: dict[str, str]):
-    device = torch.device("cpu") if args["cpu"] else cuda
+    device = torch.device("cpu") if args["cpu"] or not torch.cuda.is_available() else torch.device("cuda")
     entity_vocab, metadata, state_dict = load_from_archive(args["model"])
-    state_dict = mutate_for_ner(state_dict, entity_vocab)
+    state_dict = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"])
 
     log.debug("Loading dataset ...")
     dataset = getattr(datasets, args["dataset"])
-    dataset: NERDataset = dataset()
+    dataset: NERDataset = dataset(
+        entity_vocab,
+        base_model      = metadata["base-model"],
+        max_seq_length  = metadata["max-seq-length"],
+        max_entities    = metadata["max-entities"],
+        max_entity_span = metadata["max-entity-span"],
+    )
     dataloader = dataset.build(Split.TRAIN, args["batch_size"])
 
     log.debug("Loading model ...")
-    model = DaLukeNER(metadata["model_config"], output_shape=len(dataset.all_labels))
+    model = NERDaLUKE(metadata["model_config"], output_shape=len(dataset.all_labels))
     model.load_state_dict(state_dict, strict=False)
     model.to(device)
 
     log(f"Starting training of DaLUKE for NER on {args['dataset']}")
     training = TrainNER(model, dataloader, args["epochs"],
+        device          = device,
         grad_accumulate = args["grad_accumulate"],
         lr              = args["lr"],
-        adam_betas      = (args["adam_b1"], args["adam_b2"]),
         warmup_prop     = args["warmup_prop"],
         weight_decay    = args["weight_decay"],
-        device          = device,
     )
     log.debug(training.model)
     log.debug(training.scheduler)

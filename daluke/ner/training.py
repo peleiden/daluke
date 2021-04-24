@@ -7,8 +7,6 @@ from transformers import AdamW, get_linear_schedule_with_warmup
 
 from pelutils import log, DataStorage
 
-from daluke import cuda
-
 @dataclass
 class TrainResults(DataStorage):
     losses: list
@@ -18,15 +16,14 @@ class TrainNER:
     no_decay = {"bias", "LayerNorm.weight"}
 
     def __init__(self,
-        model: nn.Module,
-        dataloader: torch.utils.data.DataLoader,
-        epochs: int,
-        grad_accumulate: int = 2,
-        lr: float = 5e-5,
-        adam_betas: tuple[float] = (0.9, 0.98),
-        warmup_prop: float = 0.06,
-        weight_decay: float = 0.01,
-        device: torch.device = cuda,
+            model: nn.Module,
+            dataloader: torch.utils.data.DataLoader,
+            device: torch.device,
+            epochs: int,
+            grad_accumulate: int = 2,
+            lr: float = 5e-5,
+            warmup_prop: float = 0.06,
+            weight_decay: float = 0.01,
         ):
         self.model = model
         self.device = device
@@ -39,7 +36,6 @@ class TrainNER:
             [{"params": self._get_optimizer_params(params, do_decay=True), "weight_decay": weight_decay},
              {"params": self._get_optimizer_params(params, do_decay=False), "weight_decay": 0.0}],
             lr           = lr,
-            betas        = adam_betas,
         )
         # Create LR scheduler
         self.scheduler = get_linear_schedule_with_warmup(self.optimizer, int(warmup_prop * self.num_updates), self.num_updates)
