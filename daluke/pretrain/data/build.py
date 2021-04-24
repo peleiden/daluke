@@ -65,7 +65,7 @@ class DatasetBuilder:
         ]
 
     def _tokenize(self, text: str, paragraph_text: str, idx: int) -> list[str]:
-        text = re.sub(r"\s+", " ", text).rstrip()
+        text = re.sub(r"\s+", " ", text).rstrip().lower()
         if not text:
             return []
         if isinstance(self.tokenizer, RobertaTokenizer):  # TODO: Is this even necessary?

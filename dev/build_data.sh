@@ -22,6 +22,8 @@ python3 daluke/pretrain/data/preprocess.py $DATA_PATH/../dawiki-20210301-pages-a
 
 echo "BUILD DUMP DATABASE"
 cd $LUKE
+rm -f $DATA_PATH/../$DUMP_FILE
+rm -f $DATA_PATH/../$DUMP_FILE-lock
 python3 -m luke.cli build-dump-db\
     $DATA_PATH/../dawiki-20210301-pages-articles.xml.$PREPROCESS.bz2\
     $DATA_PATH/../$DUMP_FILE

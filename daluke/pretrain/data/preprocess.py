@@ -1,6 +1,5 @@
 import os
 import bz2
-import re as reee
 from typing import Generator
 
 import click
@@ -93,11 +92,9 @@ def _get_lineblocks(filepath: str) -> Generator:
             except StopIteration:
                 break
             decoded = line.decode("utf8")
-            # Extract title and make sure it is lower cased
-            if decoded.strip().startswith("<title>") and decoded.strip().endswith("</title>"):
-                decoded = decoded.lower()
-                title = decoded.strip()[7:-8]
             current_lines.append(decoded)
+            if decoded.strip().startswith("<title>") and decoded.strip().endswith("</title>"):
+                title = decoded.strip()[7:-8]
             if decoded.strip().startswith("<text"):
                 # Yield non-text
                 yield False, "".join(current_lines[:-1]), title
@@ -112,11 +109,6 @@ def _get_lineblocks(filepath: str) -> Generator:
                     decoded = next(xmlfile).decode("utf8")
                 current_lines = list()
         yield False, "".join(current_lines), None
-
-def _replace_bytes(tag: str, nbytes: int) -> str:
-    bytes_index = tag.index("bytes=\"")
-    end_index = tag.index("\"", bytes_index+7)
-    return tag[:bytes_index+7] + str(nbytes) + tag[end_index:]
 
 #FIXME: Remove click
 @click.command()
@@ -140,8 +132,7 @@ def preprocess(wikidownload: str, func: str):
                 text_end = -len("</text>\n")
                 start_tag = text[:text_start].encode()
                 end_tag = text[text_end:].encode()
-                text = func(text[text_start:text_end].lower(), title.lower()).encode()
-                # start_tag = _replace_bytes(start_tag, len(text)).encode()
+                text = func(text[text_start:text_end], title).encode()
                 text = start_tag + text + end_tag
             else:
                 text = text.encode()
