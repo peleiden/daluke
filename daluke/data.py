@@ -137,7 +137,7 @@ class BatchedExamples(Example):
 
     @classmethod
     def build(cls, ex: list[Example], device: torch.device, cut_extra_padding: bool=True):
-        return cls(*cls.stack(ex, device=device, cut=cut_extra_padding))
+        return cls(*cls.collate(ex, device=device, cut=cut_extra_padding))
 
 def get_special_ids(tokenizer: AutoTokenizer) -> (int, int, int):
     """ Returns seperator id, close id and pad id """

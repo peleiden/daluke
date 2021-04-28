@@ -15,34 +15,34 @@ from danlp.datasets import DDT
 
 from daluke.data import Entities, Example, BatchedExamples, Words
 
-@dataclass
-class NEREntities(Entities):
-    start_pos: torch.Tensor
-    end_pos: torch.Tensor
+# @dataclass
+# class NEREntities(Entities):
+#     start_pos: torch.Tensor
+#     end_pos: torch.Tensor
 
-    @classmethod
-    def build_from_entities(cls, ent: Entities):
-        return cls(ent.ids, ent.attention_mask, ent.N, ent.spans, ent.pos)
+#     @classmethod
+#     def build_from_entities(cls, ent: Entities):
+#         return cls(ent.ids, ent.attention_mask, ent.N, ent.spans, ent.pos)
 
-@dataclass
-class NERExample(Example):
-    """
-    A single data example for Named Entity Recognition
-    """
-    entities: NEREntities
-    text_num: int
+# @dataclass
+# class NERExample(Example):
+#     """
+#     A single data example for Named Entity Recognition
+#     """
+#     entities: NEREntities
+#     text_num: int
 
-@dataclass
-class NERBatchedExamples(BatchedExamples):
-    @classmethod
-    def build(
-        cls,
-        examples: list[NERExample],
-        device:   torch.device,
-        cut_extra_padding: bool=True,
-    ):
-        words, entities = cls.collate(examples, device=device, cut=cut_extra_padding)
-        return cls(words, entities, word_mask_labels, word_mask, ent_mask_labels, ent_mask)
+# @dataclass
+# class NERBatchedExamples(BatchedExamples):
+#     @classmethod
+#     def build(
+#         cls,
+#         examples: list[NERExample],
+#         device:   torch.device,
+#         cut_extra_padding: bool=True,
+#     ):
+#         words, entities = cls.collate(examples, device=device, cut=cut_extra_padding)
+#         return cls(words, entities, word_mask_labels, word_mask, ent_mask_labels, ent_mask)
 
 class Split(IntEnum):
     TRAIN = 0
@@ -62,7 +62,9 @@ class NERDataset(ABC):
             max_seq_length: int,
             max_entities: int,
             max_entity_span: int,
+            device: torch.device,
         ):
+        self.device = device
         self.entity_vocab = entity_vocab
         self.max_seq_length = max_seq_length
         self.max_entities = max_entities
@@ -83,6 +85,7 @@ class NERDataset(ABC):
         return L + list(self.labels)
 
     def _build_features(self, sent_bounds: list[list[int]]) -> list[dict[str, Any]]:
+        examples = list()
         for i, (text, annotation, bounds) in enumerate(zip(self.texts, self.annotations, sent_bounds)):
             text_token_ids: list[list[int]] = self.tokenizer(text, add_special_tokens=False)["input_ids"]
             # We might have to split some sentences to respect the maximum sentence length
@@ -99,15 +102,30 @@ class NERDataset(ABC):
                 assert len(entity_spans) < self.max_entities,\
                         f"Example {i}, sentence {j} contains {len(entity_spans)} entities, but only {self.max_entities} are allowed. Text:\n{text}"
 
-                # We dont use the entity id: We just mark that it is an entity
+                # We dont use the entity id: We just mark that it *is* an entity
                 entity_ids = [self.entity_vocab["[UNK]"]["id"] for _ in range(len(entity_spans))]
 
-                entities = Entities.build(entity_ids, spans, max_entitie=self.max_entities, max_entity_span=self.max_entity_span)
-                words = Words.build(word_ids, max_len=self.max_seq_length) # TODO: Give special ids from tokenizer
+                examples.append(
+                    Example(
+                        words = Words.build(
+                            torch.IntTensor(word_ids),
+                            max_len = self.max_seq_length
+                            # TODO: Give special ids from tokenizer
+                        ),
+                        entities = Entities.build(
+                            torch.IntTensor(entity_ids),
+                            entity_spans,
+                            max_entities    = self.max_entities,
+                            max_entity_span = self.max_entity_span
+                        )
+                    )
+                )
+        return examples
 
 
-    def collate(self, batch: list[tuple[int, NERExample]]]):
-        return NERBatchedExamples.build(
+
+    def collate(self, batch: list[tuple[int, NERExample]]):
+        return BatchedExamples.build(
             [ex for _, ex in batch],
             self.device,
             cut_extra_padding = True,
@@ -171,6 +189,14 @@ class NERDataset(ABC):
         #         for f_obj in feature_objects
         # ]
 
+    def _collate(self, batch: list[tuple[int, Example]]) -> BatchedExamples:
+        return BatchedExamples.build(
+            [ex for _, ex in batch],
+            self.device,
+            cut_extra_padding = True,
+        )
+
+
     # def _collate(self, batch: Iterator[tuple[int, dict[str, Any]]]):
     #     """
     #     Collect dataset examples into tensors and pad them for sequence classification
@@ -196,8 +222,6 @@ class DaNE(NERDataset):
         self.texts, self.annotations = DDT().load_as_simple_ner(predefined_splits=True)[split.value]
         # Sadly, we do not have access to where the DaNE sentences are divided into articles, so we let each sentence be an entire text.
         sentence_boundaries = [[len(s)] for s in self.texts]
-
         self.features = self._build_features(sentence_boundaries)
-        raise NotImplementedError
-        sampler = RandomSampler(self.features) if split == split.TRAIN else None
-        return DataLoader(list(enumerate(self.features)), batch_size=batch_size, collate_fn=self._collate, sampler=sampler)
+        self.features = self.features[:10]
+        return DataLoader(list(enumerate(self.features)), batch_size=batch_size, collate_fn=self.collate, shuffle=split==split.TRAIN)

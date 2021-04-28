@@ -20,7 +20,6 @@ class TrainNER:
             dataloader: torch.utils.data.DataLoader,
             device: torch.device,
             epochs: int,
-            grad_accumulate: int = 2,
             lr: float = 5e-5,
             warmup_prop: float = 0.06,
             weight_decay: float = 0.01,
@@ -28,8 +27,7 @@ class TrainNER:
         self.model = model
         self.device = device
         self.dataloader = dataloader
-        self.grad_accumulate = grad_accumulate
-        self.num_updates = int(epochs * (len(self.dataloader) // self.grad_accumulate))
+        self.epochs = epochs
         # Create optimizer
         params = list(model.named_parameters())
         self.optimizer = AdamW(
@@ -38,31 +36,28 @@ class TrainNER:
             lr           = lr,
         )
         # Create LR scheduler
-        self.scheduler = get_linear_schedule_with_warmup(self.optimizer, int(warmup_prop * self.num_updates), self.num_updates)
-        self.loss = nn.CrossEntropyLoss(ignore_index=-1)
+        num_updates = epochs * len(self.dataloader)
+        self.scheduler = get_linear_schedule_with_warmup(self.optimizer, int(warmup_prop * num_updates), num_updates)
+        self.criterion = nn.CrossEntropyLoss(ignore_index=-1)
 
     def run(self):
         self.model.train()
-        updates, epoch = 0, 0
         losses = list()
-        while updates < self.num_updates:
-            for step, batch in enumerate(self.dataloader):
-                inputs  = {key: val.to(self.device) for key, val in batch.items()}
-                truth   = inputs.pop("labels").view(-1)
-                outputs = self.model(**inputs)
-                loss    = self.loss(outputs.view(-1, self.model.output_shape), truth)
-                loss   /= self.grad_accumulate
+        for i in range(self.epochs):
+            for j, batch in enumerate(self.dataloader):
+                # inputs  = {key: val.to(self.device) for key, val in batch.items()}
+                # truth   = inputs.pop("labels").view(-1)
+                scores = self.model(batch)
+                loss   = self.criterion(scores.view(-1, self.model.output_shape), truth)
                 loss.backward()
-                if not (step + 1) % self.grad_accumulate:
-                    self.optimizer.step()
-                    self.scheduler.step()
-                    self.model.zero_grad()
 
-                    losses.append(loss.item())
-                    updates += 1
-                    if updates == self.num_updates: break
-            epoch += 1
-            log.debug(f"Epoch {epoch}, updates: {updates}/{self.num_updates}. Loss: {loss.item()}.")
+                self.optimizer.step()
+                self.scheduler.step()
+                self.model.zero_grad()
+
+                losses.append(loss.item())
+            log.debug(f"Epoch {i}/{self.epochs}, batch: {j}. Loss: {loss.item()}.")
+
         return TrainResults(
             losses = losses,
         )

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 import torch
+from transformers import AutoConfig
 from pelutils import log, Levels, Parser
 
 import daluke.ner.data as datasets
@@ -24,7 +25,6 @@ ARGUMENTS = {
     "epochs":          {"default": 5, "type": int},
     "batch-size":      {"default": 2, "type": int},
     "warmup-prop":     {"default": 0.06, "type": float},
-    "grad-accumulate": {"default": 2, "type": int},
     "weight-decay":    {"default": 0.01, "type": float},
 
     "quieter": {"help": "Don't show debug logging", "action": "store_true"},
@@ -35,7 +35,7 @@ ARGUMENTS = {
 def run_experiment(args: dict[str, str]):
     device = torch.device("cpu") if args["cpu"] or not torch.cuda.is_available() else torch.device("cuda")
     entity_vocab, metadata, state_dict = load_from_archive(args["model"])
-    state_dict = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"])
+    state_dict, ent_embed_size = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"])
 
     log.debug("Loading dataset ...")
     dataset = getattr(datasets, args["dataset"])
@@ -45,18 +45,27 @@ def run_experiment(args: dict[str, str]):
         max_seq_length  = metadata["max-seq-length"],
         max_entities    = metadata["max-entities"],
         max_entity_span = metadata["max-entity-span"],
+        device          = device,
     )
     dataloader = dataset.build(Split.TRAIN, args["batch_size"])
 
     log.debug("Loading model ...")
-    model = NERDaLUKE(metadata["model_config"], output_shape=len(dataset.all_labels))
+    bert_config = AutoConfig.from_pretrained(metadata["base-model"])
+    model = NERDaLUKE(
+        len(dataset.all_labels),
+        bert_config,
+        ent_vocab_size = 2, # Same reason as mutate_for_ner
+        ent_embed_size = ent_embed_size,
+    )
     model.load_state_dict(state_dict, strict=False)
     model.to(device)
 
     log(f"Starting training of DaLUKE for NER on {args['dataset']}")
-    training = TrainNER(model, dataloader, args["epochs"],
+    training = TrainNER(
+        model,
+        dataloader,
         device          = device,
-        grad_accumulate = args["grad_accumulate"],
+        epochs          = args["epochs"],
         lr              = args["lr"],
         warmup_prop     = args["warmup_prop"],
         weight_decay    = args["weight_decay"],
