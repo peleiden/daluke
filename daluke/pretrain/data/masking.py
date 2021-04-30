@@ -73,9 +73,4 @@ def mask_word_batch(
     w.ids[mask & ~unmask_mask] = mask_id # Take unmasking into account
     w.ids[randword_mask] = torch.randint_like(w.ids[randword_mask], *word_id_range)
 
-    # TODO: Remove this check when we are convinced that this does not happen, or we resolve it n some way
-    # Almost ready to be removed - now we just check that it works with new positions
-    for wid, m in zip(w.ids, mask):
-        if torch.all(~m):
-            raise RuntimeError(f"No word could be selected for masking for example {wid}")
     return labels, mask

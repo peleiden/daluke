@@ -68,7 +68,7 @@ class DatasetBuilder:
         text = re.sub(r"\s+", " ", text).rstrip().lower()
         if not text:
             return []
-        if isinstance(self.tokenizer, RobertaTokenizer):  # TODO: Is this even necessary?
+        if isinstance(self.tokenizer, RobertaTokenizer):
             tokens = self.tokenizer.tokenize(
                 text,
                 add_prefix_space=idx == 0 or text.startswith(" ") or paragraph_text[idx-1] == " ",
