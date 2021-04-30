@@ -69,7 +69,7 @@ class Entities(Words):
     def build(
         cls,
         ids: torch.Tensor,
-        spans: list[tuple],
+        spans: list[tuple[int, int]],
         max_entities: int,
         max_entity_span: int,
     ):
