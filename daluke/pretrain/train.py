@@ -347,6 +347,7 @@ def train(
 
             res.runtime[i, j] = TT.end_profile()
 
+        TT.end_profile()
         log(
             f"Completed epoch {i:2} / {params.epochs-1}",
             f"Mean loss (total, word, entity): {res.losses[i].mean():10.5f}, {res.w_losses[i].mean():10.5f}, {res.e_losses[i].mean():10.5f}",
@@ -360,7 +361,6 @@ def train(
             paths = save_training(location, params, model, res, optimizer, scheduler)
             log.debug("Saved progress to", *paths)
 
-        TT.end_profile()
 
     log.debug("Time distribution", TT)
 
