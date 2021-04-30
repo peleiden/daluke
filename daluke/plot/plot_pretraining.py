@@ -41,10 +41,10 @@ def loss_plot(location: str):
 
     # Accuracy axis
     ax2 = ax1.twinx()
-    ax2.plot(x, 100*res.w_accuracies.ravel(), color=tab_colours[3], label="Masked word accuracy",   lw=lw, ls="-.")
-    ax2.plot(x, 100*res.e_accuracies.ravel(), color=tab_colours[4], label="Masked entity accuracy", lw=lw, ls="-.")
-    ax2.scatter(epochs, 100*res.w_accuracies[:, 0], s=dot_size, color=tab_colours[3])
-    ax2.scatter(epochs, 100*res.e_accuracies[:, 0], s=dot_size, color=tab_colours[4])
+    ax2.plot(x, 100*res.w_accuracies[..., 0].ravel(), color=tab_colours[3], label="Masked word accuracy",   lw=lw, ls="-.")
+    ax2.plot(x, 100*res.e_accuracies[..., 0].ravel(), color=tab_colours[4], label="Masked entity accuracy", lw=lw, ls="-.")
+    ax2.scatter(epochs, 100*res.w_accuracies[:, 0, 0], s=dot_size, color=tab_colours[3])
+    ax2.scatter(epochs, 100*res.e_accuracies[:, 0, 0], s=dot_size, color=tab_colours[4])
     ax2.set_ylim([0, 110])
     ax2.set_ylabel("Accuracy [%]")
 
@@ -69,14 +69,13 @@ def runtime_plot(location: str):
 
     # Accuracy axis
     ax2 = ax1.twinx()
-    ax2.plot(x, [0, *res.param_diff.ravel()], color=tab_colours[1], label="Distance to original parameters")
-    ax2.set_ylabel("Accuracy [%]")
+    ax2.plot(x, [0, *(res.param_diff_1 / res.param_diff_2).ravel()**2], color=tab_colours[1], label="Est. big param. changes")
+    ax2.set_ylabel("Estimated number of big parameter changes")
 
     h1, l1 = ax1.get_legend_handles_labels()
     h2, l2 = ax2.get_legend_handles_labels()
     ax1.legend(h1+h2, l1+l2)
     plt.title("Runtime and parameter change")
-    plt.legend()
     plt.grid()
     _save(location, "runtime.png")
 

@@ -7,9 +7,8 @@ import torch
 from tqdm import tqdm
 from transformers import AutoTokenizer
 
-from pelutils import log
+from pelutils import log, TT
 
-from .. import TT
 from daluke.data import Example, Words, Entities, get_special_ids, Words, Entities
 from daluke.pretrain.data import load_jsonl
 from daluke.pretrain.data.build import DatasetBuilder

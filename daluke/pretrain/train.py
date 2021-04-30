@@ -16,16 +16,14 @@ from torch.utils.data.distributed import DistributedSampler
 import numpy as np
 
 from transformers import AutoConfig, AutoModelForPreTraining, AdamW, get_linear_schedule_with_warmup
-from pelutils import DataStorage, thousand_seps
+from pelutils import DataStorage, thousand_seps, TT
 from pelutils.logger import log, Levels
 from pelutils.ds import reset_cuda
 
-from . import TT
 from .data import DataLoader, load_entity_vocab
 from .data.build import DatasetBuilder
 from .model import PretrainTaskDaLUKE, BertAttentionPretrainTaskDaLUKE, load_base_model_weights
-from .analysis import TrainResults
-from .eval import accuracy_from_preds
+from .analysis import TrainResults, top_k_accuracy
 
 PORT = "3090"  # Are we sure this port is in stock?
 NO_DECAY =  { "bias", "LayerNorm.weight" }
@@ -164,17 +162,20 @@ def train(
     if resume_from:
         # Update folders and load results from last training
         TrainResults.subfolder = resume_from
-        Hyperparams.subfolder = resume_from
+        Hyperparams.subfolder  = resume_from
         res = TrainResults.load(location)
     else:
+        top_k = [1, 3, 5, 10]
         res = TrainResults(
             losses       = np.zeros((0, num_updates_epoch)),
             w_losses     = np.zeros((0, num_updates_epoch)),
             e_losses     = np.zeros((0, num_updates_epoch)),
-            e_accuracies = np.zeros((0, num_updates_epoch)),
-            w_accuracies = np.zeros((0, num_updates_epoch)),
+            top_k        = top_k,
+            w_accuracies = np.zeros((0, num_updates_epoch, len(top_k))),
+            e_accuracies = np.zeros((0, num_updates_epoch, len(top_k))),
             orig_params  = None,  # Set later
-            param_diff   = np.zeros((0, num_updates_epoch)),
+            param_diff_1 = np.zeros((0, num_updates_epoch)),
+            param_diff_2 = np.zeros((0, num_updates_epoch)),
             runtime      = np.zeros((0, num_updates_epoch)),
             epoch        = 0,
         )
@@ -195,7 +196,7 @@ def train(
     ).to(device)
     # TODO: Maybe init fresh model weights manually (they do)
     # Load parameters from base model
-    with TT.profile("Loading base model parameters from %s" % metadata["base-model"]):
+    with TT.profile("Loading base model parameters"):
         base_model = AutoModelForPreTraining.from_pretrained(metadata["base-model"])
         new_weights = load_base_model_weights(model, base_model)
     # Initialize self-attention query matrices to BERT word query matrix
@@ -218,13 +219,7 @@ def train(
     log("Unfixing base model params after %i epochs" % unfix_base_model_params_epoch)
 
     if is_distributed:
-        model = DDP(
-            model,
-            device_ids=[rank],
-            # TODO: Understand reasoning behind following two flags that are copied from LUKE
-            broadcast_buffers=False,
-            # find_unused_parameters=True,
-        )
+        model = DDP(model, device_ids=[rank])
 
     if resume_from:
         mpath = fpath(MODEL_OUT.format(i=res.epoch))
@@ -266,9 +261,10 @@ def train(
         res.losses       = np.vstack((res.losses,       np.zeros(num_updates_epoch)))
         res.w_losses     = np.vstack((res.w_losses,     np.zeros(num_updates_epoch)))
         res.e_losses     = np.vstack((res.e_losses,     np.zeros(num_updates_epoch)))
-        res.w_accuracies = np.vstack((res.w_accuracies, np.zeros(num_updates_epoch)))
-        res.e_accuracies = np.vstack((res.e_accuracies, np.zeros(num_updates_epoch)))
-        res.param_diff   = np.vstack((res.param_diff,   np.zeros(num_updates_epoch)))
+        res.w_accuracies = np.concatenate((res.w_accuracies, np.zeros((1, num_updates_epoch, len(res.top_k)))))
+        res.e_accuracies = np.concatenate((res.e_accuracies, np.zeros((1, num_updates_epoch, len(res.top_k)))))
+        res.param_diff_1 = np.vstack((res.param_diff_1, np.zeros(num_updates_epoch)))
+        res.param_diff_2 = np.vstack((res.param_diff_2, np.zeros(num_updates_epoch)))
         res.runtime      = np.vstack((res.runtime,      np.zeros(num_updates_epoch)))
 
         batch_iter = iter(loader)
@@ -277,17 +273,17 @@ def train(
         for j in range(num_updates_epoch):
             TT.profile("Parameter update")
 
-            # Losses, accuracies, and grad changes for each parameter update
+            # Losses and accuracies for this parameter update
             t_loss, w_loss, e_loss = 0, 0, 0
-            w_accuracies, e_accuracies = list(), list()
-            param_diff = list()
+            w_accuracies = np.zeros((grad_accumulation_steps, len(res.top_k)))
+            e_accuracies = np.zeros((grad_accumulation_steps, len(res.top_k)))
 
             # Loop over enough batches to make a parameter update
             for k in range(grad_accumulation_steps):
-                TT.profile("Forward pass")
+                TT.profile("Sub-batch")
                 batch = next(batch_iter)
 
-                TT.profile("Gradients")
+                TT.profile("FP and gradients")
                 with amp.autocast() if params.fp16 else contextlib.ExitStack():
                     word_preds, ent_preds = model(batch)
                     # Compute and backpropagate loss
@@ -310,13 +306,20 @@ def train(
 
                 # Save accuracy for statistics
                 with TT.profile("Accuracy"):
-                    w_accuracy, e_accuracy = accuracy_from_preds(word_preds, ent_preds, batch)
-                    w_accuracies.append(w_accuracy)
-                    e_accuracies.append(e_accuracy)
+                    w_accuracies[k] = top_k_accuracy(
+                        batch.word_mask_labels,
+                        word_preds,
+                        res.top_k,
+                    )
+                    e_accuracies[k] = top_k_accuracy(
+                        batch.ent_mask_labels,
+                        ent_preds,
+                        res.top_k,
+                    )
 
                 log.debug(
                     f"    Forward pass {k:5} / {grad_accumulation_steps-1} (ep. {i:2}, pu. {j:3}). Loss: {loss.item():9.5f}. "
-                    f"Word, entity accuracy: {100*w_accuracy:7.3f} %, {100*e_accuracy:7.3f}"
+                    f"Word, entity accuracy: {100*w_accuracies[k, 0]:7.3f} %, {100*e_accuracies[k, 0]:7.3f}"
                 )
                 TT.end_profile()
 
@@ -329,20 +332,21 @@ def train(
                     optimizer.step()
                 scheduler.step()
                 model.zero_grad()
+
             # Calculate how much gradient has changed
-            with TT.profile("Gradient diff"):
-                param_diff.append(np.sqrt(np.sum((model.all_params()-res.orig_params)**2)))
+            with TT.profile("Parameter changes"):
+                res.param_diff_1[i, j] = np.linalg.norm(model.all_params()-res.orig_params, ord=1)
+                res.param_diff_2[i, j] = np.linalg.norm(model.all_params()-res.orig_params, ord=2)
 
             res.losses[i, j] = t_loss
             res.w_losses[i, j] = w_loss
             res.e_losses[i, j] = e_loss
-            res.w_accuracies[i, j] = np.mean(w_accuracies)
-            res.e_accuracies[i, j] = np.mean(e_accuracies)
-            res.param_diff[i, j] = np.mean(param_diff)
+            res.w_accuracies[i, j] = w_accuracies.mean(axis=0)
+            res.e_accuracies[i, j] = e_accuracies.mean(axis=0)
             log.debug(
                 "Performed gradient update %i / %i" % (j, num_updates_epoch-1),
                 f"Loss (total, word, entity): {t_loss:10.5f}, {w_loss:10.5f}, {e_loss:10.5f}",
-                f"Accuracy (word, entity):     {100*res.w_accuracies[i, j]:7.3f} %,  {100*res.e_accuracies[i, j]:7.3f} %",
+                f"Accuracy (word, entity):     {100*res.w_accuracies[i, j, 0]:7.3f} %,  {100*res.e_accuracies[i, j, 0]:7.3f} %",
             )
 
             res.runtime[i, j] = TT.end_profile()
@@ -351,7 +355,7 @@ def train(
         log(
             f"Completed epoch {i:2} / {params.epochs-1}",
             f"Mean loss (total, word, entity): {res.losses[i].mean():10.5f}, {res.w_losses[i].mean():10.5f}, {res.e_losses[i].mean():10.5f}",
-            f"Mean accuracy (word, entity):     {100*res.w_accuracies[i].mean():7.3f} %,  {100*res.e_accuracies[i].mean():7.3f} %",
+            f"Mean accuracy (word, entity):     {100*res.w_accuracies[i, :, 0].mean():7.3f} %,  {100*res.e_accuracies[i, :, 0].mean():7.3f} %",
             "Runtime: %s" % thousand_seps(res.runtime[-1].sum()),
             "Time distribution so far",
             TT,
@@ -360,7 +364,6 @@ def train(
         if is_master and (i+1) % save_every == 0:
             paths = save_training(location, params, model, res, optimizer, scheduler)
             log.debug("Saved progress to", *paths)
-
 
     log.debug("Time distribution", TT)
 

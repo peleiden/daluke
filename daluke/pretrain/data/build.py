@@ -7,14 +7,13 @@ import random
 import re
 from collections import defaultdict
 
-from pelutils import log, TickTock
+from pelutils import log, TT
 from tqdm import tqdm
 from transformers import AutoTokenizer, XLMRobertaTokenizer, RobertaTokenizer
 from wikipedia2vec.dump_db import DumpDB
 
 from daluke.pretrain.data import ICUSentenceTokenizer, load_entity_vocab, calculate_spans
 
-TT = TickTock()
 
 class DatasetBuilder:
 
