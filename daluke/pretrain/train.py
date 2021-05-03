@@ -202,7 +202,7 @@ def train(
     # Initialize self-attention query matrices to BERT word query matrix
     model.init_queries()
     if not resume_from:
-        res.orig_params = model.all_params()
+        res.orig_params = model.all_params().cpu()
     log("Pretraining model initialized with %s parameters" % thousand_seps(len(model)))
 
     model_params = list(model.named_parameters())
@@ -334,9 +334,11 @@ def train(
                 model.zero_grad()
 
             # Calculate how much gradient has changed
-            with TT.profile("Parameter changes"):
-                res.param_diff_1[i, j] = np.linalg.norm(model.all_params()-res.orig_params, ord=1)
-                res.param_diff_2[i, j] = np.linalg.norm(model.all_params()-res.orig_params, ord=2)
+            with TT.profile("Parameter changes"), torch.no_grad():
+                pars = res.orig_params.to(device)
+                res.param_diff_1[i, j] = torch.abs(model.all_params()-pars).sum().item()
+                res.param_diff_2[i, j] = torch.sqrt(torch.sum(model.all_params()-pars)**2).item()
+                del pars
 
             res.losses[i, j] = t_loss
             res.w_losses[i, j] = w_loss
