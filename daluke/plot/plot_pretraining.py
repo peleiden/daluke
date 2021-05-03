@@ -37,7 +37,7 @@ def loss_plot(location: str):
     ax1.scatter(epochs, res.w_losses[:, 0], s=dot_size, color=tab_colours[1])
     ax1.scatter(epochs, res.e_losses[:, 0], s=dot_size, color=tab_colours[2])
     ax1.set_ylim(bottom=0)
-    ax1.set_xlabel("Batches")
+    ax1.set_xlabel("Batch")
     ax1.set_ylabel("Loss")
 
     # Accuracy axis
@@ -97,18 +97,36 @@ def parameter_plot(location: str):
     plt.grid()
     _save(location, "parameters.png")
 
+def accuracy_plot(location: str):
+    res = TrainResults.load()
+
+    plt.figure(figsize=figsize_std)
+    for i, k in enumerate(res.top_k):
+        plt.plot(100*res.w_accuracies[..., i].ravel(), label="Words, $k=%i$" % k)
+    for i, k in enumerate(res.top_k):
+        plt.plot(100*res.e_accuracies[..., i].ravel(), label="Entities, $k=%i$" % k)
+    plt.ylim([0, 110])
+    plt.xlabel("Batch")
+    plt.ylabel("Accuracy [%]")
+    plt.title("Top-k accuracy")
+    plt.legend(loc=2)
+    plt.grid()
+
+    _save(location, "accuracy.png")
+
 @click.command()
 @click.argument("location")
 def make_pretraining_plots(location: str):
     log.configure(os.path.join(location, "plots", "plots.log"), "Pretraining plots")
     TrainResults.subfolder = location
-    Hyperparams.subfolder = location
     log("Loss plot")
     loss_plot(location)
     log("Runtime plot")
     runtime_plot(location)
     log("Parameter plot")
     parameter_plot(location)
+    log("Accuracy plot")
+    accuracy_plot(location)
 
 if __name__ == "__main__":
     with log.log_errors:
