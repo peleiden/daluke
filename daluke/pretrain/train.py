@@ -344,7 +344,7 @@ def train(
             res.w_accuracies[i, j] = w_accuracies.mean(axis=0)
             res.e_accuracies[i, j] = e_accuracies.mean(axis=0)
             log.debug(
-                "Performed gradient update %i / %i" % (j, num_updates_epoch-1),
+                "Performed parameter update %i / %i" % (j, num_updates_epoch-1),
                 f"Loss (total, word, entity): {t_loss:10.5f}, {w_loss:10.5f}, {e_loss:10.5f}",
                 f"Accuracy (word, entity):     {100*res.w_accuracies[i, j, 0]:7.3f} %,  {100*res.e_accuracies[i, j, 0]:7.3f} %",
             )

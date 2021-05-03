@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from daluke.pretrain.analysis import TrainResults
+from daluke.pretrain.train import Hyperparams
 from daluke.plot import setup_mpl
 setup_mpl()
 
@@ -60,34 +61,54 @@ def runtime_plot(location: str):
     runtime = res.runtime.ravel()
     x = np.arange(runtime.size+1)
 
+    plt.figure(figsize=figsize_std)
+    plt.plot(res.runtime.ravel())
+    plt.ylim(bottom=0)
+    plt.xlabel("Batch")
+    plt.ylabel("Runtime [s]")
+    plt.title("Runtime")
+    plt.grid()
+    _save(location, "runtime.png")
+
+def parameter_plot(location: str):
+    res = TrainResults.load()
+    norm1 = res.param_diff_1.ravel()
+    norm2 = res.param_diff_2.ravel()
+    D_big = (norm1 / norm2) ** 2
+
     fig, ax1 = plt.subplots(figsize=figsize_std)
 
-    ax1.plot(x[1:], runtime, color=tab_colours[0], label="Runtime")
+    ax1.plot(norm1, color=tab_colours[0], label="1-norm")
+    ax1.plot(norm2, color=tab_colours[1], label="2-norm")
     ax1.set_ylim(bottom=0)
-    ax1.set_xlabel("Batches")
-    ax1.set_ylabel("Runtime [s]")
+    ax1.set_xlabel("Batch")
+    ax1.set_ylabel("Distance to original parameters")
 
     # Accuracy axis
     ax2 = ax1.twinx()
-    ax2.plot(x, [0, *(res.param_diff_1 / res.param_diff_2).ravel()**2], color=tab_colours[1], label="Est. big param. changes")
+    ax2.plot(D_big, color=tab_colours[2], label=r"$D_{\operatorname{big}}$")
     ax2.set_ylabel("Estimated number of big parameter changes")
+    ax2.set_ylim(bottom=0)
 
     h1, l1 = ax1.get_legend_handles_labels()
     h2, l2 = ax2.get_legend_handles_labels()
     ax1.legend(h1+h2, l1+l2)
-    plt.title("Runtime and parameter change")
+    plt.title("Parameter changes")
     plt.grid()
-    _save(location, "runtime.png")
+    _save(location, "parameters.png")
 
 @click.command()
 @click.argument("location")
 def make_pretraining_plots(location: str):
     log.configure(os.path.join(location, "plots", "plots.log"), "Pretraining plots")
     TrainResults.subfolder = location
+    Hyperparams.subfolder = location
     log("Loss plot")
     loss_plot(location)
     log("Runtime plot")
     runtime_plot(location)
+    log("Parameter plot")
+    parameter_plot(location)
 
 if __name__ == "__main__":
     with log.log_errors:
