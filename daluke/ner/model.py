@@ -9,7 +9,7 @@ from transformers.models.bert.modeling_bert import BertConfig
 from daluke.model import DaLUKE
 from daluke.ner.data import NERDataset, NERBatchedExamples
 
-ENTITY_EMBEDDING_KEY = "module.entity_embeddings.ent_embeds.weight"
+ENTITY_EMBEDDING_KEY = "entity_embeddings.ent_embeds.weight"
 
 class NERDaLUKE(DaLUKE):
     """
