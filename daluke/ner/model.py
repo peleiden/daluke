@@ -1,24 +1,13 @@
 from __future__ import annotations
-import json
-import os
-import tarfile
-import tempfile
 
 import numpy as np
 import torch
 from torch import nn
-from transformers.models.bert.modeling_bert import (
-        BertEncoder,
-        BertPooler,
-        BertConfig,
-        BertEmbeddings
-)
+from transformers.models.bert.modeling_bert import BertConfig
 
-from pelutils import log
 
 from daluke.model import DaLUKE
-from daluke.collect_modelfile import VOCAB_FILE, METADATA_FILE, MODEL_OUT
-from daluke.ner.data import NERDataset
+from daluke.ner.data import NERDataset, NERBatchedExamples
 
 ENTITY_EMBEDDING_KEY = "module.entity_embeddings.ent_embeds.weight"
 
@@ -41,7 +30,7 @@ class NERDaLUKE(DaLUKE):
         self.drop = nn.Dropout(bert_config.hidden_dropout_prob)
         self.classifier = nn.Linear(bert_config.hidden_size*3, self.output_shape)
 
-    def forward(self, ex: BatchedExamples) -> torch.Tensor:
+    def forward(self, ex: NERBatchedExamples) -> torch.Tensor:
         """
         Classify NER by passing the word and entity id's through the encoder
         and running the linear classifier on the output
@@ -49,17 +38,15 @@ class NERDaLUKE(DaLUKE):
         # Forward pass through encoder, saving the embeddings of words and entitites
         word_hidden, ent_hidden = super().forward(ex)
 
-        entity_ends = ex.entities.pos.max(dim=2)
-        dummy_pos = ex.enties.pos.copy()
-        hid_w_size = hidden_state_w.size()[-1]
+        hid_w_size = word_hidden.size()[-1]
 
-        ent_start_pos = ent_start_pos.unsqueeze(-1).expand(-1, -1, hid_w_size)
-        ent_end_pos = ent_end_pos.unsqueeze(-1).expand(-1, -1, hid_w_size)
+        ent_start_pos = ex.entities.start_pos.unsqueeze(-1).expand(-1, -1, hid_w_size)
+        ent_end_pos = ex.entities.end_pos.unsqueeze(-1).expand(-1, -1, hid_w_size)
 
-        all_starts = torch.gather(hidden_state_w, -2, ent_start_pos)
-        all_ends = torch.gather(hidden_state_w, -2, ent_end_pos)
+        all_starts = torch.gather(word_hidden, -2, ent_start_pos)
+        all_ends = torch.gather(word_hidden, -2, ent_end_pos)
 
-        features = torch.cat([all_starts, all_ends, hidden_state_ent], dim=2)
+        features = torch.cat([all_starts, all_ends, ent_hidden], dim=2)
         features = self.drop(features)
         return self.classifier(features)
 

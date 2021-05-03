@@ -45,10 +45,8 @@ class TrainNER:
         losses = list()
         for i in range(self.epochs):
             for j, batch in enumerate(self.dataloader):
-                # inputs  = {key: val.to(self.device) for key, val in batch.items()}
-                # truth   = inputs.pop("labels").view(-1)
                 scores = self.model(batch)
-                loss   = self.criterion(scores.view(-1, self.model.output_shape), truth)
+                loss = self.criterion(scores.view(-1, self.model.output_shape), batch.entities.labels.view(-1))
                 loss.backward()
 
                 self.optimizer.step()
@@ -56,7 +54,7 @@ class TrainNER:
                 self.model.zero_grad()
 
                 losses.append(loss.item())
-            log.debug(f"Epoch {i}/{self.epochs}, batch: {j}. Loss: {loss.item()}.")
+                log.debug(f"Epoch {i}/{self.epochs}, batch: {j}. Loss: {loss.item():.5f}.")
 
         return TrainResults(
             losses = losses,

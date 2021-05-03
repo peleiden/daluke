@@ -1,15 +1,14 @@
 from __future__ import annotations
-import random
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from enum import IntEnum
-from typing import Iterator, Any
+from typing import Any
+import math
 from itertools import chain
 
 import numpy as np
 import torch
-from torch import nn
-from torch.utils.data import DataLoader, RandomSampler
+from torch.utils.data import DataLoader
 
 from transformers import AutoTokenizer
 from danlp.datasets import DDT
@@ -18,17 +17,26 @@ from daluke.data import Entities, Example, BatchedExamples, Words, get_special_i
 
 @dataclass
 class NEREntities(Entities):
-    start_pos: torch.Tensor
-    end_pos: torch.Tensor
-    labels: torch.Tensor
+    start_pos: torch.IntTensor
+    end_pos: torch.IntTensor
+    labels: torch.LongTensor # Must be long for criterion
     true_spans: list[tuple[int, int]]
 
     @classmethod
-    def build_from_entities(cls, ent: Entities, labels,true_spans: list[tuple[int, int]]):
-        breakpoint()
-        start_pos = NotImplementedError
-        end_pos = NotImplementedError
-        return cls(ent.ids, ent.attention_mask, ent.N, ent.spans, ent.pos, start_pos, end_pos, labels, true_spans)
+    def build_from_entities(cls, ent: Entities, labels: torch.LongTensor, true_spans: list[tuple[int, int]], max_entities: int):
+        # Add +1 for [CLS] to match the post processing done in entities.build
+        true_spans = [(s+1, e+1) for s, e in true_spans]
+
+        out_labels = torch.full((max_entities,), 0, dtype=torch.long)
+        out_labels[:len(labels)] = torch.LongTensor(labels)
+
+        # Have to be long tensors as we are working with indeces
+        start_pos = torch.full((max_entities,), 0, dtype=torch.long)
+        start_pos[:len(ent.spans)] = torch.LongTensor([s for s, _ in ent.spans])
+
+        end_pos = torch.full((max_entities,), 0, dtype=torch.long)
+        end_pos[:len(ent.spans)] = torch.LongTensor([e for _, e in ent.spans])
+        return cls(ent.ids, ent.attention_mask, ent.N, ent.spans, ent.pos, start_pos, end_pos, out_labels, true_spans)
 
 @dataclass
 class NERExample(Example):
@@ -40,6 +48,8 @@ class NERExample(Example):
 
 @dataclass
 class NERBatchedExamples(BatchedExamples):
+    text_num: list[int]
+
     @classmethod
     def build(
         cls,
@@ -48,7 +58,21 @@ class NERBatchedExamples(BatchedExamples):
         cut_extra_padding: bool=True,
     ):
         words, entities = cls.collate(examples, device=device, cut=cut_extra_padding)
-        return cls(words, entities, word_mask_labels, word_mask, ent_mask_labels, ent_mask)
+        ent_limit = entities.ids.shape[1]
+
+        text_num = [ex.text_num for ex in examples]
+        ner_entities = NEREntities(
+            ids             = entities.ids,
+            attention_mask  = entities.attention_mask,
+            N               = entities.N,
+            spans           = entities.spans,
+            pos             = entities.pos,
+            start_pos       = torch.stack([ex.entities.start_pos[:ent_limit] for ex in examples]).to(device),
+            end_pos         = torch.stack([ex.entities.end_pos[:ent_limit] for ex in examples]).to(device),
+            labels          = torch.stack([ex.entities.labels[:ent_limit] for ex in examples]).to(device),
+            true_spans      = [ex.entities.true_spans for ex in examples],
+        )
+        return cls(words, ner_entities, text_num)
 
 class Split(IntEnum):
     TRAIN = 0
@@ -56,9 +80,6 @@ class Split(IntEnum):
     TEST = 2
 
 class NERDataset(ABC):
-    # feature_names = ("ent_start_pos", "ent_end_pos", "word_ids", "ent_ids", "word_seg_ids", "ent_seg_ids",
-        # "ent_pos_ids", "word_att_mask", "ent_att_mask", "labels", "idx")
-
     null_label: str = None
     labels: tuple[str] = None
 
@@ -100,10 +121,12 @@ class NERDataset(ABC):
         for i, (text, annotation, bounds) in enumerate(zip(self.texts, self.annotations, sent_bounds)):
             text_token_ids: list[list[int]] = self.tokenizer(text, add_special_tokens=False)["input_ids"]
             # We might have to split some sentences to respect the maximum sentence length
-            bounds = self._add_extra_sentence_boundaries(bounds, text_token_ids, annotation)
+            bounds = self._add_extra_sentence_boundaries(bounds, text_token_ids)
             # TODO: Consider the current sentence splitting: Do we throw away context in situations where we actually have sentence-document information
             for j, end in enumerate(bounds):
                 start = bounds[j-1] if j else 0
+                # Flatten structure of [[subwords], [subwords], ... ]
+                word_ids = list(chain(*text_token_ids[start: end]))
                 true_entity_full_word_spans = self._segment_entities(annotation[start: end])
                 # The cumulative length of each word in units of subwords
                 cumlength = np.cumsum([len(t) for t in text_token_ids[start: end]])
@@ -117,35 +140,39 @@ class NERDataset(ABC):
                         f"Example {i}, sentence {j} contains {len(true_entity_spans)} entities, but only {self.max_entities} are allowed. Text:\n{text}"
 
                 all_entity_spans = self._generate_all_entity_spans(true_entity_spans, text_token_ids[start: end], cumlength)
-                # We dont use the entity id: We just mark that it *is* an entity
+                # We dont use the entity id: We just use the id feature for their length
                 entity_ids = [self.entity_vocab["[UNK]"]["id"] for _ in range(len(all_entity_spans))]
-                entity_labels = [self.label_to_idx[true_entity_spans.get(span, self.null_label)] for span in all_entity_spans]
-
-                entities = Entities.build(
-                    torch.IntTensor(entity_ids),
-                    all_entity_spans,
-                    max_entities    = self.max_entities,
-                    max_entity_span = self.max_entity_span
+                entity_labels = torch.LongTensor(
+                    [self.label_to_idx[true_entity_spans.get(span, self.null_label)] for span in all_entity_spans]
                 )
-                words = Words.build(
-                    # Flatten structure of [[subword], [subword], ... ]
-                    torch.IntTensor(list(chain(*text_token_ids[start: end]))),
-                    max_len = self.max_seq_length,
-                    sep_id  = self.sep_id,
-                    cls_id  = self.cls_id,
-                    pad_id  = self.pad_id,
-                )
-                examples.append(
-                    NERExample(
-                        words    = words,
-                        entities = NEREntities.build_from_entities(
-                            entities,
-                            true_spans = list(true_entity_spans.keys()),
-                            labels = entity_labels,
-                        ),
-                        text_num = i,
+                # If there are too many possible spans for self.max_entities, we must divide the sequence into multiple examples
+                for sub_example in range(int(math.ceil(len(all_entity_spans)/self.max_entities))):
+                    substart, subend = self.max_entity_span * sub_example,  self.max_entity_span * (sub_example + 1)
+                    entities = Entities.build(
+                        torch.IntTensor(entity_ids[substart:subend]),
+                        all_entity_spans[substart:subend],
+                        max_entities    = self.max_entities,
+                        max_entity_span = self.max_entity_span,
                     )
-                )
+                    words = Words.build(
+                        torch.IntTensor(word_ids),
+                        max_len = self.max_seq_length,
+                        sep_id  = self.sep_id,
+                        cls_id  = self.cls_id,
+                        pad_id  = self.pad_id,
+                    )
+                    examples.append(
+                        NERExample(
+                            words    = words,
+                            entities = NEREntities.build_from_entities(
+                                entities,
+                                true_spans   = list(true_entity_spans.keys()),
+                                labels       = entity_labels[substart:subend],
+                                max_entities = self.max_entities,
+                            ),
+                            text_num = i,
+                        )
+                    )
         return examples
 
     def collate(self, batch: list[tuple[int, NERExample]]) -> NERBatchedExamples:
@@ -162,10 +189,8 @@ class NERDataset(ABC):
             for j in range(i+1, len(token_ids)):
                 if (i, j) not in true_spans and (cumlength[j] - cumlength[i]) <= self.max_entity_span:
                     possible_spans.append((i, j))
-        # TODO: Consider whether we should select this another way than randomly (first 2-spans, then 3-spans, ...?)
-        random.shuffle(possible_spans)
-        # Make sure we return <= max_entities while including the true spans
-        return [*possible_spans[:self.max_entities-len(true_spans)], *true_spans.keys()]
+        # Make sure we include the true spans
+        return possible_spans + list(true_spans.keys())
 
     def _segment_entities(self, annotation: list[str]) -> dict[tuple[int, int], str]:
         """
@@ -183,7 +208,7 @@ class NERDataset(ABC):
             # Might be end if either (1) last in sentence or (2) followed by explicit start or (3) followed by another annotation type
             if i+1 == len(annotation) or annotation[i+1] == self.null_label or\
                     (next_ann := annotation[i+1].split("-"))[0] == "B" or next_ann[1] != typ_:
-                assert ent_type is None or typ_ == ent_type, "Entity seemed to change annotation during span - this should not be possible"
+                assert ent_type is None or typ_ == ent_type, "Entity seems to change annotation during span - this should not be possible"
                 spans[(i if start is None else start, i+1)] = typ_
                 # We ended entity, look for a new one
                 start = None
@@ -196,7 +221,7 @@ class NERDataset(ABC):
                 ent_type = typ_
         return spans
 
-    def _add_extra_sentence_boundaries(self, bounds: list[int], text_token_ids: list[list[int]], annotation: list[str]) -> list[int]:
+    def _add_extra_sentence_boundaries(self, bounds: list[int], text_token_ids: list[list[int]]) -> list[int]:
         # Check whether we should add another sentence bound by splitting one of the sentences
         might_need_split = True
         while might_need_split:
@@ -213,40 +238,6 @@ class NERDataset(ABC):
             else:
                 might_need_split = False
         return bounds
-        # feature_objects: list[InputFeatures] = convert_examples_to_features(
-        #     list(zip(self.texts, self.annotations, sent_bounds)),
-        #     self.all_labels,
-        #     self.tokenizer,
-        #     max_seq_length=self.max_sentence_len,
-        #     max_entity_length=self.max_entities,
-        #     max_mention_length=self.max_entity_span,
-        # )
-        # # Convert to dict using only the relevant fields, as the data is highly flexible
-
-        # fields = ("entity_start_positions", "entity_end_positions", "word_ids", "entity_ids", "word_segment_ids",
-        #     "entity_segment_ids", "entity_position_ids", "word_attention_mask", "entity_attention_mask", "labels", "example_index")
-        # self.entity_spans = [f_obj.original_entity_spans for f_obj in feature_objects]
-        # return [
-        #     {fname: getattr(f_obj, field) for fname, field in zip(self.feature_names, fields)}
-        #         for f_obj in feature_objects
-        # ]
-
-    # def _collate(self, batch: Iterator[tuple[int, dict[str, Any]]]):
-    #     """
-    #     Collect dataset examples into tensors and pad them for sequence classification
-    #     """
-    #     paddings = {"word_ids": self.tokenizer.pad_token_id, "ent_pos_ids": -1, "labels": -1}
-    #     collated = dict()
-    #     for feature in self.feature_names:
-    #         if feature == "idx": continue
-    #         tensors = [torch.tensor(x[1][feature], dtype=torch.long) for x in batch]
-    #         pad_val = paddings.get(feature, 0)
-    #         collated[feature] = nn.utils.rnn.pad_sequence(tensors, batch_first=True, padding_value=pad_val)
-    #     if self.current_split != Split.TRAIN:
-    #         collated.pop("labels")
-    #         collated["idx"] = [x[1]["idx"] for x in batch]
-    #         collated["spans"] = [self.entity_spans[x[0]] for x in batch]
-    #     return collated
 
 class DaNE(NERDataset):
     null_label = "O"
@@ -257,5 +248,4 @@ class DaNE(NERDataset):
         # Sadly, we do not have access to where the DaNE sentences are divided into articles, so we let each sentence be an entire text.
         sentence_boundaries = [[len(s)] for s in self.texts]
         self.examples = self._build_examples(sentence_boundaries)
-        self.examples = self.examples[:10]
-        return DataLoader(list(enumerate(self.features)), batch_size=batch_size, collate_fn=self.collate, shuffle=split==split.TRAIN)
+        return DataLoader(list(enumerate(self.examples)), batch_size=batch_size, collate_fn=self.collate, shuffle=split==split.TRAIN)

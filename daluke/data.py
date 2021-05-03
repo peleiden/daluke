@@ -49,7 +49,7 @@ class Words:
         )
 
     @staticmethod
-    def _build_att_mask(fill: int, max_size: int):
+    def _build_att_mask(fill: int, max_size: int) -> torch.IntTensor:
         att_mask = torch.zeros(max_size, dtype=torch.int)
         att_mask[:fill] = 1
         return att_mask
@@ -63,12 +63,12 @@ class Entities(Words):
     N: Number of entities
     pos: Saves position spans in each row for each entity as these are used for positional embeddings, size: (B x) M x max mention size
     """
-    pos: torch.IntIntTensor
+    pos: torch.IntTensor
 
     @classmethod
     def build(
         cls,
-        ids: torch.Tensor,
+        ids: torch.IntTensor,
         spans: list[tuple[int, int]],
         max_entities: int,
         max_entity_span: int,
@@ -93,7 +93,7 @@ class Entities(Words):
             ids            = ent_ids,
             attention_mask = cls._build_att_mask(N, max_entities),
             N              = N,
-            spans          = spans,
+            spans          = torch.IntTensor(spans),
             pos            = ent_pos,
         )
 

@@ -23,7 +23,7 @@ ARGUMENTS = {
     },
     "lr":              {"default": 5e-5, "type": float},
     "epochs":          {"default": 5, "type": int},
-    "batch-size":      {"default": 2, "type": int},
+    "batch-size":      {"default": 4, "type": int},
     "warmup-prop":     {"default": 0.06, "type": float},
     "weight-decay":    {"default": 0.01, "type": float},
 
