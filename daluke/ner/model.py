@@ -51,7 +51,6 @@ class NERDaLUKE(DaLUKE):
         return self.classifier(features)
 
 def span_probs_to_preds(span_probs: dict[tuple[int], np.ndarray], seq_len: int, dataset: NERDataset) -> list[str]:
-    # FIXME NO WÔRK
     positives = list()
     for span, probs in span_probs.items():
         max_idx = probs.argmax()
@@ -61,11 +60,12 @@ def span_probs_to_preds(span_probs: dict[tuple[int], np.ndarray], seq_len: int, 
     # Sort after max probability
     for _, span, label in reversed(sorted(positives)):
         if all(l == dataset.null_label for l in preds[span[0]:span[1]]):
-            # Follow IOUB2 scheme: Set all to "I-X" unless first which is "B-X"
+            # Follow IOUB2 scheme: Set all to "I-X" apart from first which is "B-X"
             for i in range(*span):
                 preds[i] = f"I-{label}"
             preds[span[0]] = f"B-{label}"
-    return preds
+    # Cut off the first element which is only padding
+    return preds[1:]
 
 def get_ent_embed(state_dict: dict) -> dict:
     return state_dict[ENTITY_EMBEDDING_KEY]

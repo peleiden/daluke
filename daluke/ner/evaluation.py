@@ -38,7 +38,8 @@ def evaluate_ner(model: nn.Module, dataloader: torch.utils.data.DataLoader, data
             span_probs[idx].update({
                 span: probs[i, j].detach().cpu().numpy() for j, span in enumerate(spans) if span
             })
-    preds = [span_probs_to_preds(p, len(t), dataset) for p, t in zip(span_probs, dataset.texts)]
+    # + 1 to sequence length
+    preds = [span_probs_to_preds(p, len(t) + 1, dataset) for p, t in zip(span_probs, dataset.texts)]
 
     stats = _stats_to_py_nums(
         classification_report(dataset.annotations, preds, output_dict=True, zero_division=0)
