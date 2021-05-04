@@ -48,7 +48,7 @@ class NERExample(Example):
 
 @dataclass
 class NERBatchedExamples(BatchedExamples):
-    text_num: list[int]
+    text_nums: list[int]
 
     @classmethod
     def build(
@@ -60,7 +60,7 @@ class NERBatchedExamples(BatchedExamples):
         words, entities = cls.collate(examples, device=device, cut=cut_extra_padding)
         ent_limit = entities.ids.shape[1]
 
-        text_num = [ex.text_num for ex in examples]
+        text_nums = [ex.text_num for ex in examples]
         ner_entities = NEREntities(
             ids             = entities.ids,
             attention_mask  = entities.attention_mask,
@@ -72,7 +72,7 @@ class NERBatchedExamples(BatchedExamples):
             labels          = torch.stack([ex.entities.labels[:ent_limit] for ex in examples]).to(device),
             true_spans      = [ex.entities.true_spans for ex in examples],
         )
-        return cls(words, ner_entities, text_num)
+        return cls(words, ner_entities, text_nums)
 
 class Split(IntEnum):
     TRAIN = 0

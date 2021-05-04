@@ -3,15 +3,17 @@ from __future__ import annotations
 import os
 
 import torch
+from transformers import AutoConfig
 from pelutils import log, Levels, Parser
 
-import daluke.data as datasets
+import daluke.ner.data as datasets
 
-from daluke import cuda
-from daluke.train_ner import OUT_FILE as train_out
-from daluke.model import load_from_archive, DaLukeNER
-from daluke.data import NERDataset, Split
-from daluke.eval import evaluate_ner
+from daluke.ner.model import NERDaLUKE, get_ent_embed
+from daluke.ner.data import NERDataset, Split
+from daluke.ner.evaluation import evaluate_ner
+
+from daluke.serialize import load_from_archive
+from daluke.serialize import OUT_FILE as train_out
 
 EVAL_BATCH_SIZE = 32
 
@@ -26,16 +28,25 @@ ARGUMENTS = {
 }
 
 def run_experiment(args: dict[str, str]):
-    device = torch.device("cpu") if args["cpu"] else cuda
+    device = torch.device("cpu") if args["cpu"] or not torch.cuda.is_available() else torch.device("cuda")
     entity_vocab, metadata, state_dict = load_from_archive(args["model"])
 
     log.debug("Loading dataset ...")
     dataset = getattr(datasets, args["dataset"])
-    dataset: NERDataset = dataset()
+    dataset: NERDataset = dataset(
+        entity_vocab,
+        base_model      = metadata["base-model"],
+        max_seq_length  = metadata["max-seq-length"],
+        max_entities    = metadata["max-entities"],
+        max_entity_span = metadata["max-entity-span"],
+        device          = device,
+    )
     dataloader = dataset.build(Split.TEST, EVAL_BATCH_SIZE)
 
     log.debug("Loading model ...")
-    model = DaLukeNER(metadata["model_config"], output_shape=len(dataset.all_labels))
+    bert_config = AutoConfig.from_pretrained(metadata["base-model"])
+    ent_embed_size = get_ent_embed(state_dict).shape[1]
+    model = NERDaLUKE(len(dataset.all_labels), bert_config, ent_vocab_size=2, ent_embed_size=ent_embed_size)
     model.load_state_dict(state_dict, strict=False)
     model.to(device)
 

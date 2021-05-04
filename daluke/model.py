@@ -1,7 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass
 
-import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -12,8 +10,6 @@ from transformers.models.bert.modeling_bert import (
     BertOutput,
     BertIntermediate,
 )
-
-from pelutils import log
 
 from daluke.data import BatchedExamples
 
@@ -85,7 +81,7 @@ class EntityAwareLayer(nn.Module):
         self.intermediate = BertIntermediate(bert_config)
         self.output       = BertOutput(bert_config)
 
-    def forward(self, word_hidden: torch.Tensor, entity_hidden: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
+    def forward(self, word_hidden: torch.Tensor, entity_hidden: torch.Tensor, attention_mask: torch.Tensor) -> (torch.Tensor, torch.Tensor):
         word_size = word_hidden.size(1)
         total_hidden = torch.cat((word_hidden, entity_hidden), dim=1)
         self_attention = self.attention(word_hidden, entity_hidden, attention_mask)

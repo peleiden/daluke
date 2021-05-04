@@ -51,6 +51,7 @@ class NERDaLUKE(DaLUKE):
         return self.classifier(features)
 
 def span_probs_to_preds(span_probs: dict[tuple[int], np.ndarray], seq_len: int, dataset: NERDataset) -> list[str]:
+    # FIXME NO WÔRK
     positives = list()
     for span, probs in span_probs.items():
         max_idx = probs.argmax()
@@ -66,11 +67,14 @@ def span_probs_to_preds(span_probs: dict[tuple[int], np.ndarray], seq_len: int, 
             preds[span[0]] = f"B-{label}"
     return preds
 
+def get_ent_embed(state_dict: dict) -> dict:
+    return state_dict[ENTITY_EMBEDDING_KEY]
+
 def mutate_for_ner(state_dict: dict, mask_id: int) -> (dict, int):
     """
     For NER, we don't need the entire entity vocabulary layer: Only entity and not entity are considered
     """
-    ent_embed = state_dict[ENTITY_EMBEDDING_KEY]
+    ent_embed = get_ent_embed(state_dict)
     mask_embed = ent_embed[mask_id].unsqueeze(0)
     state_dict[ENTITY_EMBEDDING_KEY] = torch.cat((ent_embed[:1], mask_embed))
 

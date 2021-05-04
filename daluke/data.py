@@ -93,7 +93,7 @@ class Entities(Words):
             ids            = ent_ids,
             attention_mask = cls._build_att_mask(N, max_entities),
             N              = N,
-            spans          = torch.IntTensor(spans),
+            spans          = spans,
             pos            = ent_pos,
         )
 
