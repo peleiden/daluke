@@ -84,7 +84,7 @@ def run_experiment(args: dict[str, str]):
 
 if __name__ == '__main__':
     with log.log_errors:
-        parser = Parser(ARGUMENTS, name="daLUKE-NER-finetune", multiple_jobs=True)
+        parser = Parser(ARGUMENTS, name="daLUKE-NER-finetune", multiple_jobs=False)
         experiments = parser.parse()
         parser.document_settings()
         log.configure(
