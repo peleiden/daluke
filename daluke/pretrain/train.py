@@ -175,14 +175,14 @@ def train(
     num_updates_all = num_updates_epoch * params.epochs
 
     if not resume_from:
-        top_k = [1, 3, 5, 10]
+        top_k = [1, 3, 5, 10, 25, 50]
         res = TrainResults(
             losses       = np.zeros((0, num_updates_epoch)),
             w_losses     = np.zeros((0, num_updates_epoch)),
             e_losses     = np.zeros((0, num_updates_epoch)),
             top_k        = top_k,
-            w_accuracies = np.zeros((0, num_updates_epoch, len(top_k))),
-            e_accuracies = np.zeros((0, num_updates_epoch, len(top_k))),
+            w_accuracies = np.full((0, num_updates_epoch, len(top_k)), np.nan),
+            e_accuracies = np.full((0, num_updates_epoch, len(top_k)), np.nan),
             orig_params  = None,  # Set later
             param_diff_1 = np.zeros((0, num_updates_epoch)),
             param_diff_2 = np.zeros((0, num_updates_epoch)),
@@ -270,8 +270,8 @@ def train(
         res.losses       = np.vstack((res.losses,       np.zeros(num_updates_epoch)))
         res.w_losses     = np.vstack((res.w_losses,     np.zeros(num_updates_epoch)))
         res.e_losses     = np.vstack((res.e_losses,     np.zeros(num_updates_epoch)))
-        res.w_accuracies = np.concatenate((res.w_accuracies, np.zeros((1, num_updates_epoch, len(res.top_k)))))
-        res.e_accuracies = np.concatenate((res.e_accuracies, np.zeros((1, num_updates_epoch, len(res.top_k)))))
+        res.w_accuracies = np.concatenate((res.w_accuracies, np.full((1, num_updates_epoch, len(res.top_k)), np.nan)))
+        res.e_accuracies = np.concatenate((res.e_accuracies, np.full((1, num_updates_epoch, len(res.top_k)), np.nan)))
         res.param_diff_1 = np.vstack((res.param_diff_1, np.zeros(num_updates_epoch)))
         res.param_diff_2 = np.vstack((res.param_diff_2, np.zeros(num_updates_epoch)))
         res.runtime      = np.vstack((res.runtime,      np.zeros(num_updates_epoch)))
@@ -284,8 +284,8 @@ def train(
 
             # Losses and accuracies for this parameter update
             t_loss, w_loss, e_loss = 0, 0, 0
-            w_accuracies = np.zeros((grad_accumulation_steps, len(res.top_k)))
-            e_accuracies = np.zeros((grad_accumulation_steps, len(res.top_k)))
+            w_accuracies = np.full((grad_accumulation_steps, len(res.top_k)), np.nan)
+            e_accuracies = np.full((grad_accumulation_steps, len(res.top_k)), np.nan)
 
             # Loop over enough batches to make a parameter update
             for k in range(grad_accumulation_steps):
@@ -315,15 +315,17 @@ def train(
 
                 # Save accuracy for statistics
                 with TT.profile("Accuracy"):
-                    w_accuracies[k] = top_k_accuracy(
+                    # Only calculate more than top 10 every 20th subbatch
+                    top_k = res.top_k if k % 20 == 0 else [x for x in res.top_k if x <= 10]
+                    w_accuracies[k, :len(top_k)] = top_k_accuracy(
                         batch.word_mask_labels,
                         word_preds,
-                        res.top_k,
+                        top_k,
                     )
-                    e_accuracies[k] = top_k_accuracy(
+                    e_accuracies[k, :len(top_k)] = top_k_accuracy(
                         batch.ent_mask_labels,
                         ent_preds,
-                        res.top_k,
+                        top_k,
                     )
 
                 log.debug(
@@ -352,8 +354,8 @@ def train(
             res.losses[i, j] = t_loss
             res.w_losses[i, j] = w_loss
             res.e_losses[i, j] = e_loss
-            res.w_accuracies[i, j] = w_accuracies.mean(axis=0)
-            res.e_accuracies[i, j] = e_accuracies.mean(axis=0)
+            res.w_accuracies[i, j] = np.nanmean(w_accuracies, axis=0)
+            res.e_accuracies[i, j] = np.nanmean(e_accuracies, axis=0)
             log.debug(
                 "Performed parameter update %i / %i" % (j, num_updates_epoch-1),
                 f"Loss (total, word, entity): {t_loss:10.5f}, {w_loss:10.5f}, {e_loss:10.5f}",
