@@ -12,6 +12,6 @@ seqeval
 pyicu
 
 # Misc
-pelutils[ds]>=0.6.2
+pelutils[ds]>=0.6.3
 click
 tqdm
