@@ -32,7 +32,8 @@ class NEREntities(Entities):
         start_pos[:len(ent.spans)] = torch.LongTensor([s for s, _ in ent.spans])
 
         end_pos = torch.full((max_entities,), 0, dtype=torch.long)
-        end_pos[:len(ent.spans)] = torch.LongTensor([e for _, e in ent.spans])
+        # -1 as the spans are end-exclusive, but we want to gather the last token
+        end_pos[:len(ent.spans)] = torch.LongTensor([e-1 for _, e in ent.spans])
         return cls(ent.ids, ent.attention_mask, ent.N, ent.spans, ent.pos, start_pos, end_pos, out_labels, fullword_spans)
 
 @dataclass
@@ -190,7 +191,7 @@ class NERDataset(ABC):
                 if (i, j) not in true_spans and (cumlength[j] - cumlength[i]) <= self.max_entity_span:
                     possible_spans.append((i, j))
 
-        # Making special case of single word sequences as these are missed by end-exclusive for loops
+        # Making special case of single-word sequences as these are missed by end-exclusive for loops
         if len(token_ids) == 1 and (0, 1) not in true_spans:
             possible_spans.append((0, 1))
         # Make sure we include the true spans
