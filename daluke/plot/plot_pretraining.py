@@ -8,10 +8,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from daluke.pretrain.analysis import TrainResults
-from daluke.pretrain.train import Hyperparams
 from daluke.plot import setup_mpl
 setup_mpl()
-
 
 def _save(location: str, name: str):
     plt.tight_layout()
@@ -20,7 +18,7 @@ def _save(location: str, name: str):
 
 def loss_plot(location: str):
     res = TrainResults.load()
-    fig, ax1 = plt.subplots(figsize=figsize_std)
+    _, ax1 = plt.subplots(figsize=figsize_std)
 
     # Positions of epoch ends on x axis
     epochs = np.arange(res.epoch+1) * res.losses.shape[1]
@@ -58,8 +56,6 @@ def loss_plot(location: str):
 
 def runtime_plot(location: str):
     res = TrainResults.load()
-    runtime = res.runtime.ravel()
-    x = np.arange(runtime.size+1)
 
     plt.figure(figsize=figsize_std)
     plt.plot(res.runtime.ravel())
@@ -76,7 +72,7 @@ def parameter_plot(location: str):
     norm2 = res.param_diff_2.ravel()
     D_big = (norm1 / norm2) ** 2
 
-    fig, ax1 = plt.subplots(figsize=figsize_std)
+    _, ax1 = plt.subplots(figsize=figsize_std)
 
     ax1.plot(norm1, color=tab_colours[0], label="1-norm")
     ax1.plot(norm2, color=tab_colours[1], label="2-norm")
