@@ -57,7 +57,6 @@ class Words:
 @dataclass
 class Entities(Words):
     """
-    TODO: Update docstring
     ids: Tensor of entity vocabulary ids for each entity, size: (B x ) M
     attention_mask: Mask showing where the actual content is and what is padding, size: (B x) M
     N: Number of entities

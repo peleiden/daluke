@@ -46,12 +46,13 @@ class Hyperparams(DataStorage):
     word_ent_weight: float = 0.5
     bert_fix_prop: float = 0.5
     fp16: bool = False  # Note: If default is changed, change fp16 arg to fp32
+    ent_vocab_min: int = 0  # How many times an entity at least should mentioned to be kept. 0 for no limit
 
     subfolder = TrainResults.subfolder
     json_name = "params.json"
 
     def __post_init__(self):
-        # Test input correctness
+        # Test parameter validity
         assert self.epochs > 0
         assert self.lr > 0, "Learning rate must be larger than 0"
         assert isinstance(self.ent_embed_size, int) and self.ent_embed_size > 0
@@ -63,6 +64,7 @@ class Hyperparams(DataStorage):
         assert isinstance(self.fp16, bool)
         if self.fp16:
             assert torch.cuda.is_available(), "Half-precision cannot be used without CUDA access"
+        assert isinstance(self.ent_vocab_min, int) and self.ent_vocab_min >= 0
 
     def __str__(self):
         return json.dumps(self.__dict__, indent=4)
@@ -155,6 +157,11 @@ def train(
         entity_vocab = json.load(f)
     log("Loaded metadata:", json.dumps(metadata, indent=4))
     log(f"Loaded entity vocabulary of {len(entity_vocab)} entities")
+    if params.ent_vocab_min:
+        log("Removing entities with less than %i mentions" % params.ent_vocab_min)
+        entity_vocab = { ent: info for ent, info in entity_vocab.items()
+            if info["count"] >= params.ent_vocab_min or ent in {"[PAD]", "[UNK]", "[MASK]"} }
+        log("After filtering, entity vocab now has %i entities" % len(entity_vocab))
 
     # Device should be cuda:rank or just cuda if single gpu, else cpu
     if is_distributed:
@@ -164,7 +171,7 @@ def train(
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Load dataset and training results
-    data = DataLoader(location, metadata, device)
+    data = DataLoader(location, metadata, entity_vocab, device)
     sampler = (DistributedSampler if is_distributed else RandomSampler)(data.examples)
 
     loader = data.get_dataloader(params.ff_size, sampler)
@@ -253,7 +260,7 @@ def train(
     criterion = nn.CrossEntropyLoss(ignore_index=-1)
 
     log.section(f"Training of daLUKE for {params.epochs} epochs")
-    model.zero_grad() # To avoid tracking of model parameter manipulation
+    model.zero_grad()  # To avoid tracking of model parameter manipulation
     model.train()
 
     for i in range(res.epoch, params.epochs):

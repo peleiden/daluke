@@ -20,6 +20,7 @@ class DataLoader:
         self,
         data_dir: str,
         metadata: dict,
+        entity_vocab: dict,
         device:   torch.device,
         ent_mask_id:         int = 2,
         max_sentence_len:    int = 512,
@@ -33,6 +34,7 @@ class DataLoader:
         """
         self.data_dir = data_dir
         self.metadata = metadata
+        self.ent_ids = { info["id"] for info in entity_vocab.values() }
         self.device = device
 
         self.max_sentence_len = max_sentence_len
@@ -65,22 +67,33 @@ class DataLoader:
             load_jsonl(os.path.join(self.data_dir, DatasetBuilder.data_file)),
             total=self.metadata["number-of-items"],
         )):
-            examples.append(Example(
-                words = Words.build(
-                    torch.IntTensor(seq_data["word_ids"]),
-                    seq_data["word_spans"],
-                    max_len = self.max_sentence_len,
-                    sep_id  = self.sep_id,
-                    cls_id  = self.cls_id,
-                    pad_id  = self.pad_id,
-                ),
-                entities = Entities.build(
-                    torch.IntTensor(seq_data["entity_ids"]),
-                    seq_data["entity_spans"],
-                    max_entities    = self.max_entities,
-                    max_entity_span = self.max_entity_span,
+            try:
+                # Keep only entities in filtered entity vocab
+                seq_data["entity_ids"], seq_data["entity_spans"] = zip(
+                    *((id_, span) for id_, span in zip(seq_data["entity_ids"], seq_data["entity_spans"]) if id_ in self.ent_ids)
                 )
-            ))
+            except ValueError:
+                # Happens if no entities in vocab
+                seq_data["entity_ids"] = list()
+                seq_data["entity_spans"] = list()
+            examples.append(
+                Example(
+                    words = Words.build(
+                        torch.IntTensor(seq_data["word_ids"]),
+                        seq_data["word_spans"],
+                        max_len = self.max_sentence_len,
+                        sep_id  = self.sep_id,
+                        cls_id  = self.cls_id,
+                        pad_id  = self.pad_id,
+                    ),
+                    entities = Entities.build(
+                        torch.IntTensor(seq_data["entity_ids"]),
+                        list(seq_data["entity_spans"]),
+                        max_entities    = self.max_entities,
+                        max_entity_span = self.max_entity_span,
+                    ),
+                )
+            )
         return examples
 
     def get_dataloader(self, batch_size: int, sampler: torch.utils.data.Sampler) -> DataLoader:
