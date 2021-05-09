@@ -83,7 +83,15 @@ def get_optimizer_params(params: list, do_decay: bool) -> list:
     include = lambda n: do_decay != any(nd in n for nd in NO_DECAY)
     return [p for n, p in params if p.requires_grad and include(n)]
 
-def save_training(loc: str, params: Hyperparams, model: PretrainTaskDaLUKE, res: TrainResults, optimizer: Optimizer, scheduler) -> list[str]:
+def save_training(
+    loc: str,
+    params: Hyperparams,
+    model: PretrainTaskDaLUKE,
+    res: TrainResults,
+    optimizer: Optimizer,
+    scheduler,
+    scaler=None,
+) -> list[str]:
     paths = list()
     # Save tracked statistics
     paths += res.save(loc)
@@ -96,6 +104,10 @@ def save_training(loc: str, params: Hyperparams, model: PretrainTaskDaLUKE, res:
     torch.save(optimizer.state_dict(), paths[-1])
     paths.append(os.path.join(loc, TrainResults.subfolder, SCHEDULER_OUT.format(i=res.epoch)))
     torch.save(scheduler.state_dict(), paths[-1])
+    # Save scaler if using fp16
+    if scaler:
+        paths.append(os.path.join(loc, TrainResults.subfolder, SCALER_OUT.format(i=res.epoch)))
+        torch.save(scaler.state_dict(), paths[-1])
     return paths
 
 def train(
@@ -111,7 +123,7 @@ def train(
     params: Hyperparams,
 ):
     # Get filepath within path context
-    fpath = lambda path: os.path.join(location, path)
+    fpath = lambda path: os.path.join(location, path) if isinstance(path, str) else os.path.join(location, *path)
 
     # Setup multi-gpu if used and get device
     setup(rank, world_size)
@@ -128,10 +140,13 @@ def train(
         print_level = (Levels.INFO if quiet else Levels.DEBUG) if is_master else None,
         append      = resume_from,  # Append to existing log file if we are resuming training
     )
-    log.section("Starting pretraining with the following hyperparameters", params)
-    log("Training using %i workers" % num_workers)
     if resume_from:
         log("Resuming from %s" % resume_from)
+        # Load results and hyperparameters from earlier training
+        res = TrainResults.load(location)
+        params = Hyperparams.load(location)
+    log.section("Starting pretraining with the following hyperparameters", params)
+    log("Training using %i workers" % num_workers)
 
     log.section("Reading metadata and entity vocabulary")
     with open(fpath(DatasetBuilder.metadata_file)) as f:
@@ -159,12 +174,7 @@ def train(
     # Total number of parameter updates
     num_updates_all = num_updates_epoch * params.epochs
 
-    if resume_from:
-        # Update folders and load results from last training
-        TrainResults.subfolder = resume_from
-        Hyperparams.subfolder  = resume_from
-        res = TrainResults.load(location)
-    else:
+    if not resume_from:
         top_k = [1, 3, 5, 10]
         res = TrainResults(
             losses       = np.zeros((0, num_updates_epoch)),
@@ -222,7 +232,7 @@ def train(
         model = DDP(model, device_ids=[rank])
 
     if resume_from:
-        mpath = fpath(MODEL_OUT.format(i=res.epoch))
+        mpath = fpath((TrainResults.subfolder, MODEL_OUT.format(i=res.epoch)))
         model.load_state_dict(torch.load(mpath))
         log(f"Resuming training saved at epoch {res.epoch} and loaded model from {mpath}")
     # TODO: Consider whether this AdamW is sufficient or we should tune it in some way to LUKE
@@ -234,10 +244,10 @@ def train(
     scaler = amp.GradScaler() if params.fp16 else None
     scheduler = get_linear_schedule_with_warmup(optimizer, int(params.warmup_prop * num_updates_all), num_updates_all)
     if resume_from:
-        optimizer.load_state_dict(torch.load(fpath(OPTIMIZER_OUT.format(i=res.epoch))))
-        scheduler.load_state_dict(torch.load(fpath(SCHEDULER_OUT.format(i=res.epoch))))
+        optimizer.load_state_dict(torch.load(fpath((TrainResults.subfolder, OPTIMIZER_OUT.format(i=res.epoch)))))
+        scheduler.load_state_dict(torch.load(fpath((TrainResults.subfolder, SCHEDULER_OUT.format(i=res.epoch)))))
         if params.fp16:
-            scaler.load_state_dict(torch.load(fpath(SCALER_OUT.format(i=res.epoch))))
+            scaler.load_state_dict(torch.load(fpath((TrainResults.subfolder, SCALER_OUT.format(i=res.epoch)))))
         res.epoch += 1  # We saved the data at epoch i, but should now commence epoch i+1
 
     criterion = nn.CrossEntropyLoss(ignore_index=-1)
@@ -363,7 +373,7 @@ def train(
         )
         # Save results and model
         if is_master and (i+1) % save_every == 0:
-            paths = save_training(location, params, model, res, optimizer, scheduler)
+            paths = save_training(location, params, model, res, optimizer, scheduler, scaler)
             log.debug("Saved progress to", *paths)
 
     log.debug("Time distribution", TT)

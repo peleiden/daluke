@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 import os
+import re as reee
 from typing import Any
 
 from pelutils import EnvVars
@@ -16,7 +17,7 @@ from daluke.pretrain.analysis import TrainResults
 
 
 ARGUMENTS = {
-    "resume-from":     { "default": "", "type": str, "help": "Resume training from given directory" },
+    "resume-from":     { "default": "", "type": str, "help": "Resume training from given directory. Set to 'newest' to load latest run" },
     "epochs":          { "default": Hyperparams.epochs, "type": int, "help": "Number of passes through the entire data set"},
     "batch-size":      { "default": Hyperparams.batch_size, "type": int, "help": "Number of sequences per parameter update" },
     "lr":              { "default": Hyperparams.lr, "type": float, "help": "Initial learning rate" },
@@ -59,6 +60,19 @@ if __name__ == '__main__':
     with log.log_errors, EnvVars(OMP_NUM_THREADS=1):
         parser = Parser(ARGUMENTS, name="daluke-pretrain", multiple_jobs=False)
         args = parser.parse()[0]
+
+        if args["resume_from"] == "newest":
+            # Load last created save
+            args["resume_from"] = next(
+                p for p in sorted(os.listdir(args["location"]), reverse=True)
+                if os.path.isdir(os.path.join(args["location"], p)) and reee.fullmatch(r"[\-_0-9]+_pretrain_results", p)
+            )
+        if args["resume_from"]:
+            # Update locations
+            TrainResults.subfolder = args["resume_from"]
+            Hyperparams.subfolder = args["resume_from"]
+
+
         parser.document_settings(TrainResults.subfolder)
         if torch.cuda.device_count() > 1:
             run(args)
