@@ -64,8 +64,8 @@ def span_probs_to_preds(span_probs: dict[tuple[int], np.ndarray], seq_len: int, 
             for i in range(*span):
                 preds[i] = f"I-{label}"
             preds[span[0]] = f"B-{label}"
-    # Cut off the first element which is only padding
-    return preds[1:]
+    # Cut off the first element which is padding
+    return preds
 
 def get_ent_embed(state_dict: dict) -> dict:
     return state_dict[ENTITY_EMBEDDING_KEY]

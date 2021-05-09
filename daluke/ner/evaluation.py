@@ -34,12 +34,11 @@ def evaluate_ner(model: nn.Module, dataloader: torch.utils.data.DataLoader, data
             scores = model(batch)
         probs = F.softmax(scores, dim=2)
         # We save probability distribution, for every possible span in the example
-        for idx, (i, spans) in zip(batch.text_nums, enumerate(batch.entities.spans)):
+        for idx, (i, spans) in zip(batch.text_nums, enumerate(batch.entities.fullword_spans)):
             span_probs[idx].update({
                 span: probs[i, j].detach().cpu().numpy() for j, span in enumerate(spans) if span
             })
-    # + 1 to sequence length
-    preds = [span_probs_to_preds(p, len(t) + 1, dataset) for p, t in zip(span_probs, dataset.texts)]
+    preds = [span_probs_to_preds(p, len(t), dataset) for p, t in zip(span_probs, dataset.texts)]
 
     stats = _stats_to_py_nums(
         classification_report(dataset.annotations, preds, output_dict=True, zero_division=0)

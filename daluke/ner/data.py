@@ -20,13 +20,10 @@ class NEREntities(Entities):
     start_pos: torch.IntTensor
     end_pos: torch.IntTensor
     labels: torch.LongTensor # Must be long for criterion
-    true_spans: list[tuple[int, int]]
+    fullword_spans: list[tuple[int, int]] # Must be same order as the spans given to entities
 
     @classmethod
-    def build_from_entities(cls, ent: Entities, labels: torch.LongTensor, true_spans: list[tuple[int, int]], max_entities: int):
-        # Add +1 for [CLS] to match the post processing done in entities.build
-        true_spans = [(s+1, e+1) for s, e in true_spans]
-
+    def build_from_entities(cls, ent: Entities, labels: torch.LongTensor, fullword_spans: list[tuple[int, int]], max_entities: int):
         out_labels = torch.full((max_entities,), 0, dtype=torch.long)
         out_labels[:len(labels)] = torch.LongTensor(labels)
 
@@ -36,7 +33,7 @@ class NEREntities(Entities):
 
         end_pos = torch.full((max_entities,), 0, dtype=torch.long)
         end_pos[:len(ent.spans)] = torch.LongTensor([e for _, e in ent.spans])
-        return cls(ent.ids, ent.attention_mask, ent.N, ent.spans, ent.pos, start_pos, end_pos, out_labels, true_spans)
+        return cls(ent.ids, ent.attention_mask, ent.N, ent.spans, ent.pos, start_pos, end_pos, out_labels, fullword_spans)
 
 @dataclass
 class NERExample(Example):
@@ -70,7 +67,7 @@ class NERBatchedExamples(BatchedExamples):
             start_pos       = torch.stack([ex.entities.start_pos[:ent_limit] for ex in examples]).to(device),
             end_pos         = torch.stack([ex.entities.end_pos[:ent_limit] for ex in examples]).to(device),
             labels          = torch.stack([ex.entities.labels[:ent_limit] for ex in examples]).to(device),
-            true_spans      = [ex.entities.true_spans for ex in examples],
+            fullword_spans  = [ex.entities.fullword_spans for ex in examples],
         )
         return cls(words, ner_entities, text_nums)
 
@@ -127,30 +124,32 @@ class NERDataset(ABC):
                 start = bounds[j-1] if j else 0
                 # Flatten structure of [[subwords], [subwords], ... ]
                 word_ids = list(chain(*text_token_ids[start: end]))
-                true_entity_full_word_spans = self._segment_entities(annotation[start: end])
+                true_entity_fullword_spans = self._segment_entities(annotation[start: end])
                 # The cumulative length of each word in units of subwords
                 cumlength = np.cumsum([len(t) for t in text_token_ids[start: end]])
                 # Save the spans of entities as they are in the token list
-                true_entity_spans = {(cumlength[entstart]-1, cumlength[entend-1]): ann
-                    for (entstart, entend), ann in true_entity_full_word_spans.items()}
+                true_entity_subword_spans = {(cumlength[entstart]-1, cumlength[entend-1]): ann
+                    for (entstart, entend), ann in true_entity_fullword_spans.items()}
 
-                assert all(e-s <= self.max_entity_span for e, s in true_entity_spans),\
-                        f"Example {i}, sentence {j} contains an entity true_longer than limit of {self.max_entity_span} tokens. Text:\n{text}"
-                assert len(true_entity_spans) < self.max_entities,\
-                        f"Example {i}, sentence {j} contains {len(true_entity_spans)} entities, but only {self.max_entities} are allowed. Text:\n{text}"
+                assert all(e-s <= self.max_entity_span for e, s in true_entity_subword_spans),\
+                        f"Example {i}, sentence {j} contains an entity longer than limit of {self.max_entity_span} tokens. Text:\n\t{text}"
+                assert len(true_entity_subword_spans) < self.max_entities,\
+                        f"Example {i}, sentence {j} contains {len(true_entity_subword_spans)} entities, but only {self.max_entities} are allowed. Text:\n\t{text}"
 
-                all_entity_spans = self._generate_all_entity_spans(true_entity_spans, text_token_ids[start: end], cumlength)
+                all_entity_fullword_spans = self._generate_all_entity_spans(true_entity_fullword_spans, text_token_ids[start: end], cumlength)
+                all_entity_subword_spans = [(cumlength[s]-1, cumlength[e-1]) for s, e in all_entity_fullword_spans]
+
                 # We dont use the entity id: We just use the id feature for their length
-                entity_ids = [self.entity_vocab["[UNK]"]["id"] for _ in range(len(all_entity_spans))]
-                entity_labels = torch.LongTensor(
-                    [self.label_to_idx[true_entity_spans.get(span, self.null_label)] for span in all_entity_spans]
+                entity_ids = [self.entity_vocab["[UNK]"]["id"] for _ in range(len(all_entity_subword_spans))]
+                subword_entity_labels = torch.LongTensor(
+                    [self.label_to_idx[true_entity_subword_spans.get(span, self.null_label)] for span in all_entity_subword_spans]
                 )
                 # If there are too many possible spans for self.max_entities, we must divide the sequence into multiple examples
-                for sub_example in range(int(math.ceil(len(all_entity_spans)/self.max_entities))):
-                    substart, subend = self.max_entity_span * sub_example,  self.max_entity_span * (sub_example + 1)
+                for sub_example in range(int(math.ceil(len(all_entity_subword_spans)/self.max_entities))):
+                    substart, subend = self.max_entities * sub_example,  self.max_entities * (sub_example + 1)
                     entities = Entities.build(
                         torch.IntTensor(entity_ids[substart:subend]),
-                        all_entity_spans[substart:subend],
+                        all_entity_subword_spans[substart:subend],
                         max_entities    = self.max_entities,
                         max_entity_span = self.max_entity_span,
                     )
@@ -166,13 +165,14 @@ class NERDataset(ABC):
                             words    = words,
                             entities = NEREntities.build_from_entities(
                                 entities,
-                                true_spans   = list(true_entity_spans.keys()),
-                                labels       = entity_labels[substart:subend],
-                                max_entities = self.max_entities,
+                                fullword_spans = all_entity_fullword_spans[substart:subend],
+                                labels         = subword_entity_labels[substart:subend],
+                                max_entities   = self.max_entities,
                             ),
                             text_num = i,
                         )
                     )
+
         return examples
 
     def collate(self, batch: list[tuple[int, NERExample]]) -> NERBatchedExamples:
@@ -184,11 +184,15 @@ class NERDataset(ABC):
 
     def _generate_all_entity_spans(self, true_spans: dict[tuple[int, int], str], token_ids: list[list[int]], cumlength: np.ndarray) -> list[tuple[int, int]]:
         possible_spans = list()
-        # Spans are (1, 2), (1, 3), (1, 4) ... (1, N), (2, 3), (2, 4), ... (N-1, N)
+        # Spans are (0, 1), (0, 2), (0, 3), ... (0, N), (1, 2), (1, 3), ... (N-1, N)
         for i in range(len(token_ids)):
             for j in range(i+1, len(token_ids)):
                 if (i, j) not in true_spans and (cumlength[j] - cumlength[i]) <= self.max_entity_span:
                     possible_spans.append((i, j))
+
+        # Making special case of single word sequences as these are missed by end-exclusive for loops
+        if len(token_ids) == 1 and (0, 1) not in true_spans:
+            possible_spans.append((0, 1))
         # Make sure we include the true spans
         return possible_spans + list(true_spans.keys())
 
