@@ -22,7 +22,8 @@ class PretrainTaskDaLUKE(DaLUKE):
     """
     DaLUKE for the LUKE pre-training task consisting of masked language modelling and entity masking
     """
-    def __init__(self,
+    def __init__(
+        self,
         bert_config: BertConfig,
         ent_vocab_size: int,
         ent_embed_size: int,
@@ -35,7 +36,7 @@ class PretrainTaskDaLUKE(DaLUKE):
         # Needed for reshaping in forward pass
         self.hiddsize, self.wsize, self.esize = bert_config.hidden_size, bert_config.vocab_size, ent_vocab_size
 
-        self.mask_entity_scorer.decode.weight = self.entity_embeddings.ent_embeds.weight # TODO: Understand
+        self.mask_entity_scorer.decode.weight = self.entity_embeddings.ent_embeds.weight  # TODO: Understand
 
     def forward(self, ex: MaskedBatchedExamples):
         word_hidden, ent_hidden = super().forward(ex)

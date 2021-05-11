@@ -68,13 +68,8 @@ if __name__ == '__main__':
                 p for p in sorted(os.listdir(args["location"]), reverse=True)
                 if os.path.isdir(os.path.join(args["location"], p)) and reee.fullmatch(r"[\-_0-9]+_pretrain_results", p)
             )
-        if args["resume_from"]:
-            # Update locations
-            TrainResults.subfolder = args["resume_from"]
-            Hyperparams.subfolder = args["resume_from"]
-
-
-        parser.document_settings(TrainResults.subfolder)
+        else:
+            parser.document_settings(TrainResults.subfolder)
         if torch.cuda.device_count() > 1:
             run(args)
         else:

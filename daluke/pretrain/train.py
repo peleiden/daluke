@@ -134,6 +134,11 @@ def train(
     is_distributed = rank != -1  # Are we performing distributed computing?
     num_workers = torch.distributed.get_world_size() if is_distributed else 1
 
+    if resume_from:
+        # Update locations
+        TrainResults.subfolder = resume_from
+        Hyperparams.subfolder = resume_from
+
     # Setup logger
     log.configure(
         os.path.join(location, resume_from or TrainResults.subfolder, f"{name}{'-%s' % rank if is_distributed else ''}.log"),
@@ -205,6 +210,7 @@ def train(
         f"but max. seq. len. is set to {metadata['max-seq-length']}"
     log("Bert config", bert_config.to_json_string())
 
+    log("Initializing model")
     model_cls = BertAttentionPretrainTaskDaLUKE if bert_attention else PretrainTaskDaLUKE
     model = model_cls(
         bert_config,
@@ -213,6 +219,7 @@ def train(
     ).to(device)
     # TODO: Maybe init fresh model weights manually (they do)
     # Load parameters from base model
+    log("Loading base model parameters")
     with TT.profile("Loading base model parameters"):
         base_model = AutoModelForPreTraining.from_pretrained(metadata["base-model"])
         new_weights = load_base_model_weights(model, base_model)
@@ -235,13 +242,12 @@ def train(
     unfix_base_model_params_epoch = round(params.bert_fix_prop * params.epochs)
     log("Unfixing base model params after %i epochs" % unfix_base_model_params_epoch)
 
-    if is_distributed:
-        model = DDP(model, device_ids=[rank])
-
     if resume_from:
         mpath = fpath((TrainResults.subfolder, MODEL_OUT.format(i=res.epoch)))
         model.load_state_dict(torch.load(mpath))
         log(f"Resuming training saved at epoch {res.epoch} and loaded model from {mpath}")
+    if is_distributed:
+        model = DDP(model, device_ids=[rank])
     # TODO: Consider whether this AdamW is sufficient or we should tune it in some way to LUKE
     optimizer = AdamW(
         [{"params": get_optimizer_params(model_params, do_decay=True),  "weight_decay": params.weight_decay},
@@ -267,7 +273,7 @@ def train(
         TT.profile("Epoch")
         log("Starting epoch %i" % i)
         res.epoch = i
-        if i == unfix_base_model_params_epoch:
+        if i >= unfix_base_model_params_epoch:
             log("Unfixing base model params")
             fix_base_model_params(False)
         if is_distributed:
@@ -382,7 +388,7 @@ def train(
         )
         # Save results and model
         if is_master and (i+1) % save_every == 0:
-            paths = save_training(location, params, model, res, optimizer, scheduler, scaler)
+            paths = save_training(location, params, model.model if is_distributed else model, res, optimizer, scheduler, scaler)
             log.debug("Saved progress to", *paths)
 
     log.debug("Time distribution", TT)
