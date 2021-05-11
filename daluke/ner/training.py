@@ -46,7 +46,6 @@ class TrainNER:
         for i in range(self.epochs):
             for j, batch in enumerate(self.dataloader):
                 scores = self.model(batch)
-                # log.critical((batch.entities.labels.view(-1) != 0).float().mean())
                 loss = self.criterion(scores.view(-1, self.model.output_shape), batch.entities.labels.view(-1))
                 loss.backward()
 

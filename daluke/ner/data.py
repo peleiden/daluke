@@ -24,7 +24,7 @@ class NEREntities(Entities):
 
     @classmethod
     def build_from_entities(cls, ent: Entities, labels: torch.LongTensor, fullword_spans: list[tuple[int, int]], max_entities: int):
-        out_labels = torch.full((max_entities,), 0, dtype=torch.long)
+        out_labels = torch.full((max_entities,), -1, dtype=torch.long)
         out_labels[:len(labels)] = torch.LongTensor(labels)
 
         # Have to be long tensors as we are working with indeces
