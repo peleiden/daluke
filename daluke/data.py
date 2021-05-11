@@ -83,10 +83,9 @@ class Entities(Words):
         ent_ids[:N] = ids
 
         ent_pos = torch.full((max_entities, max_entity_span), -1, dtype=torch.int)
-        # TODO: Make faster than for loop
+        spans = [(s+1, e+1) for s, e in spans] # +1 for [CLS] token added to words
         for i, (start, end) in enumerate(spans):
             ent_pos[i, :end-start] = torch.arange(start, end)
-        ent_pos[ent_pos != -1] += 1 #+1 for [cls]
 
         return cls(
             ids            = ent_ids,

@@ -31,7 +31,7 @@ def run_experiment(args: dict[str, str]):
     device = torch.device("cpu") if args["cpu"] or not torch.cuda.is_available() else torch.device("cuda")
     entity_vocab, metadata, state_dict = load_from_archive(args["model"])
 
-    log.debug("Loading dataset ...")
+    log("Loading dataset ...")
     dataset = getattr(datasets, args["dataset"])
     dataset: NERDataset = dataset(
         entity_vocab,
@@ -43,7 +43,7 @@ def run_experiment(args: dict[str, str]):
     )
     dataloader = dataset.build(Split.TEST, EVAL_BATCH_SIZE)
 
-    log.debug("Loading model ...")
+    log("Loading model ...")
     bert_config = AutoConfig.from_pretrained(metadata["base-model"])
     ent_embed_size = get_ent_embed(state_dict).shape[1]
     model = NERDaLUKE(len(dataset.all_labels), bert_config, ent_vocab_size=2, ent_embed_size=ent_embed_size)

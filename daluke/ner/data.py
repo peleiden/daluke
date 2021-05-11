@@ -17,8 +17,8 @@ from daluke.data import Entities, Example, BatchedExamples, Words, get_special_i
 
 @dataclass
 class NEREntities(Entities):
-    start_pos: torch.IntTensor
-    end_pos: torch.IntTensor
+    start_pos: torch.LongTensor
+    end_pos: torch.LongTensor
     labels: torch.LongTensor # Must be long for criterion
     fullword_spans: list[tuple[int, int]] # Must be same order as the spans given to entities
 

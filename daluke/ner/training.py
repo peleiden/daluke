@@ -20,7 +20,7 @@ class TrainNER:
             dataloader: torch.utils.data.DataLoader,
             device: torch.device,
             epochs: int,
-            lr: float = 5e-5,
+            lr: float = 1e-5,
             warmup_prop: float = 0.06,
             weight_decay: float = 0.01,
         ):
@@ -46,6 +46,7 @@ class TrainNER:
         for i in range(self.epochs):
             for j, batch in enumerate(self.dataloader):
                 scores = self.model(batch)
+                # log.critical(((batch.entities.labels.view(-1) != 0) & (batch.entities.labels.view(-1) != -1)).float().mean())
                 loss = self.criterion(scores.view(-1, self.model.output_shape), batch.entities.labels.view(-1))
                 loss.backward()
 

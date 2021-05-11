@@ -37,7 +37,7 @@ def run_experiment(args: dict[str, str]):
     entity_vocab, metadata, state_dict = load_from_archive(args["model"])
     state_dict, ent_embed_size = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"])
 
-    log.debug("Loading dataset ...")
+    log("Loading dataset ...")
     dataset = getattr(datasets, args["dataset"])
     dataset: NERDataset = dataset(
         entity_vocab,
@@ -49,7 +49,7 @@ def run_experiment(args: dict[str, str]):
     )
     dataloader = dataset.build(Split.TRAIN, args["batch_size"])
 
-    log.debug("Loading model ...")
+    log("Loading model ...")
     bert_config = AutoConfig.from_pretrained(metadata["base-model"])
     model = NERDaLUKE(
         len(dataset.all_labels),

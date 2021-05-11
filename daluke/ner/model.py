@@ -56,6 +56,7 @@ def span_probs_to_preds(span_probs: dict[tuple[int], np.ndarray], seq_len: int, 
         max_idx = probs.argmax()
         if (max_label := dataset.all_labels[max_idx]) != dataset.null_label:
             positives.append((probs[max_idx], span, max_label))
+    # Initialize all predictions to null predictions
     preds = [dataset.null_label for _ in range(seq_len)]
     # Sort after max probability
     for _, span, label in reversed(sorted(positives)):
