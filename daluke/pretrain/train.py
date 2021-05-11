@@ -192,6 +192,7 @@ def train(
             losses       = np.zeros((0, num_updates_epoch)),
             w_losses     = np.zeros((0, num_updates_epoch)),
             e_losses     = np.zeros((0, num_updates_epoch)),
+            lr           = np.zeros((0, num_updates_epoch)),
             top_k        = top_k,
             w_accuracies = np.full((0, num_updates_epoch, len(top_k)), np.nan),
             e_accuracies = np.full((0, num_updates_epoch, len(top_k)), np.nan),
@@ -283,6 +284,7 @@ def train(
         res.losses       = np.vstack((res.losses,       np.zeros(num_updates_epoch)))
         res.w_losses     = np.vstack((res.w_losses,     np.zeros(num_updates_epoch)))
         res.e_losses     = np.vstack((res.e_losses,     np.zeros(num_updates_epoch)))
+        res.lr           = np.vstack((res.lr,           np.zeros(num_updates_epoch)))
         res.w_accuracies = np.concatenate((res.w_accuracies, np.full((1, num_updates_epoch, len(res.top_k)), np.nan)))
         res.e_accuracies = np.concatenate((res.e_accuracies, np.full((1, num_updates_epoch, len(res.top_k)), np.nan)))
         res.param_diff_1 = np.vstack((res.param_diff_1, np.zeros(num_updates_epoch)))
@@ -342,8 +344,8 @@ def train(
                     )
 
                 log.debug(
-                    f"    Forward pass {k:5} / {grad_accumulation_steps-1} (ep. {i:2}, pu. {j:3}). Loss: {loss.item():9.5f}. "
-                    f"Word, entity accuracy: {100*w_accuracies[k, 0]:7.3f} %, {100*e_accuracies[k, 0]:7.3f}"
+                    f"    Subbatch {k:5} / {grad_accumulation_steps-1} (ep. {i:2}, pu. {j:3}). Loss: {loss.item():9.5f}. "
+                    f"Word, entity accuracy: {100*w_accuracies[k, 0]:7.3f} %, {100*e_accuracies[k, 0]:7.3f} %"
                 )
                 TT.end_profile()
 
@@ -367,6 +369,7 @@ def train(
             res.losses[i, j] = t_loss
             res.w_losses[i, j] = w_loss
             res.e_losses[i, j] = e_loss
+            res.lr[i, j] = scheduler.get_last_lr()[0]
             res.w_accuracies[i, j] = np.nanmean(w_accuracies, axis=0)
             res.e_accuracies[i, j] = np.nanmean(e_accuracies, axis=0)
             log.debug(
