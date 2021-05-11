@@ -78,8 +78,8 @@ class Split(IntEnum):
     TEST = 2
 
 class NERDataset(ABC):
-    null_label: str = None
-    labels: tuple[str] = None
+    null_label: str | None = None
+    labels: tuple[str] | None = None
 
     def __init__(self,
             entity_vocab: dict,
@@ -101,9 +101,9 @@ class NERDataset(ABC):
         self.sep_id, self.cls_id, self.pad_id = get_special_ids(self.tokenizer)
 
         # To be set in build method
-        self.examples: list[Example] = None
-        self.texts: list[list[str]] = None
-        self.annotations: list[list[str]] = None
+        self.examples: list[Example] | None = None
+        self.texts: list[list[str]] | None = None
+        self.annotations: list[list[str]] | None= None
 
     @abstractmethod
     def build(self, split: Split, batch_size: int) -> DataLoader:
@@ -190,12 +190,11 @@ class NERDataset(ABC):
             for j in range(i+1, len(token_ids)):
                 if (i, j) not in true_spans and (cumlength[j] - cumlength[i]) <= self.max_entity_span:
                     possible_spans.append((i, j))
-
         # Making special case of single-word sequences as these are missed by end-exclusive for loops
         if len(token_ids) == 1 and (0, 1) not in true_spans:
             possible_spans.append((0, 1))
-        # Make sure we include the true spans
-        return possible_spans + list(true_spans.keys())
+        # Make sure we include the true spans. Sort it such that the true spans are not always in the last example
+        return list(sorted(possible_spans + list(true_spans.keys())))
 
     def _segment_entities(self, annotation: list[str]) -> dict[tuple[int, int], str]:
         """
