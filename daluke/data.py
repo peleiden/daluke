@@ -114,7 +114,7 @@ class BatchedExamples(Example):
         # Stack the tensors in specific field for each example and send to device
         tensor_collate = lambda field, subfield, limit: torch.stack(tuple(getattr(getattr(e, field), subfield)[:limit] for e in ex)).to(device)
 
-        word_N = torch.tensor(tuple(e.words.N for e in ex)).to(device)
+        word_N = torch.tensor(tuple(e.words.N for e in ex)).to(device) + 1 # +1 for CLS
         ent_N = torch.tensor(tuple(e.entities.N for e in ex)).to(device)
         # It is here assumed that all word and entity ids already have been padded to exactly same length (as they have in their build methods)
         word_limit = max(word_N) if cut else len(ex[0].words.ids)
