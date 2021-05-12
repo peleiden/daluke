@@ -37,20 +37,7 @@ def loss_plot(location: str):
     ax1.set_ylim(bottom=0)
     ax1.set_xlabel("Batch")
     ax1.set_ylabel("Loss")
-
-    # Accuracy axis
-    ax2 = ax1.twinx()
-    ax2.plot(x, 100*res.w_accuracies[..., 0].ravel(), color=tab_colours[3], label="Masked word accuracy",   lw=lw, ls="-.")
-    ax2.plot(x, 100*res.e_accuracies[..., 0].ravel(), color=tab_colours[4], label="Masked entity accuracy", lw=lw, ls="-.")
-    ax2.scatter(epochs, 100*res.w_accuracies[:, 0, 0], s=dot_size, color=tab_colours[3])
-    ax2.scatter(epochs, 100*res.e_accuracies[:, 0, 0], s=dot_size, color=tab_colours[4])
-    ax2.set_ylim([0, 110])
-    ax2.set_ylabel("Accuracy [%]")
-
-    h1, l1 = ax1.get_legend_handles_labels()
-    h2, l2 = ax2.get_legend_handles_labels()
-    ax1.legend(h1+h2, l1+l2)
-    plt.title("Pretraining loss and accuracy")
+    ax1.set_title("Pretraining loss and accuracy")
     plt.grid()
     _save(location, "loss.png")
 
@@ -110,6 +97,17 @@ def accuracy_plot(location: str):
 
     _save(location, "accuracy.png")
 
+def lr_plot(location: str):
+    res = TrainResults.load()
+    plt.figure(figsize=figsize_std)
+    plt.plot(res.lr.flat)
+    plt.xlabel("Batch")
+    plt.ylabel("Learning rate")
+    plt.title("Learning rate")
+    plt.grid()
+
+    _save(location, "lr.png")
+
 @click.command()
 @click.argument("location")
 def make_pretraining_plots(location: str):
@@ -123,6 +121,8 @@ def make_pretraining_plots(location: str):
     parameter_plot(location)
     log("Accuracy plot")
     accuracy_plot(location)
+    log("Learning rate plot")
+    lr_plot(location)
 
 if __name__ == "__main__":
     with log.log_errors:
