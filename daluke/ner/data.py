@@ -129,16 +129,15 @@ class NERDataset(ABC):
                 # The cumulative length of each word in units of subwords
                 cumlength = np.cumsum([len(t) for t in text_token_ids[start: end]])
                 # Save the spans of entities as they are in the token list
-                true_entity_subword_spans = {(cumlength[entstart]-1, cumlength[entend-1]): ann
+                true_entity_subword_spans = {(cumlength[entstart] - len(text_token_ids[start+entstart]), cumlength[entend-1]): ann
                     for (entstart, entend), ann in true_entity_fullword_spans.items()}
-
-                assert all(e-s <= self.max_entity_span for e, s in true_entity_subword_spans),\
+                assert all(e-s <= self.max_entity_span for s, e in true_entity_subword_spans),\
                         f"Example {i}, sentence {j} contains an entity longer than limit of {self.max_entity_span} tokens. Text:\n\t{text}"
                 assert len(true_entity_subword_spans) < self.max_entities,\
                         f"Example {i}, sentence {j} contains {len(true_entity_subword_spans)} entities, but only {self.max_entities} are allowed. Text:\n\t{text}"
 
                 all_entity_fullword_spans = self._generate_all_entity_spans(true_entity_fullword_spans, text_token_ids[start: end], cumlength)
-                all_entity_subword_spans = [(cumlength[s]-1, cumlength[e-1]) for s, e in all_entity_fullword_spans]
+                all_entity_subword_spans = [(cumlength[s] - len(text_token_ids[start+s]), cumlength[e-1]) for s, e in all_entity_fullword_spans]
 
                 # We dont use the entity id: We just use the id feature for their length
                 entity_ids = [self.entity_vocab["[UNK]"]["id"] for _ in range(len(all_entity_subword_spans))]

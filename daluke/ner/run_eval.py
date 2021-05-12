@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
+from typing import Type
 import os
 
 import torch
@@ -22,6 +23,10 @@ ARGUMENTS = {
         "help": "directory or .tar.gz file containing fine-tuned model, metadata and entity vocab",
         "default": os.path.join("local_data", train_out)
     },
+    "max-entity-span":  {"help": "Max. length of spans used in data. If not given, use the one in pre-training metadata",
+                            "default": None, "type": int},
+    "max-entities":     {"help": "Max. enitites in each example. If not given, use the one in pre-training metadata",
+                            "default": None, "type": int},
     "quieter":    {"help": "Don't show debug logging", "action": "store_true"},
     "cpu":        {"help": "Run experiment on cpu",    "action": "store_true"},
     "dataset":    {"help": "Which dataset to use. Currently, only DaNE supported", "default": "DaNE"},
@@ -32,13 +37,13 @@ def run_experiment(args: dict[str, str]):
     entity_vocab, metadata, state_dict = load_from_archive(args["model"])
 
     log("Loading dataset ...")
-    dataset = getattr(datasets, args["dataset"])
-    dataset: NERDataset = dataset(
+    dataset_cls: Type[NERDataset] = getattr(datasets, args["dataset"])
+    dataset = dataset_cls(
         entity_vocab,
         base_model      = metadata["base-model"],
         max_seq_length  = metadata["max-seq-length"],
-        max_entities    = metadata["max-entities"],
-        max_entity_span = metadata["max-entity-span"],
+        max_entities    = metadata["max-entities"] if args["max_entities"] is None else args["max_entities"],
+        max_entity_span = metadata["max-entity-span"] if args["max_entity_span"] is None else args["max_entity_span"],
         device          = device,
     )
     dataloader = dataset.build(Split.TEST, EVAL_BATCH_SIZE)

@@ -53,6 +53,7 @@ def run_experiment(args: dict[str, str]):
         device          = device,
     )
     dataloader = dataset.build(Split.TRAIN, args["batch_size"])
+    log(f"Built dataset of {len(dataset.texts)} documents divided into {len(dataset.examples)} observations to be forward passed")
 
     log("Loading model ...")
     bert_config = AutoConfig.from_pretrained(metadata["base-model"])
