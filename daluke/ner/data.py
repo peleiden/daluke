@@ -101,7 +101,7 @@ class NERDataset(ABC):
         self.sep_id, self.cls_id, self.pad_id = get_special_ids(self.tokenizer)
 
         # To be set in build method
-        self.examples: list[Example] | None = None
+        self.examples: list[NERExample] | None = None
         self.texts: list[list[str]] | None = None
         self.annotations: list[list[str]] | None= None
 
@@ -110,17 +110,17 @@ class NERDataset(ABC):
         pass
 
     @property
-    def all_labels(self):
+    def all_labels(self) -> list[str]:
         L = list() if self.null_label is None else [self.null_label]
-        return L + list(self.labels)
+        return [*L, *self.labels]
 
-    def _build_examples(self, sent_bounds: list[list[int]]) -> list[dict[str, Any]]:
+    def _build_examples(self, sent_bounds: list[list[int]]) -> list[NERExample]:
         examples = list()
         for i, (text, annotation, bounds) in enumerate(zip(self.texts, self.annotations, sent_bounds)):
             text_token_ids: list[list[int]] = self.tokenizer(text, add_special_tokens=False)["input_ids"]
             # We might have to split some sentences to respect the maximum sentence length
             bounds = self._add_extra_sentence_boundaries(bounds, text_token_ids)
-            # TODO: Consider the current sentence splitting: Do we throw away context in situations where we actually have sentence-document information
+            # TODO: Consider the current sentence splitting: Do we throw away context in situations where we actually have sentence-document information? (Not relevant for DaNE)
             for j, end in enumerate(bounds):
                 start = bounds[j-1] if j else 0
                 # Flatten structure of [[subwords], [subwords], ... ]

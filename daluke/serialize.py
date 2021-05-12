@@ -15,7 +15,7 @@ MODEL_OUT = "model.bin"
 VOCAB_FILE    = "entity-vocab.json"
 METADATA_FILE = "metadata.json"
 
-def load_from_archive(model: str) -> (list[dict], dict, dict):
+def load_from_archive(model: str) -> tuple[list[dict], dict[str, int | str], dict]:
     """
     Reads the directory or luke.tar.gz archive containing the model, the entity vocabulary and metadata
     """
