@@ -55,7 +55,7 @@ class TrainNER:
                 self.model.zero_grad()
 
                 losses.append(loss.item())
-                log.debug(f"Epoch {i}/{self.epochs}, batch: {j}. Loss: {loss.item():.5f}.")
+                log.debug(f"Epoch {i} / {self.epochs-1}, batch: {j} / {len(self.dataloader)-1}. Loss: {loss.item():.5f}.")
 
         return TrainResults(
             losses = losses,

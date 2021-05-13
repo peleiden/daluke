@@ -13,15 +13,14 @@ from daluke.ner.model import NERDaLUKE, get_ent_embed
 from daluke.ner.data import NERDataset, Split
 from daluke.ner.evaluation import evaluate_ner
 
-from daluke.serialize import load_from_archive
-from daluke.serialize import OUT_FILE as train_out
+from daluke.serialize import load_from_archive, TRAIN_OUT
 
 EVAL_BATCH_SIZE = 32
 
 ARGUMENTS = {
     "model": {
         "help": "directory or .tar.gz file containing fine-tuned model, metadata and entity vocab",
-        "default": os.path.join("local_data", train_out)
+        "default": os.path.join("local_data", TRAIN_OUT)
     },
     "max-entity-span":  {"help": "Max. length of spans used in data. If not given, use the one in pre-training metadata",
                             "default": None, "type": int},
