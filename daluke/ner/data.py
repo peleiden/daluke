@@ -2,7 +2,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from enum import IntEnum
-from typing import Any
 import math
 from itertools import chain
 
@@ -12,6 +11,7 @@ from torch.utils.data import DataLoader
 
 from transformers import AutoTokenizer
 from danlp.datasets import DDT
+from pelutils import log
 
 from daluke.data import Entities, Example, BatchedExamples, Words, get_special_ids
 
@@ -241,6 +241,16 @@ class NERDataset(ABC):
             else:
                 might_need_split = False
         return bounds
+
+    def document(self):
+        """
+        To be run after _build_examples to document the resulting data.
+        """
+
+        non_zeros = [(ex.entities.labels[ex.entities.labels != -1] != 0).float().mean().item() for ex in self.examples]
+        log(f"Built dataset of {len(self.texts)} documents divided into {len(self.examples)} examples to be forward passed")
+        log(f"Average proportion of spans that have positive labels over all examples: {np.mean(non_zeros)*100:.2f}%")
+
 
 class DaNE(NERDataset):
     null_label = "O"

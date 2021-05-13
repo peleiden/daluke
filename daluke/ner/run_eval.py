@@ -46,6 +46,7 @@ def run_experiment(args: dict[str, str]):
         device          = device,
     )
     dataloader = dataset.build(Split.TEST, EVAL_BATCH_SIZE)
+    dataset.document()
 
     log("Loading model ...")
     bert_config = AutoConfig.from_pretrained(metadata["base-model"])
@@ -53,6 +54,9 @@ def run_experiment(args: dict[str, str]):
     model = NERDaLUKE(len(dataset.all_labels), bert_config, ent_vocab_size=2, ent_embed_size=ent_embed_size)
     model.load_state_dict(state_dict, strict=False)
     model.to(device)
+
+    log.debug(model)
+    dataset.document()
 
     log("Starting evaluation of daLUKE for NER")
     results = evaluate_ner(model, dataloader, dataset, device)
