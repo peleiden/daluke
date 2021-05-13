@@ -33,12 +33,11 @@ ARGUMENTS = {
     "weight-decay":     {"default": 0.01, "type": float},
 
     "quieter": {"help": "Don't show debug logging", "action": "store_true"},
-    "cpu":     {"help": "Run experiment on cpu",    "action": "store_true"},
     "dataset": {"help": "Which dataset to use. Currently, only DaNE supported", "default": "DaNE"},
 }
 
 def run_experiment(args: dict[str, str]):
-    device = torch.device("cpu") if args["cpu"] or not torch.cuda.is_available() else torch.device("cuda")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     entity_vocab, metadata, state_dict = load_from_archive(args["model"])
     state_dict, ent_embed_size = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"])
 
