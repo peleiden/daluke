@@ -20,19 +20,9 @@ METADATA_FILE = "metadata.json"
 
 def load_from_archive(model: str) -> tuple[list[dict], dict[str, int | str], dict]:
     """
-    Reads the *.tar.gz archive or directory containing the model, the entity vocabulary and metadata
+    Reads the *.tar.gz archive  containing the model, the entity vocabulary and metadata
     """
-    if os.path.isdir(model):
-        # Read directly from decompressed files
-        log.debug(f"Reading {VOCAB_FILE}, {METADATA_FILE}, and {MODEL_OUT}...")
-        with open(os.path.join(model, VOCAB_FILE), "r") as vfile:
-            entity_vocab = json.load(vfile)
-        with open(os.path.join(model, METADATA_FILE), "r") as metafile:
-            metadata = json.load(metafile)
-        with open(os.path.join(model, MODEL_OUT), "rb") as mfile:
-            state_dict = torch.load(mfile, map_location="cpu")
-        return entity_vocab, metadata, state_dict
-    elif shutil.which("tar"):
+    if shutil.which("tar"):
         # tar exists in system and is used for decompressing
         log.debug(f"Extracting {VOCAB_FILE}, {METADATA_FILE}, and {MODEL_OUT} using system tar tool...")
         tmpdir = os.path.join(os.path.split(model)[0], "tmpdir")
