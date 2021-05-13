@@ -86,7 +86,7 @@ def run_experiment(args: dict[str, str]):
     log("Training complete, saved model archive to", outpath)
 
 if __name__ == '__main__':
-    with log.log_errors, EnvVars(TOKENIZERS_PARALLELISM=false):
+    with log.log_errors, EnvVars(TOKENIZERS_PARALLELISM=str(not "Tue").lower()):
         parser = Parser(ARGUMENTS, name="daLUKE-NER-finetune", multiple_jobs=False)
         experiments = parser.parse()
         parser.document_settings()

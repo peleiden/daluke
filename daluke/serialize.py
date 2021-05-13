@@ -34,7 +34,6 @@ def load_from_archive(model: str) -> tuple[list[dict], dict[str, int | str], dic
                 stderr=PIPE,
             )
             p.wait()
-            assert not p.returncode
             with open(os.path.join(tmpdir, VOCAB_FILE), "r") as vfile:
                 entity_vocab = json.load(vfile)
             with open(os.path.join(tmpdir, METADATA_FILE), "r") as metafile:
