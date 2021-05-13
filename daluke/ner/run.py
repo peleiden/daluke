@@ -30,8 +30,9 @@ ARGUMENTS = {
     "warmup-prop":      {"default": 0.06, "type": float},
     "weight-decay":     {"default": 0.01, "type": float},
 
-    "quieter": {"help": "Don't show debug logging", "action": "store_true"},
     "dataset": {"help": "Which dataset to use. Currently, only DaNE supported", "default": "DaNE"},
+    "eval": {"help": "Run evaluation on dev. set after each epoch", "action": "store_true"},
+    "quieter": {"help": "Don't show debug logging", "action": "store_true"},
 }
 
 def run_experiment(args: dict[str, str]):
@@ -50,6 +51,7 @@ def run_experiment(args: dict[str, str]):
         device          = device,
     )
     dataloader = dataset.build(Split.TRAIN, args["batch_size"])
+    dev_dataloader = dataset.build(Split.DEV, args["batch_size"]) if args["eval"] else None
 
     log("Loading model ...")
     bert_config = AutoConfig.from_pretrained(metadata["base-model"])
@@ -66,16 +68,18 @@ def run_experiment(args: dict[str, str]):
     training = TrainNER(
         model,
         dataloader,
+        dataset,
         device          = device,
         epochs          = args["epochs"],
         lr              = args["lr"],
         warmup_prop     = args["warmup_prop"],
         weight_decay    = args["weight_decay"],
+        dev_dataloader  = dev_dataloader,
     )
     log.debug(training.model)
     log.debug(training.scheduler)
     log.debug(training.optimizer)
-    dataset.document()
+    dataset.document(dataloader, Split.TRAIN)
 
     results = training.run()
 

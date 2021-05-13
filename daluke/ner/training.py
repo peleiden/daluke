@@ -7,6 +7,9 @@ from transformers import AdamW, get_linear_schedule_with_warmup
 
 from pelutils import log, DataStorage
 
+from .data import Split, NERDataset
+from .evaluation import evaluate_ner
+
 @dataclass
 class TrainResults(DataStorage):
     losses: list
@@ -18,15 +21,19 @@ class TrainNER:
     def __init__(self,
             model: nn.Module,
             dataloader: torch.utils.data.DataLoader,
+            dataset: NERDataset,
             device: torch.device,
             epochs: int,
             lr: float = 1e-5,
             warmup_prop: float = 0.06,
             weight_decay: float = 0.01,
+            dev_dataloader: torch.utils.data.DataLoader | None = None,
         ):
         self.model = model
         self.device = device
         self.dataloader = dataloader
+        self.dataset = dataset
+        self.dev_dataloader = dev_dataloader
         self.epochs = epochs
         # Create optimizer
         params = list(model.named_parameters())
@@ -55,6 +62,11 @@ class TrainNER:
 
                 losses.append(loss.item())
                 log.debug(f"Epoch {i} / {self.epochs-1}, batch: {j} / {len(self.dataloader)-1}. Loss: {loss.item():.5f}.")
+            if self.dev_dataloader is not None:
+                # dev_results = TODO: Save running dev scores and plot afterwards
+                log("Evaluating on development set ...")
+                evaluate_ner(self.model, self.dev_dataloader, self.dataset, self.device, Split.DEV, also_no_misc=False)
+                self.model.train()
 
         return TrainResults(
             losses = losses,
