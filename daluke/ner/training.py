@@ -8,10 +8,12 @@ from transformers import AdamW, get_linear_schedule_with_warmup
 from pelutils import log, DataStorage
 
 from .evaluation import evaluate_ner, pred_distribution
+from .data import Split, NERDataset
 
 @dataclass
 class TrainResults(DataStorage):
     losses: list
+    running_f1: list
 
 class TrainNER:
     # These layers should not be subject to weight decay
@@ -48,7 +50,7 @@ class TrainNER:
 
     def run(self):
         self.model.train()
-        losses = list()
+        losses, running_f1 = list(), list()
         for i in range(self.epochs):
             for j, batch in enumerate(self.dataloader):
                 scores = self.model(batch)
@@ -70,6 +72,7 @@ class TrainNER:
 
         return TrainResults(
             losses = losses,
+            running_f1 = running_f1
         )
 
     def _get_optimizer_params(self, params: list, do_decay: bool) -> list:
