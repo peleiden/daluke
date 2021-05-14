@@ -11,7 +11,7 @@ import daluke.ner.data as datasets
 
 from daluke.ner.model import NERDaLUKE, get_ent_embed
 from daluke.ner.data import NERDataset, Split
-from daluke.ner.evaluation import evaluate_ner
+from daluke.ner.evaluation import evaluate_ner, pred_distribution
 
 from daluke.serialize import load_from_archive, TRAIN_OUT
 
@@ -52,7 +52,7 @@ def run_experiment(args: dict[str, str]):
     ent_embed_size = get_ent_embed(state_dict).shape[1]
     model = NERDaLUKE(len(dataset.all_labels), bert_config, ent_vocab_size=2, ent_embed_size=ent_embed_size)
     model.load_state_dict(state_dict, strict=False)
-    model.to(device)
+    model = model.to(device)
 
     log.debug(model)
     dataset.document(dataloader, Split.TEST)
@@ -60,6 +60,7 @@ def run_experiment(args: dict[str, str]):
     log("Starting evaluation of daLUKE for NER")
     results = evaluate_ner(model, dataloader, dataset, device, Split.TEST)
     results.save(args["location"])
+    pred_distribution(results)
 
 if __name__ == '__main__':
     with log.log_errors:

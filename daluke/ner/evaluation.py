@@ -67,7 +67,7 @@ def pred_distribution(res: NER_Results):
     for seq in res.preds:
         for pred in seq:
             dist[pred if "-" not in pred else pred.split("-")[-1]] += 1
-    log("Prediction distribution (class no.: number of predictions):", json.dumps(dist, indent=4))
+    log("Prediction distribution:", json.dumps(dist, indent=4))
     return dist
 
 def _rm_misc(seqs: list[list[str]], null_class: str) -> list[list[str]]:

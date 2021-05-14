@@ -62,7 +62,7 @@ def run_experiment(args: dict[str, str]):
         ent_embed_size = ent_embed_size,
     )
     model.load_state_dict(state_dict, strict=False)
-    model.to(device)
+    model = model.to(device)
 
     log(f"Starting training of DaLUKE for NER on {args['dataset']}")
     training = TrainNER(
