@@ -73,7 +73,7 @@ class TrainNER:
             if self.dev_dataloader is not None:
                 log("Evaluating on development set ...")
                 dev_results = evaluate_ner(self.model, self.dev_dataloader, self.dataset, self.device, Split.DEV, also_no_misc=False)
-                res.running_f1.append(dev_results.statistics["micro avg"]["f1-score"].item())
+                res.running_f1.append(dev_results.statistics["micro avg"]["f1-score"])
                 res.pred_distributions.append(pred_distribution(dev_results))
                 self.model.train()
         return res

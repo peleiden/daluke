@@ -50,7 +50,7 @@ def run_experiment(args: dict[str, str]):
         max_entity_span = metadata["max-entity-span"] if args["max_entity_span"] is None else args["max_entity_span"],
         device          = device,
     )
-    dataloader = dataset.build(Split.TEST, args["batch_size"])
+    dataloader = dataset.build(Split.TRAIN, args["batch_size"])
     dev_dataloader = dataset.build(Split.DEV, args["batch_size"]) if args["eval"] else None
 
     log("Loading model ...")
@@ -63,7 +63,6 @@ def run_experiment(args: dict[str, str]):
     )
     model.load_state_dict(state_dict, strict=False)
     model = model.to(device)
-    model.init_queries()
 
     log(f"Starting training of DaLUKE for NER on {args['dataset']}")
     training = TrainNER(
@@ -80,7 +79,7 @@ def run_experiment(args: dict[str, str]):
     log.debug(training.model)
     log.debug(training.scheduler)
     log.debug(training.optimizer)
-    dataset.document(dataloader, Split.TEST)
+    dataset.document(dataloader, Split.TRAIN)
 
     results = training.run()
 
