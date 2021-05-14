@@ -39,10 +39,14 @@ class TrainNER:
         self.epochs = epochs
         # Create optimizer
         params = list(model.named_parameters())
+        optimizer_parameters = [
+             {"params": self._get_optimizer_params(params, do_decay=True), "weight_decay": weight_decay},
+             {"params": self._get_optimizer_params(params, do_decay=False), "weight_decay": 0.0}
+        ]
         self.optimizer = AdamW(
-            [{"params": self._get_optimizer_params(params, do_decay=True), "weight_decay": weight_decay},
-             {"params": self._get_optimizer_params(params, do_decay=False), "weight_decay": 0.0}],
-            lr           = lr,
+            optimizer_parameters,
+            lr    = lr,
+            betas = (0.9, 0.98),
         )
         # Create LR scheduler
         num_updates = epochs * len(self.dataloader)

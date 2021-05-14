@@ -37,7 +37,6 @@ class NERDaLUKE(DaLUKE):
         """
         # Forward pass through encoder, saving the embeddings of words and entitites
         word_hidden, ent_hidden = super().forward(ex)
-
         hid_w_size = word_hidden.size()[-1]
 
         ent_start_pos = ex.entities.start_pos.unsqueeze(-1).expand(-1, -1, hid_w_size)
