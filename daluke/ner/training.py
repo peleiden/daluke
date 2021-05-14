@@ -68,7 +68,7 @@ class TrainNER:
                 self.model.zero_grad()
 
                 res.losses.append(loss.item())
-                log.debug(f"Epoch {i} / {self.epochs-1}, batch: {j} / {len(self.dataloader)-1}. Loss: {loss.item():.5f}.")
+                log.debug(f"Epoch {i} / {self.epochs-1}, batch: {j} / {len(self.dataloader)-1}. LR: {self.scheduler.get_last_lr()[0]:.2e} Loss: {loss.item():.5f}.")
             # Perform running evaluation
             if self.dev_dataloader is not None:
                 log("Evaluating on development set ...")
