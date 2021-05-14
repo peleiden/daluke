@@ -7,8 +7,7 @@ from transformers import AdamW, get_linear_schedule_with_warmup
 
 from pelutils import log, DataStorage
 
-from .data import Split, NERDataset
-from .evaluation import evaluate_ner
+from .evaluation import evaluate_ner, pred_distribution
 
 @dataclass
 class TrainResults(DataStorage):
@@ -63,10 +62,11 @@ class TrainNER:
                 losses.append(loss.item())
                 log.debug(f"Epoch {i} / {self.epochs-1}, batch: {j} / {len(self.dataloader)-1}. Loss: {loss.item():.5f}.")
             if self.dev_dataloader is not None:
-                # dev_results = TODO: Save running dev scores and plot afterwards
                 log("Evaluating on development set ...")
-                evaluate_ner(self.model, self.dev_dataloader, self.dataset, self.device, Split.DEV, also_no_misc=False)
+                dev_results = evaluate_ner(self.model, self.dev_dataloader, self.dataset, self.device, Split.DEV, also_no_misc=False)
+                pred_distribution(dev_results)
                 self.model.train()
+                # TODO: Save running dev scores and plot afterwards
 
         return TrainResults(
             losses = losses,

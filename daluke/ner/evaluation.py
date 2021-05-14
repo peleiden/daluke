@@ -1,6 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Union
+from collections import defaultdict
+import json
 
 import numpy as np
 import torch
@@ -59,6 +61,13 @@ def evaluate_ner(model: nn.Module, dataloader: torch.utils.data.DataLoader, data
         statistics=stats,
         statistics_nomisc=stats_nomisc if also_no_misc else {},
     )
+
+def pred_distribution(res: NER_Results):
+    dist = defaultdict(lambda: 0)
+    for seq in res.preds:
+        for pred in seq:
+            dist[pred] += 1
+    log("Prediction distribution (class no.: number of predictions):", json.dumps(dist, indent=4))
 
 def _rm_misc(seqs: list[list[str]], null_class: str) -> list[list[str]]:
     """ Convert all "MISC"-entities to null-entities """
