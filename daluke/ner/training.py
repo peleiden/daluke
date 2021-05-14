@@ -45,8 +45,9 @@ class TrainNER:
         ]
         self.optimizer = AdamW(
             optimizer_parameters,
-            lr    = lr,
-            betas = (0.9, 0.98),
+            lr           = lr,
+            betas        = (0.9, 0.98),
+            correct_bias = False,
         )
         # Create LR scheduler
         num_updates = epochs * len(self.dataloader)
