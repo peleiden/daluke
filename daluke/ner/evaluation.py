@@ -66,8 +66,9 @@ def pred_distribution(res: NER_Results):
     dist = defaultdict(lambda: 0)
     for seq in res.preds:
         for pred in seq:
-            dist[pred] += 1
+            dist[pred if "-" not in pred else pred.split("-")[-1]] += 1
     log("Prediction distribution (class no.: number of predictions):", json.dumps(dist, indent=4))
+    return dist
 
 def _rm_misc(seqs: list[list[str]], null_class: str) -> list[list[str]]:
     """ Convert all "MISC"-entities to null-entities """

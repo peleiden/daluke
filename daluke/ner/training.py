@@ -12,8 +12,9 @@ from .data import Split, NERDataset
 
 @dataclass
 class TrainResults(DataStorage):
-    losses: list
-    running_f1: list
+    losses: list[float]
+    running_f1: list[float]
+    pred_distributions: list[dict[str, int]]
 
 class TrainNER:
     # These layers should not be subject to weight decay
@@ -50,7 +51,7 @@ class TrainNER:
 
     def run(self):
         self.model.train()
-        losses, running_f1 = list(), list()
+        res = TrainResults(losses=list(), running_f1=list(), pred_distributions=list())
         for i in range(self.epochs):
             for j, batch in enumerate(self.dataloader):
                 scores = self.model(batch)
@@ -61,19 +62,17 @@ class TrainNER:
                 self.scheduler.step()
                 self.model.zero_grad()
 
-                losses.append(loss.item())
+                res.losses.append(loss.item())
                 log.debug(f"Epoch {i} / {self.epochs-1}, batch: {j} / {len(self.dataloader)-1}. Loss: {loss.item():.5f}.")
+            # Perform running evaluation
             if self.dev_dataloader is not None:
                 log("Evaluating on development set ...")
                 dev_results = evaluate_ner(self.model, self.dev_dataloader, self.dataset, self.device, Split.DEV, also_no_misc=False)
-                pred_distribution(dev_results)
+                res.running_f1.append(dev_results.statistics["micro avg"]["f1-score"])
+                res.pred_distributions.append(pred_distribution(dev_results))
                 self.model.train()
-                # TODO: Save running dev scores and plot afterwards
+        return res
 
-        return TrainResults(
-            losses = losses,
-            running_f1 = running_f1
-        )
 
     def _get_optimizer_params(self, params: list, do_decay: bool) -> list:
         # Only include the parameter if do_decay has reverse truth value of the parameter being in no_decay
