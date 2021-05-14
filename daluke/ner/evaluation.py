@@ -27,6 +27,8 @@ class NER_Results(DataStorage):
     statistics:         dict[str, dict[str, float]]
     statistics_nomisc:  dict[str, dict[str, float]]
 
+    subfolder = "eval-results"
+
 def evaluate_ner(model: nn.Module, dataloader: torch.utils.data.DataLoader, dataset: NERDataset, device: torch.device, split: Split, also_no_misc=True) -> NER_Results:
     model.eval()
     annotations, texts = dataset.annotations[split], dataset.texts[split]

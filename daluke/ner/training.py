@@ -15,6 +15,7 @@ class TrainResults(DataStorage):
     losses: list[float]
     running_f1: list[float]
     pred_distributions: list[dict[str, int]]
+    subfolder = "train-results"
 
 class TrainNER:
     # These layers should not be subject to weight decay
