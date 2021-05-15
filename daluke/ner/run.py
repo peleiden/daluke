@@ -13,7 +13,7 @@ from daluke.serialize import load_from_archive, save_to_archive, COLLECT_OUT, TR
 from daluke.ner.model import NERDaLUKE, mutate_for_ner
 from daluke.ner.training import TrainNER
 from daluke.ner.data import NERDataset, Split
-
+from daluke.ner.evaluation import type_distribution
 
 ARGUMENTS = {
     "model": {
@@ -80,8 +80,11 @@ def run_experiment(args: dict[str, str]):
     log.debug(training.scheduler)
     log.debug(training.optimizer)
     dataset.document(dataloader, Split.TRAIN)
-
     results = training.run()
+
+    if args["eval"]:
+        log("True dev. set distribution")
+        results.true_type_distribution = type_distribution(dataset.annotations[Split.DEV])
 
     os.makedirs(args["location"], exist_ok=True)
     results.save(args["location"])

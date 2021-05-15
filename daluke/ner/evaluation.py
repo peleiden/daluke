@@ -50,8 +50,8 @@ def evaluate_ner(model: nn.Module, dataloader: torch.utils.data.DataLoader, data
     )
     log(classification_report(annotations, preds, zero_division=0, digits=4))
 
-    #FIXME: Do this manually instead of rerunning everything
     if also_no_misc:
+        #FIXME: Do this manually instead of rerunning everything
         stats_nomisc = _stats_to_py_nums(
             classification_report(_rm_misc(annotations, dataset.null_label), _rm_misc(preds, dataset.null_label), output_dict=True)
         )
@@ -64,12 +64,12 @@ def evaluate_ner(model: nn.Module, dataloader: torch.utils.data.DataLoader, data
         statistics_nomisc=stats_nomisc if also_no_misc else {},
     )
 
-def pred_distribution(res: NER_Results):
+def type_distribution(seqs: list[list[str]]):
     dist = defaultdict(lambda: 0)
-    for seq in res.preds:
+    for seq in seqs:
         for pred in seq:
             dist[pred if "-" not in pred else pred.split("-")[-1]] += 1
-    log("Prediction distribution:", json.dumps(dist, indent=4))
+    log("Type distribution:", json.dumps(dist, indent=4))
     return dist
 
 def _rm_misc(seqs: list[list[str]], null_class: str) -> list[list[str]]:

@@ -11,7 +11,7 @@ import daluke.ner.data as datasets
 
 from daluke.ner.model import NERDaLUKE, get_ent_embed
 from daluke.ner.data import NERDataset, Split
-from daluke.ner.evaluation import evaluate_ner, pred_distribution
+from daluke.ner.evaluation import evaluate_ner, type_distribution
 
 from daluke.serialize import load_from_archive, TRAIN_OUT
 
@@ -56,11 +56,12 @@ def run_experiment(args: dict[str, str]):
 
     log.debug(model)
     dataset.document(dataloader, Split.TEST)
+    type_distribution(dataset.annotations[Split.TEST])
 
     log("Starting evaluation of daLUKE for NER")
     results = evaluate_ner(model, dataloader, dataset, device, Split.TEST)
     results.save(args["location"])
-    pred_distribution(results)
+    type_distribution(results.preds)
 
 if __name__ == '__main__':
     with log.log_errors:

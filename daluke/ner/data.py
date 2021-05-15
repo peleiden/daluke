@@ -241,15 +241,14 @@ class NERDataset(ABC):
                 might_need_split = False
         return bounds
 
-    def document(self, loader: DataLoader, split: Split):
+    def document(self, loader: DataLoader, split: Split) -> dict[str, int]:
         """
         To be run after _build_examples to document the resulting data.
         """
         examples = [ex for _, ex in loader.dataset]
         non_zeros = [(ex.entities.labels[ex.entities.labels != -1] != self.label_to_idx[self.null_label]).float().mean().item() for ex in examples]
         log(f"Built dataset of {len(self.texts[split])} documents divided into {len(examples)} examples to be forward passed")
-        log(f"Average proportion of spans that have positive labels over all examples: {np.mean(non_zeros)*100:.2f}%")
-
+        log(f"Average proportion of spans in each example that have positive labels: {np.mean(non_zeros)*100:.2f}%")
 
 class DaNE(NERDataset):
     null_label = "O"
@@ -258,7 +257,7 @@ class DaNE(NERDataset):
     def build(self, split: Split, batch_size: int) -> DataLoader:
         # Get all three splits from DaNE and divide them in source texts and annotations
         datasets = DDT().load_as_simple_ner(predefined_splits=True)
-        self.texts, self.annotations = list(s[0] for s in datasets), list(s[1] for s in datasets) #FIXME: Tuplificér
+        self.texts, self.annotations = tuple(d[0] for d in datasets), tuple(d[1] for d in datasets)
         # Sadly, we do not have access to where the DaNE sentences are divided into articles, so we let each sentence be an entire text.
         sentence_boundaries = [[len(s)] for s in self.texts[split]]
         examples = self._build_examples(sentence_boundaries, split)

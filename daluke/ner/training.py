@@ -7,7 +7,7 @@ from transformers import AdamW, get_linear_schedule_with_warmup
 
 from pelutils import log, DataStorage
 
-from .evaluation import evaluate_ner, pred_distribution
+from .evaluation import evaluate_ner, type_distribution
 from .data import Split, NERDataset
 
 @dataclass
@@ -15,6 +15,9 @@ class TrainResults(DataStorage):
     losses: list[float]
     running_f1: list[float]
     pred_distributions: list[dict[str, int]]
+    true_type_distribution: dict[str, int]
+
+
     subfolder = "train-results"
 
 class TrainNER:
@@ -57,7 +60,7 @@ class TrainNER:
 
     def run(self):
         self.model.train()
-        res = TrainResults(losses=list(), running_f1=list(), pred_distributions=list())
+        res = TrainResults(losses=list(), running_f1=list(), pred_distributions=list(), true_type_distribution=dict())
         for i in range(self.epochs):
             for j, batch in enumerate(self.dataloader):
                 scores = self.model(batch)
@@ -75,7 +78,7 @@ class TrainNER:
                 log("Evaluating on development set ...")
                 dev_results = evaluate_ner(self.model, self.dev_dataloader, self.dataset, self.device, Split.DEV, also_no_misc=False)
                 res.running_f1.append(dev_results.statistics["micro avg"]["f1-score"])
-                res.pred_distributions.append(pred_distribution(dev_results))
+                res.pred_distributions.append(type_distribution(dev_results.preds))
                 self.model.train()
         return res
 
