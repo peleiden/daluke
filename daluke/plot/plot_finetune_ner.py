@@ -24,17 +24,18 @@ def loss_plot(location: str):
     ax1.set_xlabel("Batch")
     ax1.set_ylabel("Cross Entropy Loss")
 
+    h, l = ax1.get_legend_handles_labels()
     # Accuracy axis
     if res.running_f1 is not None:
         ax2 = ax1.twinx()
         ax2.plot(100*np.array(res.running_f1), color=tab_colours[1], linewidth=linewidth, linestyle="-.", label="Running evaluation on dev. set")
         ax2.set_ylim([0, 110])
         ax2.set_ylabel("Micro avg. F1 [%]")
+        h2, l2 = ax2.get_legend_handles_labels()
+        h += h2
+        l += l2
 
-
-    h1, l1 = ax1.get_legend_handles_labels()
-    h2, l2 = ax2.get_legend_handles_labels()
-    ax1.legend(h1+h2, l1+l2)
+    ax1.legend(h, l)
     plt.title("Fine-tuning loss")
     plt.grid()
     plt.tight_layout()
