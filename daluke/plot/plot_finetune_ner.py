@@ -16,13 +16,11 @@ setup_mpl()
 def loss_plot(location: str):
     res = TrainResults.load()
     _, ax1 = plt.subplots(figsize=figsize_std)
-    linewidth = 2
 
     # Loss axis
     x = np.arange(len(res.losses)) + 1
-    ax1.plot(x, res.losses, color=tab_colours[0], label="NER classification loss", linewidth=linewidth)
+    ax1.semilogy(x, res.losses, color=tab_colours[0], label="NER classification loss", linewidth=1)
 
-    ax1.set_ylim(bottom=0)
     ax1.set_xlabel("Batch")
     ax1.set_ylabel("Cross Entropy Loss (log. axis)")
 
@@ -34,13 +32,13 @@ def loss_plot(location: str):
         x2 = [1, *x2]
 
         ax2.plot(x2, 100*np.array([0]+[e.statistics["micro avg"]["f1-score"] for e in res.running_evaluations]),
-            color=tab_colours[1], linewidth=linewidth, linestyle="-.", label="Micro avg. F1", marker=".", markersize=5,
+            color=tab_colours[1], linewidth=3, linestyle="-.", label="Micro avg. F1", marker=".", markersize=10,
         )
         ax2.plot(x2, 100*np.array([0]+[e.statistics["micro avg"]["precision"] for e in res.running_evaluations]),
-            color=tab_colours[2], linewidth=linewidth, linestyle="-.", label="Micro avg. precision", alpha=.5, marker=".", markersize=5
+            color=tab_colours[2], linewidth=3, linestyle="-.", label="Micro avg. precision", marker=".", markersize=10,
         )
         ax2.plot(x2, 100*np.array([0]+[e.statistics["micro avg"]["recall"] for e in res.running_evaluations]),
-            color=tab_colours[3], linewidth=linewidth, linestyle="-.", label="Micro avg. recall", alpha=.5, marker=".", markersize=5,
+            color=tab_colours[3], linewidth=3, linestyle="-.", label="Micro avg. recall", marker=".", markersize=10,
         )
 
         ax2.set_ylim([0, 110])
@@ -50,7 +48,6 @@ def loss_plot(location: str):
         h += h2
         l += l2
 
-    ax1.set_yscale("log")
     ax1.legend(h, l)
     ax1.set_title("NER Fine-tuning of daLUKE")
     plt.grid()
