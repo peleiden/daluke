@@ -22,9 +22,9 @@ class TrainResults(DataStorage):
     w_accuracies: np.ndarray  # Masked word pred. accuracy, epochs x param updates x len(top_k)
     e_accuracies: np.ndarray  # Masked ent. pred. accuracy, epochs x param updates x len(top_k)
 
-    orig_params:  torch.Tensor  # Array of all parameters in original model
-    param_diff_1: np.ndarray    # 1-norm distance to original parameters, epochs x param updates
-    param_diff_2: np.ndarray    # 2-norm distance to original parameters, epochs x param updates
+    orig_params:  np.ndarray  # Array of all parameters in original model
+    param_diff_1: np.ndarray  # 1-norm distance to original parameters, epochs x param updates
+    param_diff_2: np.ndarray  # 2-norm distance to original parameters, epochs x param updates
 
     subfolder = get_timestamp(for_file=True) + "_pretrain_results"
     json_name = "pretrain_results.json"

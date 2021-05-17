@@ -171,7 +171,6 @@ def train(
     # Device should be cuda:rank or just cuda if single gpu, else cpu
     if is_distributed:
         device = torch.device("cuda", index=rank)
-        torch.cuda.set_device(rank)
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -226,8 +225,8 @@ def train(
         new_weights = load_base_model_weights(model, base_model)
     # Initialize self-attention query matrices to BERT word query matrix
     model.init_queries()
-    if not resume_from:
-        res.orig_params = model.all_params().cpu()
+    if not resume_from and is_master:
+        res.orig_params = model.all_params().cpu().numpy()
     log("Pretraining model initialized with %s parameters" % thousand_seps(len(model)))
 
     model_params = list(model.named_parameters())
@@ -245,7 +244,7 @@ def train(
 
     if resume_from:
         mpath = fpath((TrainResults.subfolder, MODEL_OUT.format(i=res.epoch)))
-        model.load_state_dict(torch.load(mpath))
+        model.load_state_dict(torch.load(mpath, map_location=device))
         log(f"Resuming training saved at epoch {res.epoch} and loaded model from {mpath}")
     if is_distributed:
         model = DDP(model, device_ids=[rank])
@@ -325,7 +324,8 @@ def train(
                     t_loss += loss.item()
                     w_loss += word_loss.item() / grad_accumulation_steps
                     e_loss += ent_loss.item() / grad_accumulation_steps
-                reset_cuda()
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
                 TT.end_profile()
 
                 # Save accuracy for statistics
@@ -361,10 +361,12 @@ def train(
 
             # Calculate how much gradient has changed
             with TT.profile("Parameter changes"), torch.no_grad():
-                pars = res.orig_params.to(device)
-                res.param_diff_1[i, j] = torch.abs(model.all_params()-pars).sum().item()
-                res.param_diff_2[i, j] = torch.sqrt(torch.sum(model.all_params()-pars)**2).item()
-                del pars
+                if is_master:
+                    orig_pars = torch.from_numpy(res.orig_params).to(device)
+                    current_pars = (model.module if is_distributed else model).all_params()
+                    res.param_diff_1[i, j] = torch.abs(current_pars-orig_pars).sum().item()
+                    res.param_diff_2[i, j] = torch.sqrt(torch.sum(current_pars-orig_pars)**2).item()
+                    del orig_pars
 
             res.losses[i, j] = t_loss
             res.w_losses[i, j] = w_loss
@@ -391,7 +393,7 @@ def train(
         )
         # Save results and model
         if is_master and (i+1) % save_every == 0:
-            paths = save_training(location, params, model.model if is_distributed else model, res, optimizer, scheduler, scaler)
+            paths = save_training(location, params, model.module if is_distributed else model, res, optimizer, scheduler, scaler)
             log.debug("Saved progress to", *paths)
 
     log.debug("Time distribution", TT)
