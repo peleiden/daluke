@@ -24,7 +24,7 @@ def loss_plot(location: str):
 
     ax1.set_ylim(bottom=0)
     ax1.set_xlabel("Batch")
-    ax1.set_ylabel("Cross Entropy Loss")
+    ax1.set_ylabel("Cross Entropy Loss (log. axis)")
 
     h, l = ax1.get_legend_handles_labels()
     # Accuracy axis
@@ -34,13 +34,13 @@ def loss_plot(location: str):
         x2 = [1, *x2]
 
         ax2.plot(x2, 100*np.array([0]+[e.statistics["micro avg"]["f1-score"] for e in res.running_evaluations]),
-            color=tab_colours[1], linewidth=linewidth, linestyle="-.", label="Micro avg. F1"
+            color=tab_colours[1], linewidth=linewidth, linestyle="-.", label="Micro avg. F1", marker=".", markersize=5,
         )
         ax2.plot(x2, 100*np.array([0]+[e.statistics["micro avg"]["precision"] for e in res.running_evaluations]),
-            color=tab_colours[2], linewidth=linewidth, linestyle="-.", label="Micro avg. precision", alpha=.5
+            color=tab_colours[2], linewidth=linewidth, linestyle="-.", label="Micro avg. precision", alpha=.5, marker=".", markersize=5
         )
         ax2.plot(x2, 100*np.array([0]+[e.statistics["micro avg"]["recall"] for e in res.running_evaluations]),
-            color=tab_colours[3], linewidth=linewidth, linestyle="-.", label="Micro avg. recall", alpha=.5
+            color=tab_colours[3], linewidth=linewidth, linestyle="-.", label="Micro avg. recall", alpha=.5, marker=".", markersize=5,
         )
 
         ax2.set_ylim([0, 110])
@@ -50,8 +50,9 @@ def loss_plot(location: str):
         h += h2
         l += l2
 
+    ax1.set_yscale("log")
     ax1.legend(h, l)
-    ax1.set_title("Fine-tuning loss")
+    ax1.set_title("NER Fine-tuning of daLUKE")
     plt.grid()
     plt.tight_layout()
 
