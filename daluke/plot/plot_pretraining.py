@@ -37,10 +37,11 @@ def loss_plot(location: str):
     ax1.scatter(epochs, res.losses[:, 0],   s=DOTSIZE, color=tab_colours[0])
     ax1.scatter(epochs, res.w_losses[:, 0], s=DOTSIZE, color=tab_colours[1])
     ax1.scatter(epochs, res.e_losses[:, 0], s=DOTSIZE, color=tab_colours[2])
+    ax1.set_xlim(left=0)
     ax1.set_ylim(bottom=0)
     ax1.set_xlabel("Batch")
     ax1.set_ylabel("Loss")
-    ax1.set_title("Pretraining loss and accuracy")
+    ax1.set_title("Loss During Pretraining")
     plt.grid()
     plt.legend(loc=1)
     _save(location, "loss.png")
@@ -52,7 +53,7 @@ def scaled_loss_plot(location: str):
     plt.figure(figsize=figsize_std)
     plt.plot(res.scaled_loss.ravel(), color=tab_colours[0])
     plt.scatter(epochs, res.scaled_loss[:, 0], s=DOTSIZE, color=tab_colours[0])
-    plt.title("Scaled loss")
+    plt.title("Scaled Loss")
     plt.yscale("log")
     plt.xlabel("Batch")
     plt.ylabel("Loss")
@@ -64,7 +65,6 @@ def runtime_plot(location: str):
     plt.figure(figsize=figsize_std)
 
     plt.plot(res.runtime.ravel())
-    plt.ylim(bottom=0)
     plt.xlabel("Batch")
     plt.ylabel("Runtime [s]")
     plt.title("Runtime")
@@ -75,23 +75,24 @@ def parameter_plot(location: str):
     res = TrainResults.load()
     norm1 = res.param_diff_1.ravel()
     norm2 = res.param_diff_2.ravel()
-    D_big = (norm1 / norm2) ** 2
+    D_big = ((norm1 / norm2) ** 2) / res.orig_params.size
     epochs = np.arange(res.epoch+1) * res.param_diff_1.shape[1]
 
     _, (ax1, ax2) = plt.subplots(ncols=2, figsize=figsize_wide)
 
     # Norms
-    ax1.plot(norm1, color=tab_colours[0], label="1-norm")
+    ax1.plot(norm1, color=tab_colours[0], label="1-Norm")
     ax1.scatter(epochs, res.param_diff_1[:, 0], s=DOTSIZE, color=tab_colours[0])
     ax1.set_ylim(bottom=0)
     ax1.set_xlabel("Batch")
-    ax1.set_ylabel("1-norm")
+    ax1.set_ylabel("1-Norm")
+    ax1.set_xlim(left=0)
     ax1.set_ylim(bottom=0)
 
     ax1_ = ax1.twinx()
-    ax1_.plot(norm2, color=tab_colours[1], label="2-norm")
+    ax1_.plot(norm2, color=tab_colours[1], label="2-Norm")
     ax1_.scatter(epochs, res.param_diff_2[:, 0], s=DOTSIZE, color=tab_colours[1])
-    ax1_.set_ylabel("2-norm")
+    ax1_.set_ylabel("2-Norm")
     ax1_.set_ylim(bottom=0)
 
     h1, l1 = ax1.get_legend_handles_labels()
@@ -100,9 +101,12 @@ def parameter_plot(location: str):
     ax1.grid()
 
     # D
-    ax2.plot(D_big, color=tab_colours[2], label=r"$D_{\operatorname{big}}$")
-    ax2.scatter(epochs, D_big[epochs], s=DOTSIZE, color=tab_colours[2])
-    ax2.set_ylabel("Estimated number of big parameter changes")
+    ax2.plot(100*D_big, color=tab_colours[2])
+    ax2.scatter(epochs, 100*D_big[epochs], s=DOTSIZE, color=tab_colours[2])
+    ax2.set_title(r"$D_{\operatorname{big}}$")
+    ax2.set_xlabel("Batch")
+    ax2.set_ylabel(r"$D_{\operatorname{big}}$ [%]")
+    ax2.set_xlim(left=0)
     ax2.set_ylim(bottom=0)
     ax2.grid()
 
@@ -124,25 +128,25 @@ def accuracy_plot(location: str):
 
     plt.figure(figsize=figsize_wide)
     epochs = np.arange(res.epoch+1) * res.w_accuracies.shape[1]
-    for i, (data, label) in enumerate(((res.w_accuracies, "Words"), (res.e_accuracies, "Entities"))):
+    for i, (data, label) in enumerate(((res.w_accuracies, "Word"), (res.e_accuracies, "Entity"))):
         plt.subplot(1, 2, i+1)
         colours = iter(tab_colours)
         for j, k in enumerate(res.top_k):
             c = next(colours)
             if k <= 10:
-                plt.plot(100*data[..., j].ravel(), color=c, label="%s, $k=%i$" % (label, k))
+                plt.plot(100*data[..., j].ravel(), color=c, label="$k=%i$" % k)
                 plt.scatter(epochs, 100*data[:, 0, j], color=c, s=DOTSIZE)
             else:
                 plt.plot(100*data[..., j].ravel(), alpha=0.3, color="gray")
                 n = 5
                 x = np.arange(data[..., j].size)
                 x, y = _rolling_avg(n, x, 100*data[..., j].ravel())
-                plt.plot(x, y, color=c, label="%s, $k=%i$" % (label, k))
+                plt.plot(x, y, color=c, label="$k=%i$" % k)
                 plt.scatter(x[epochs[1:]]-n, y[epochs[1:]-n], color=c, s=DOTSIZE)
 
         plt.xlim(left=0)
         plt.ylim([0, 110])
-        plt.title("Top-k %s accuracy" % label)
+        plt.title("Top-k %s Accuracy" % label)
         plt.xlabel("Batch")
         if i == 0:
             plt.ylabel("Accuracy [%]")
@@ -156,8 +160,10 @@ def lr_plot(location: str):
     plt.figure(figsize=figsize_std)
     plt.plot(res.lr.flat)
     plt.xlabel("Batch")
-    plt.ylabel("Learning rate")
-    plt.title("Learning rate")
+    plt.ylabel("Learning Rate")
+    plt.title("Learning Rate")
+    plt.xlim(left=0)
+    plt.ylim(bottom=0)
     plt.grid()
 
     _save(location, "lr.png")
