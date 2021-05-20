@@ -51,12 +51,15 @@ def pca(A: torch.Tensor, k: int) -> tuple[torch.Tensor, torch.Tensor]:
     A is (# data points, # dimensions).
     k is number of eigenvalues used for projection
     """
+    log.debug("Calculating covariance matrix")
     A_c = A - A.mean(dim=0)
     # As # data points >>> # dimensions (~1M vs. 2k), we do covariance of features
     covar = (A_c.T @ A_c) / (A_c.shape[0]-1)
+    log.debug("Calculating eigenvalues ...")
     lambdas, Q = torch.linalg.eigh(covar)
     # Want it in eigenvalue-descending order
     lambdas, Q = lambdas.flip(0), Q.flip(1)
+    log.debug("Transforming to PCA")
     P = Q[:, :k]
     Z = A_c @ P
     return Z, lambdas
