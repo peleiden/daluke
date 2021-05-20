@@ -182,6 +182,7 @@ def train(
     # Number of parameter updates each epoch
     grad_accumulation_steps = params.batch_size // (params.ff_size * num_workers)
     num_updates_epoch = len(loader) // grad_accumulation_steps
+    assert num_updates_epoch, "Batch size cannot be larger than number of sequences in dataset"
     # Total number of parameter updates
     num_updates_all = num_updates_epoch * params.epochs
 
