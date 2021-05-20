@@ -335,8 +335,8 @@ def train(
                 w_loss += word_loss.item() / grad_accumulation_steps
                 e_loss += ent_loss.item() / grad_accumulation_steps
 
-                if torch.cuda.is_available():
-                    torch.cuda.synchronize()
+                if torch.cuda.is_available() and is_distributed:
+                    torch.cuda.synchronize(rank if is_distributed else None)
 
                 TT.end_profile()
 
