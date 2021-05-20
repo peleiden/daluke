@@ -35,19 +35,25 @@ class NERDaLUKE(DaLUKE):
         Classify NER by passing the word and entity id's through the encoder
         and running the linear classifier on the output
         """
-        # Forward pass through encoder, saving the embeddings of words and entitites
-        word_hidden, ent_hidden = super().forward(ex)
-        hid_w_size = word_hidden.size()[-1]
-
-        ent_start_pos = ex.entities.start_pos.unsqueeze(-1).expand(-1, -1, hid_w_size)
-        ent_end_pos = ex.entities.end_pos.unsqueeze(-1).expand(-1, -1, hid_w_size)
-
-        all_starts = torch.gather(word_hidden, -2, ent_start_pos)
-        all_ends = torch.gather(word_hidden, -2, ent_end_pos)
-
-        features = torch.cat([all_starts, all_ends, ent_hidden], dim=2)
+        # Forward pass through encoder, saving the contextualized representations of words and entitites
+        word_representations, ent_representations = super().forward(ex)
+        # We gather the starting and ending words in each entity span
+        start_word_representations, end_word_representations = self.collect_start_and_ends(word_representations, ex)
+        features = torch.cat([start_word_representations, end_word_representations, ent_representations], dim=2)
         features = self.drop(features)
         return self.classifier(features)
+
+    @staticmethod
+    def collect_start_and_ends(word_representations: torch.Tensor, ex: NERBatchedExamples) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Get the word representations for first and last entity as is done for BERT NER
+        """
+        hidden_word_size = word_representations.size()[-1]
+
+        ent_start_pos = ex.entities.start_pos.unsqueeze(-1).expand(-1, -1, hidden_word_size)
+        ent_end_pos = ex.entities.end_pos.unsqueeze(-1).expand(-1, -1, hidden_word_size)
+
+        return torch.gather(word_representations, -2, ent_start_pos), torch.gather(word_representations, -2, ent_end_pos)
 
 def span_probs_to_preds(span_probs: dict[tuple[int], np.ndarray], seq_len: int, dataset: NERDataset) -> list[str]:
     positives = list()
@@ -67,6 +73,7 @@ def span_probs_to_preds(span_probs: dict[tuple[int], np.ndarray], seq_len: int, 
     # Cut off the first element which is padding
     return preds
 
+# TODO: Move this to model - it is not specific for NER
 def get_ent_embed(state_dict: dict) -> dict:
     return state_dict[ENTITY_EMBEDDING_KEY]
 

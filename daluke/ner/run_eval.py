@@ -12,7 +12,7 @@ from daluke.ner.evaluation import evaluate_ner, type_distribution
 
 from daluke.serialize import load_from_archive, TRAIN_OUT
 
-EVAL_BATCH_SIZE = 32
+FP_SIZE = 32
 
 ARGUMENTS = {
     "model": {
@@ -34,7 +34,7 @@ def run_experiment(args: dict[str, Any]):
 
     log("Loading dataset ...")
     dataset = load_dataset(entity_vocab, args, metadata, device)
-    dataloader = dataset.build(Split.TEST, EVAL_BATCH_SIZE)
+    dataloader = dataset.build(Split.TEST, FP_SIZE)
 
     log("Loading model ...")
     model = load_model(state_dict, dataset, metadata, device)

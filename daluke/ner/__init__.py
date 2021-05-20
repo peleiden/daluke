@@ -14,8 +14,8 @@ def load_dataset(entity_vocab: list[dict], args: dict[str, Any], metadata: dict[
         entity_vocab,
         base_model      = metadata["base-model"],
         max_seq_length  = metadata["max-seq-length"],
-        max_entities    = metadata["max-entities"] if args["max_entities"] is None else args["max_entities"],
-        max_entity_span = metadata["max-entity-span"] if args["max_entity_span"] is None else args["max_entity_span"],
+        max_entities    = metadata["max-entities"] if args.get("max_entities") is None else args["max_entities"],
+        max_entity_span = metadata["max-entity-span"] if args.get("max_entity_span") is None else args["max_entity_span"],
         device          = device,
     )
 
