@@ -44,6 +44,7 @@ def collect_representations(modelpath: str, device: torch.device, target_device)
             # Flatten batch dimensions
             representations.view(-1, representations.shape[-1]).contiguous().to(target_device)
         )
+    # TODO: Colour after label
     return torch.cat(batch_representations)
 
 def pca(A: torch.Tensor, k: int) -> tuple[torch.Tensor, torch.Tensor]:
@@ -54,7 +55,7 @@ def pca(A: torch.Tensor, k: int) -> tuple[torch.Tensor, torch.Tensor]:
     log.debug("Calculating covariance matrix")
     A_c = A - A.mean(dim=0)
     # As # data points >>> # dimensions (~1M vs. 2k), we do covariance of features
-    covar = (A_c.T @ A_c) / (A_c.shape[0]-1)
+    covar = (A_c.T @ A_c) / (A_c.shape[1]-1)
     log.debug("Calculating eigenvalues ...")
     lambdas, Q = torch.linalg.eigh(covar)
     # Want it in eigenvalue-descending order

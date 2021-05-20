@@ -1,11 +1,13 @@
 import os
 
 import click
-from pelutils.logger import log
-from pelutils.ds.plot import figsize_std, tab_colours
+from itertools import combinations
 
 import matplotlib.pyplot as plt
 import numpy as np
+
+from pelutils.logger import log
+from pelutils.ds.plot import tab_colours, figsize_std
 
 from daluke.ner.analysis.representation_geometry import GeometryResults
 from daluke.plot import setup_mpl
@@ -29,7 +31,22 @@ def pca_explained_plot(location: str):
     plt.close()
 
 def pca_matrix_plot(location: str):
-    res = GeometryResults.load()
+    V = GeometryResults.load().pca_transformed.numpy()
+    N = 4
+
+    _, axes = plt.subplots(N-1, N-1, figsize=(20, 20))
+    # TODO: Dont create unused subplots
+    # j, i are switched around to get lower triangle
+    for (j, i) in combinations(range(N), 2):
+        print(i, j)
+        ax = axes[i-1, j]
+        ax.scatter(V[:, j], V[:, i])
+        ax.set_xlabel(f"PC {j+1}")
+        ax.set_ylabel(f"PC {i+1}")
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(location, "geometry-plots", "pca_matrix.png"))
+    plt.close()
 
 @click.command()
 @click.argument("location")
