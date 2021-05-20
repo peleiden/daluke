@@ -384,7 +384,7 @@ def train(
             res.w_accuracies[i, j] = np.nanmean(w_accuracies, axis=0)
             res.e_accuracies[i, j] = np.nanmean(e_accuracies, axis=0)
             log.debug(
-                "Performed parameter update %i / %i" % (j, num_updates_epoch-1),
+                "Performed parameter update %i / %i (ep. %i)" % (j, num_updates_epoch-1, i),
                 f"Loss (total, word, entity, scaled): {t_loss:10.5f}, {w_loss:10.5f}, {e_loss:10.5f}, {s_loss:10.5f}",
                 f"Accuracy (word, entity):     {100*res.w_accuracies[i, j, 0]:7.3f} %,  {100*res.e_accuracies[i, j, 0]:7.3f} %",
             )
