@@ -22,7 +22,7 @@ class GeometryResults(DataStorage):
 
     subfolder = "geometry"
 
-def collect_representations(modelpath: str, device: torch.device) -> torch.Tensor:
+def collect_representations(modelpath: str, device: torch.device, target_device) -> torch.Tensor:
     entity_vocab, metadata, state_dict = load_from_archive(modelpath)
     state_dict, ent_embed_size = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"])
     log("Loading dataset")
@@ -42,7 +42,7 @@ def collect_representations(modelpath: str, device: torch.device) -> torch.Tenso
         representations = torch.cat([start_word_representations, end_word_representations, entity_representations], dim=2)
         batch_representations.append(
             # Flatten batch dimensions
-            representations.view(-1, representations.shape[-1]).contiguous()
+            representations.view(-1, representations.shape[-1]).contiguous().to(target_device)
         )
     return torch.cat(batch_representations)
 
@@ -65,14 +65,14 @@ def pca(A: torch.Tensor, k: int) -> tuple[torch.Tensor, torch.Tensor]:
 @click.argument("path")
 @click.option("--model", default = os.path.join("local_data", COLLECT_OUT))
 @click.option("--n-components", default = 10, type=int)
-@click.option("--cpu", is_flag=True)
-def main(path: str, model: str, n_components: int, cpu: bool):
+@click.option("--pca-on-cpu", is_flag=True)
+def main(path: str, model: str, n_components: int, pca_on_cpu: bool):
     log.configure(
         os.path.join(path, "geometry-analysis.log"), "daLUKE embedding geometry analysis",
     )
-    device = torch.device("cuda" if torch.cuda.is_available() and not cpu else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     with torch.no_grad():
-        representations = collect_representations(model, device)
+        representations = collect_representations(model, device, target_device=torch.device("cpu") if pca_on_cpu else device)
     log("Performing principal component analysis")
     pca_transformed, principal_components = pca(representations, n_components)
 
