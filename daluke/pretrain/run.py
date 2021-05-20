@@ -4,7 +4,7 @@ import os
 import re as reee
 from typing import Any
 
-from pelutils import EnvVars
+from pelutils import EnvVars, get_timestamp
 from pelutils.parse import Parser
 from pelutils.logger import log
 
@@ -13,11 +13,12 @@ import torch.multiprocessing as mp
 
 from daluke import daBERT
 from daluke.pretrain.train import train, Hyperparams
-from daluke.pretrain.analysis import TrainResults
+from daluke.analysis.pretrain import TrainResults
 
 
 ARGUMENTS = {
-    "resume-from":     { "default": "", "type": str, "help": "Resume training from given directory. Set to 'newest' to load latest run" },
+    "resume":          { "action": "store_true", "help": "Resume from training given by name. If name if not given, resumes from newest non-named pretraining" },
+    "name":            { "default": "", "type": str, "help": "Name of pretraining" },
     "epochs":          { "default": Hyperparams.epochs, "type": int, "help": "Number of passes through the entire data set"},
     "batch-size":      { "default": Hyperparams.batch_size, "type": int, "help": "Number of sequences per parameter update" },
     "lr":              { "default": Hyperparams.lr, "type": float, "help": "Initial learning rate" },
@@ -39,7 +40,7 @@ def _run_training(rank: int, world_size: int, args: dict[str, Any]):
     return train(
         rank,
         world_size,
-        resume_from    = args.pop("resume_from"),
+        resume         = args.pop("resume"),
         location       = args.pop("location"),
         name           = args.pop("name"),
         quiet          = args.pop("quiet"),
@@ -62,14 +63,19 @@ if __name__ == '__main__':
         parser = Parser(ARGUMENTS, name="daluke-pretrain", multiple_jobs=False)
         args = parser.parse()[0]
 
-        if args["resume_from"] == "newest":
+        if args["resume"]:
             # Load last created save
-            args["resume_from"] = next(
-                p for p in sorted(os.listdir(args["location"]), reverse=True)
-                if os.path.isdir(os.path.join(args["location"], p)) and reee.fullmatch(r"[\-_0-9]+_pretrain_results", p)
-            )
+            if not args["name"]:
+                args["name"] = next(
+                    p for p in sorted(os.listdir(args["location"]), reverse=True)
+                    if os.path.isdir(os.path.join(args["location"], p)) and reee.fullmatch(r"[\-_0-9]+_pretrain_results", p)
+                )
+            else:
+                args["name"] = "pretrain-results_" + get_timestamp(for_file=True)
         else:
-            parser.document_settings(TrainResults.subfolder)
+            if not args["name"]:
+                args["name"] = "pretrain-results_" + get_timestamp(for_file=True)
+            parser.document_settings(args["name"])
         if torch.cuda.device_count() > 1:
             run(args)
         else:

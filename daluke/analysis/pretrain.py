@@ -11,12 +11,13 @@ from pelutils.ds import no_grad
 
 @dataclass
 class TrainResults(DataStorage):
-    losses:   np.ndarray  # Total loss, epochs x param updates
-    w_losses: np.ndarray  # Word pred. loss, epochs x param updates
-    e_losses: np.ndarray  # Entity pred. loss, epochs x param updates
-    runtime:  np.ndarray  # Runtime, epochs x param updates
-    lr:       np.ndarray  # Learning rate, epochs x param updates
-    epoch:    int
+    losses:       np.ndarray  # Total loss, epochs x param updates
+    w_losses:     np.ndarray  # Word pred. loss, epochs x param updates
+    e_losses:     np.ndarray  # Entity pred. loss, epochs x param updates
+    scaled_loss:  np.ndarray  # Scaled loss, epochs x param updates. Only zeros if not using amp
+    runtime:      np.ndarray  # Runtime, epochs x param updates
+    lr:           np.ndarray  # Learning rate, epochs x param updates
+    epoch:        int
 
     top_k:        list[int]   # Which accuracies to save, e.g. [1, 5, 10, 50]
     w_accuracies: np.ndarray  # Masked word pred. accuracy, epochs x param updates x len(top_k)
@@ -26,7 +27,7 @@ class TrainResults(DataStorage):
     param_diff_1: np.ndarray  # 1-norm distance to original parameters, epochs x param updates
     param_diff_2: np.ndarray  # 2-norm distance to original parameters, epochs x param updates
 
-    subfolder = get_timestamp(for_file=True) + "_pretrain_results"
+    subfolder = None  # Set at runtime
     json_name = "pretrain_results.json"
 
     def __post_init__(self):
