@@ -65,20 +65,24 @@ def pca(A: torch.Tensor, k: int) -> tuple[torch.Tensor, torch.Tensor]:
 @click.argument("path")
 @click.option("--model", default = os.path.join("local_data", COLLECT_OUT))
 @click.option("--n-components", default = 10, type=int)
-def main(path: str, model: str, n_components):
+@click.option("--cpu", is_flag=True)
+def main(path: str, model: str, n_components: int, cpu: bool):
     log.configure(
         os.path.join(path, "geometry-analysis.log"), "daLUKE embedding geometry analysis",
     )
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() and not cpu else "cpu")
     with torch.no_grad():
         representations = collect_representations(model, device)
     log("Performing principal component analysis")
     pca_transformed, principal_components = pca(representations, n_components)
 
-    GeometryResults(
-        pca_transformed      = pca_transformed,
-        principal_components = principal_components
-    ).save(path)
+    log(
+        "Saved analysis results to",
+        GeometryResults(
+            pca_transformed      = pca_transformed,
+            principal_components = principal_components,
+        ).save(path),
+    )
 
 if __name__ == "__main__":
     with log.log_errors:
