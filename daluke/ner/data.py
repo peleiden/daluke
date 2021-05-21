@@ -104,6 +104,8 @@ class NERDataset(ABC):
         self.texts: tuple[list[list[str]]] | None = None
         self.annotations: tuple[list[list[str]]] | None= None
 
+        self.data_limit = None # To be used for debugging
+
     @abstractmethod
     def build(self, split: Split, batch_size: int) -> DataLoader:
         pass
@@ -115,6 +117,7 @@ class NERDataset(ABC):
 
     def _build_examples(self, sent_bounds: list[list[int]], split: Split) -> list[NERExample]:
         examples = list()
+
         for i, (text, annotation, bounds) in enumerate(zip(self.texts[split], self.annotations[split], sent_bounds)):
             text_token_ids: list[list[int]] = self.tokenizer(text, add_special_tokens=False)["input_ids"]
             # We might have to split some sentences to respect the maximum sentence length
@@ -174,7 +177,9 @@ class NERDataset(ABC):
                             text_num = i,
                         )
                     )
-
+            # Handy for debugging on smaller data set
+            if self.data_limit is not None and i == self.data_limit:
+                break
         return examples
 
     def collate(self, batch: list[tuple[int, NERExample]]) -> NERBatchedExamples:

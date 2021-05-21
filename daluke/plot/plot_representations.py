@@ -31,15 +31,18 @@ def pca_explained_plot(location: str):
     plt.close()
 
 def pca_matrix_plot(location: str):
-    V = GeometryResults.load().pca_transformed
+    res = GeometryResults.load()
+    V = res.pca_transformed
     N = 4
+    colors = ["grey", "red", "yellow", "blue", "green"]
 
     _, axes = plt.subplots(N-1, N-1, figsize=(20, 20))
     # TODO: Dont create unused subplots
     # j, i are switched around to get lower triangle
+    cdict = dict(enumerate(colors))
     for (j, i) in combinations(range(N), 2):
         ax = axes[i-1, j]
-        ax.scatter(V[:, j], V[:, i])
+        ax.scatter(V[:, j], V[:, i], c=[cdict[l] for l in res.labels])
         ax.set_xlabel(f"PC {j+1}")
         ax.set_ylabel(f"PC {i+1}")
 

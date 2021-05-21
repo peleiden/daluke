@@ -18,35 +18,39 @@ FP_SIZE = 32
 
 @dataclass
 class GeometryResults(DataStorage):
+    labels: np.ndarray
     pca_transformed: np.ndarray
     principal_components: np.ndarray
 
     subfolder = "geometry"
 
-def collect_representations(modelpath: str, device: torch.device, target_device) -> torch.Tensor:
+def collect_representations(modelpath: str, device: torch.device, target_device) -> tuple[np.ndarray, np.ndarray]:
     entity_vocab, metadata, state_dict = load_from_archive(modelpath)
     state_dict, ent_embed_size = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"])
     log("Loading dataset")
     # Note: We dont fill out dict as we dont allow changing max-entities and max-entity-span here. If this results in an error for any dataset, we must change this.
     dataset = load_dataset(entity_vocab,  dict(dataset="DaNE"), metadata, device)
-    dataloader = dataset.build(Split.TRAIN, FP_SIZE)
+    dataloader = dataset.build(Split.TRAIN, FP_SIZE,)
     log("Loading model")
     model = load_model(state_dict, dataset, metadata, device, entity_embedding_size=ent_embed_size)
     model.eval()
 
     log("Forward passing examples")
-    batch_representations = list()
+    batch_representations, labels = list(), list()
     for batch in tqdm(dataloader):
         # Use super class as we want the represenations
         word_representations, entity_representations = super(type(model), model).forward(batch)
         start_word_representations, end_word_representations = model.collect_start_and_ends(word_representations, batch)
         representations = torch.cat([start_word_representations, end_word_representations, entity_representations], dim=2)
+        # We dont want padding
+        mask = batch.entities.attention_mask.bool()
         batch_representations.append(
-            # Flatten batch dimensions
-            representations.view(-1, representations.shape[-1]).contiguous().to(target_device)
+            representations[mask].contiguous().to(target_device)
         )
-    # TODO: Colour after label
-    return torch.cat(batch_representations)
+        labels.append(
+            batch.entities.labels[mask].contiguous().to(target_device)
+        )
+    return torch.cat(batch_representations).numpy(), torch.cat(labels).numpy()
 
 def pca(A: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -76,13 +80,14 @@ def main(path: str, model: str, n_components: int):
     )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     with torch.no_grad():
-        representations = collect_representations(model, device, target_device=torch.device("cpu")).numpy()
+        representations, labels = collect_representations(model, device, target_device=torch.device("cpu"))
     log("Performing principal component analysis")
     pca_transformed, principal_components = pca(representations, n_components)
 
     log(
         "Saved analysis results to",
         GeometryResults(
+            labels               = labels,
             pca_transformed      = pca_transformed,
             principal_components = principal_components,
         ).save(path),
