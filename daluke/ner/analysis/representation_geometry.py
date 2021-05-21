@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Optional
 from dataclasses import dataclass
 import os
 
@@ -90,7 +91,8 @@ def tsne(A: np.ndarray) -> np.ndarray:
 @click.argument("path")
 @click.option("--model", default = os.path.join("local_data", COLLECT_OUT))
 @click.option("--n-components", default = 10, type=int)
-def main(path: str, model: str, n_components: int):
+@click.option("--reducer-subsample", default=None, type=int)
+def main(path: str, model: str, n_components: int, reducer_subsample: Optional[int]):
     log.configure(
         os.path.join(path, "geometry-analysis.log"), "daLUKE embedding geometry analysis",
         print_level=Levels.DEBUG
@@ -98,8 +100,12 @@ def main(path: str, model: str, n_components: int):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     with torch.no_grad():
         representations, labels = collect_representations(model, device, target_device=torch.device("cpu"))
+    log(f"Acquired representations of shape {representations.shape}")
     log("Performing principal component analysis")
     pca_transformed, principal_components = pca(representations, n_components)
+    if reducer_subsample is not None:
+        log.debug(f"Reducing dataset to {reducer_subsample} examples for UMAP and t-SNE")
+        representations = representations[:reducer_subsample]
     log("Running the UMAP algorithm")
     umap_transformed = umap(representations)
     log("Running the t-SNE algorithm")

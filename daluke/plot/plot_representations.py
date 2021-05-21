@@ -59,7 +59,7 @@ def pca_matrix_plot(location: str):
 def umap_plot(location: str):
     res = GeometryResults.load()
     _, ax = plt.subplots(figsize=figsize_std)
-    _scatter_transformed(res.umap_transformed[:, 0], res.umap_transformed[:, 1], res.labels, ax)
+    _scatter_transformed(res.umap_transformed[:, 0], res.umap_transformed[:, 1], res.labels[:len(res.umap_transformed)], ax)
     ax.set_title("UMAP space of daLUKE contextualized entity representations for DaNE")
 
     plt.tight_layout()
@@ -69,7 +69,7 @@ def umap_plot(location: str):
 def tsne_plot(location: str):
     res = GeometryResults.load()
     _, ax = plt.subplots(figsize=figsize_std)
-    _scatter_transformed(res.tsne_transformed[:, 0], res.tsne_transformed[:, 1], res.labels, ax)
+    _scatter_transformed(res.tsne_transformed[:, 0], res.tsne_transformed[:, 1], res.labels[:len(res.pca_transformed)], ax)
     ax.set_title("t-SNE space of daLUKE contextualized entity representations for DaNE")
 
     plt.tight_layout()
