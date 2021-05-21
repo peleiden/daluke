@@ -7,7 +7,7 @@ import numpy as np
 import click
 from tqdm import tqdm
 
-from pelutils import log, DataStorage
+from pelutils import log, DataStorage, Levels
 
 from daluke.serialize import load_from_archive, COLLECT_OUT
 from daluke.ner import load_model, load_dataset
@@ -77,6 +77,7 @@ def pca(A: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
 def main(path: str, model: str, n_components: int):
     log.configure(
         os.path.join(path, "geometry-analysis.log"), "daLUKE embedding geometry analysis",
+        print_level=Levels.DEBUG
     )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     with torch.no_grad():

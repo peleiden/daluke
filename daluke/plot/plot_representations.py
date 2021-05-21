@@ -42,7 +42,9 @@ def pca_matrix_plot(location: str):
     cdict = dict(enumerate(colors))
     for (j, i) in combinations(range(N), 2):
         ax = axes[i-1, j]
-        ax.scatter(V[:, j], V[:, i], c=[cdict[l] for l in res.labels])
+        nulls = res.labels == 0
+        ax.scatter(V[nulls, j], V[nulls, i], c=colors[0], alpha=.25)
+        ax.scatter(V[~nulls, j], V[~nulls, i], c=[cdict[l] for l in res.labels[~nulls]], alpha=.5)
         ax.set_xlabel(f"PC {j+1}")
         ax.set_ylabel(f"PC {i+1}")
 
