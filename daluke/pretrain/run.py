@@ -63,19 +63,17 @@ if __name__ == '__main__':
         parser = Parser(ARGUMENTS, name="daluke-pretrain", multiple_jobs=False)
         args = parser.parse()[0]
 
-        if args["resume"]:
+        if args["resume"] and not args["name"]:
             # Load last created save
-            if not args["name"]:
-                args["name"] = next(
-                    p for p in sorted(os.listdir(args["location"]), reverse=True)
-                    if os.path.isdir(os.path.join(args["location"], p)) and reee.fullmatch(r"[\-_0-9]+_pretrain_results", p)
-                )
-            else:
-                args["name"] = "pretrain-results_" + get_timestamp(for_file=True)
+            args["name"] = next(
+                p for p in sorted(os.listdir(args["location"]), reverse=True)
+                if os.path.isdir(os.path.join(args["location"], p)) and reee.fullmatch(r"pretrain-results_[\-_0-9]+", p)
+            )
         else:
             if not args["name"]:
                 args["name"] = "pretrain-results_" + get_timestamp(for_file=True)
             parser.document_settings(args["name"])
+
         if torch.cuda.device_count() > 1:
             run(args)
         else:

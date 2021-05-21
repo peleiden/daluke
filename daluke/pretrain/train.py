@@ -34,19 +34,19 @@ SCHEDULER_OUT = "scheduler_epoch{i}.pt"
 SCALER_OUT = "scaler_epoch{i}.pt"
 
 
-@dataclass
+@dataclass(frozen=True)
 class Hyperparams(DataStorage):
-    epochs: int = 20
-    batch_size: int = 2048
-    lr: float = 1e-4
-    ff_size: int = 16
-    ent_embed_size: int = 256
-    weight_decay: float = 0.01
-    warmup_prop: float = 0.06
+    epochs:          int   = 20
+    batch_size:      int   = 2048
+    lr:              float = 1e-4
+    ff_size:         int   = 16
+    ent_embed_size:  int   = 256
+    weight_decay:    float = 0.01
+    warmup_prop:     float = 0.06
     word_ent_weight: float = 0.5
-    bert_fix_prop: float = 0.5
-    fp16: bool = False  # Note: If default is changed, change fp16 arg to fp32
-    ent_vocab_min: int = 0  # How many times an entity at least should mentioned to be kept. 0 for no limit
+    bert_fix_prop:   float = 0.5
+    fp16:            bool  = False  # Note: If default is changed, change fp16 arg to fp32
+    ent_vocab_min:   int   = 0      # How many times an entity at least should mentioned to be kept. 0 for no limit
 
     subfolder = None  # Set at runtime
     json_name = "params.json"
