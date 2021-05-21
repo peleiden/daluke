@@ -29,6 +29,7 @@ class TrainResults(DataStorage):
 
     subfolder = None  # Set at runtime
     json_name = "pretrain_results.json"
+    ignore_missing = True
 
     def __post_init__(self):
         assert self.top_k == sorted(self.top_k), "Top k accuracy list must be monotonically increasing"
