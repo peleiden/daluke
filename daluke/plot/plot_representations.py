@@ -15,7 +15,7 @@ from daluke.plot import setup_mpl
 setup_mpl()
 
 def pca_explained_plot(location: str):
-    lambdas = GeometryResults.load().principal_components.numpy()
+    lambdas = GeometryResults.load().principal_components
     show_k = 100
 
     _, ax = plt.subplots(figsize=figsize_std)
@@ -31,14 +31,13 @@ def pca_explained_plot(location: str):
     plt.close()
 
 def pca_matrix_plot(location: str):
-    V = GeometryResults.load().pca_transformed.numpy()
+    V = GeometryResults.load().pca_transformed
     N = 4
 
     _, axes = plt.subplots(N-1, N-1, figsize=(20, 20))
     # TODO: Dont create unused subplots
     # j, i are switched around to get lower triangle
     for (j, i) in combinations(range(N), 2):
-        print(i, j)
         ax = axes[i-1, j]
         ax.scatter(V[:, j], V[:, i])
         ax.set_xlabel(f"PC {j+1}")

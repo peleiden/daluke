@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import os
 
 import torch
+import numpy as np
 import click
 from tqdm import tqdm
 
@@ -17,8 +18,8 @@ FP_SIZE = 32
 
 @dataclass
 class GeometryResults(DataStorage):
-    pca_transformed: torch.Tensor
-    principal_components: torch.Tensor
+    pca_transformed: np.ndarray
+    principal_components: np.ndarray
 
     subfolder = "geometry"
 
@@ -47,19 +48,19 @@ def collect_representations(modelpath: str, device: torch.device, target_device)
     # TODO: Colour after label
     return torch.cat(batch_representations)
 
-def pca(A: torch.Tensor, k: int) -> tuple[torch.Tensor, torch.Tensor]:
+def pca(A: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
     """
     A is (# data points, # dimensions).
     k is number of eigenvalues used for projection
     """
     log.debug("Calculating covariance matrix")
-    A_c = A - A.mean(dim=0)
+    A_c = A - A.mean(0)
     # As # data points >>> # dimensions (~1M vs. 2k), we do covariance of features
     covar = (A_c.T @ A_c) / (A_c.shape[1]-1)
     log.debug("Calculating eigenvalues ...")
-    lambdas, Q = torch.linalg.eigh(covar)
+    lambdas, Q = np.linalg.eigh(covar)
     # Want it in eigenvalue-descending order
-    lambdas, Q = lambdas.flip(0), Q.flip(1)
+    lambdas, Q = lambdas[::-1], np.flip(Q, axis=1)
     log.debug("Transforming to PCA")
     P = Q[:, :k]
     Z = A_c @ P
@@ -69,14 +70,13 @@ def pca(A: torch.Tensor, k: int) -> tuple[torch.Tensor, torch.Tensor]:
 @click.argument("path")
 @click.option("--model", default = os.path.join("local_data", COLLECT_OUT))
 @click.option("--n-components", default = 10, type=int)
-@click.option("--pca-on-cpu", is_flag=True)
-def main(path: str, model: str, n_components: int, pca_on_cpu: bool):
+def main(path: str, model: str, n_components: int):
     log.configure(
         os.path.join(path, "geometry-analysis.log"), "daLUKE embedding geometry analysis",
     )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     with torch.no_grad():
-        representations = collect_representations(model, device, target_device=torch.device("cpu") if pca_on_cpu else device)
+        representations = collect_representations(model, device, target_device=torch.device("cpu")).numpy()
     log("Performing principal component analysis")
     pca_transformed, principal_components = pca(representations, n_components)
 
