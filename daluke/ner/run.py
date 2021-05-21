@@ -33,11 +33,7 @@ ARGUMENTS = {
 }
 
 def run_experiment(args: dict[str, Any]):
-    log.configure(
-        os.path.join(args["location"], "daluke-train-ner.log"), "Finetune daLUKE for Danish NER",
-        print_level=Levels.INFO if args["quieter"] else Levels.DEBUG,
-    )
-
+    log.section("Beginnng", args["name"])
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     entity_vocab, metadata, state_dict = load_from_archive(args["model"])
     state_dict, ent_embed_size = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"])
@@ -84,6 +80,10 @@ if __name__ == '__main__':
     with log.log_errors, EnvVars(TOKENIZERS_PARALLELISM=str(not "Tue").lower()):
         parser = Parser(ARGUMENTS, name="daluke-ner-"+get_timestamp(for_file=True), multiple_jobs=True)
         experiments = parser.parse()
+        log.configure(
+            os.path.join(parser.location, "daluke-train-ner.log"), "Finetune daLUKE for Danish NER",
+            print_level=Levels.INFO if experiments[0]["quieter"] else Levels.DEBUG,
+        )
         parser.document_settings()
         for exp in experiments:
             run_experiment(exp)
