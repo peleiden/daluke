@@ -19,8 +19,8 @@ def _scatter_transformed(Z1: np.ndarray, Z2: np.ndarray, labels: np.ndarray, axi
     cdict = dict(enumerate(colors))
 
     nulls = labels == 0
-    axis.scatter(Z1[nulls], Z2[nulls], c=colors[0], alpha=.25)
-    axis.scatter(Z1[~nulls], Z2[~nulls], c=[cdict[l] for l in labels[~nulls]], alpha=.5)
+    axis.scatter(Z1[nulls], Z2[nulls], c=colors[0], alpha=.1)
+    axis.scatter(Z1[~nulls], Z2[~nulls], c=[cdict[l] for l in labels[~nulls]], alpha=.4)
 
 def pca_explained_plot(location: str):
     lambdas = GeometryResults.load().principal_components
