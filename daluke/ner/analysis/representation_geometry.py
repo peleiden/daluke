@@ -77,12 +77,12 @@ def pca(A: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
     Z = A_c @ P
     return Z, lambdas
 
-def umap(A: np.ndarray) -> np.ndarray:
-    reducer = UMAP()
+def umap(A: np.ndarray, n_neighbours: int, min_dist: float) -> np.ndarray:
+    reducer = UMAP(n_neighbors=n_neighbours, min_dist=min_dist)
     A_c = A - A.mean(0)
     return reducer.fit_transform(A_c)
 
-def tsne(A: np.ndarray) -> np.ndarray:
+def tsne(A: np.ndarray, perplexity: float) -> np.ndarray:
     reducer = TSNE()
     A_c = A - A.mean(0)
     return reducer.fit_transform(A_c)
@@ -92,7 +92,10 @@ def tsne(A: np.ndarray) -> np.ndarray:
 @click.option("--model", default = os.path.join("local_data", COLLECT_OUT))
 @click.option("--n-components", default = 10, type=int)
 @click.option("--reducer-subsample", default=None, type=int)
-def main(path: str, model: str, n_components: int, reducer_subsample: Optional[int]):
+@click.option("--tsne-perplexity", default=100.0, type=float)
+@click.option("--umap-neighbours", default=1000, type=int)
+@click.option("--umap-min-idst", default=0.001, type=float)
+def main(path: str, model: str, n_components: int, reducer_subsample: Optional[int], tsne_perplexity: float, umap_neighbours: int, umap_min_dist: float):
     log.configure(
         os.path.join(path, "geometry-analysis.log"), "daLUKE embedding geometry analysis",
         print_level=Levels.DEBUG
@@ -107,9 +110,9 @@ def main(path: str, model: str, n_components: int, reducer_subsample: Optional[i
         log.debug(f"Reducing dataset to {reducer_subsample} examples for UMAP and t-SNE")
         representations = representations[:reducer_subsample]
     log("Running the UMAP algorithm")
-    umap_transformed = umap(representations)
+    umap_transformed = umap(representations, umap_neighbours, umap_min_dist)
     log("Running the t-SNE algorithm")
-    tsne_transformed = tsne(representations)
+    tsne_transformed = tsne(representations, tsne_perplexity)
 
     log(
         "Saved analysis results to",
