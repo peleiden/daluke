@@ -4,6 +4,9 @@ import os
 
 import torch
 import numpy as np
+from umap import UMAP
+from sklearn.manifold import TSNE
+
 import click
 from tqdm import tqdm
 
@@ -18,8 +21,11 @@ FP_SIZE = 32
 
 @dataclass
 class GeometryResults(DataStorage):
-    labels: np.ndarray
     pca_transformed: np.ndarray
+    umap_transformed: np.ndarray
+    tsne_transformed: np.ndarray
+
+    labels: np.ndarray
     principal_components: np.ndarray
 
     subfolder = "geometry"
@@ -65,10 +71,20 @@ def pca(A: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
     lambdas, Q = np.linalg.eigh(covar)
     # Want it in eigenvalue-descending order
     lambdas, Q = lambdas[::-1], np.flip(Q, axis=1)
-    log.debug("Transforming to PCA")
+    log.debug("Transforming to PC space")
     P = Q[:, :k]
     Z = A_c @ P
     return Z, lambdas
+
+def umap(A: np.ndarray) -> np.ndarray:
+    reducer = UMAP()
+    A_c = A - A.mean(0)
+    return reducer.fit_transform(A_c)
+
+def tsne(A: np.ndarray) -> np.ndarray:
+    reducer = TSNE()
+    A_c = A - A.mean(0)
+    return reducer.fit_transform(A_c)
 
 @click.command()
 @click.argument("path")
@@ -84,12 +100,18 @@ def main(path: str, model: str, n_components: int):
         representations, labels = collect_representations(model, device, target_device=torch.device("cpu"))
     log("Performing principal component analysis")
     pca_transformed, principal_components = pca(representations, n_components)
+    log("Running the UMAP algorithm")
+    umap_transformed = umap(representations)
+    log("Running the t-SNE algorithm")
+    tsne_transformed = tsne(representations)
 
     log(
         "Saved analysis results to",
         GeometryResults(
-            labels               = labels,
             pca_transformed      = pca_transformed,
+            umap_transformed     = umap_transformed,
+            tsne_transformed     = tsne_transformed,
+            labels               = labels,
             principal_components = principal_components,
         ).save(path),
     )

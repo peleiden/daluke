@@ -14,6 +14,14 @@ from daluke.plot import setup_mpl
 
 setup_mpl()
 
+def _scatter_transformed(Z1: np.ndarray, Z2: np.ndarray, labels: np.ndarray, axis):
+    colors = ["grey", "red", "yellow", "blue", "green"]
+    cdict = dict(enumerate(colors))
+
+    nulls = labels == 0
+    axis.scatter(Z1[nulls], Z2[nulls], c=colors[0], alpha=.25)
+    axis.scatter(Z1[~nulls], Z2[~nulls], c=[cdict[l] for l in labels[~nulls]], alpha=.5)
+
 def pca_explained_plot(location: str):
     lambdas = GeometryResults.load().principal_components
     show_k = 100
@@ -34,22 +42,38 @@ def pca_matrix_plot(location: str):
     res = GeometryResults.load()
     V = res.pca_transformed
     N = 4
-    colors = ["grey", "red", "yellow", "blue", "green"]
 
     _, axes = plt.subplots(N-1, N-1, figsize=(20, 20))
     # TODO: Dont create unused subplots
     # j, i are switched around to get lower triangle
-    cdict = dict(enumerate(colors))
     for (j, i) in combinations(range(N), 2):
         ax = axes[i-1, j]
-        nulls = res.labels == 0
-        ax.scatter(V[nulls, j], V[nulls, i], c=colors[0], alpha=.25)
-        ax.scatter(V[~nulls, j], V[~nulls, i], c=[cdict[l] for l in res.labels[~nulls]], alpha=.5)
+        _scatter_transformed(V[:, j], V[:, i], res.labels, ax)
         ax.set_xlabel(f"PC {j+1}")
         ax.set_ylabel(f"PC {i+1}")
 
     plt.tight_layout()
     plt.savefig(os.path.join(location, "geometry-plots", "pca_matrix.png"))
+    plt.close()
+
+def umap_plot(location: str):
+    res = GeometryResults.load()
+    _, ax = plt.subplots(figsize=figsize_std)
+    _scatter_transformed(res.umap_transformed[:, 0], res.umap_transformed[:, 1], res.labels, ax)
+    ax.set_title("UMAP space of daLUKE contextualized entity representations for DaNE")
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(location, "geometry-plots", "umap.png"))
+    plt.close()
+
+def tsne_plot(location: str):
+    res = GeometryResults.load()
+    _, ax = plt.subplots(figsize=figsize_std)
+    _scatter_transformed(res.tsne_transformed[:, 0], res.tsne_transformed[:, 1], res.labels, ax)
+    ax.set_title("t-SNE space of daLUKE contextualized entity representations for DaNE")
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(location, "geometry-plots", "tsne.png"))
     plt.close()
 
 @click.command()
@@ -61,6 +85,10 @@ def make_representation_plots(location: str):
     pca_matrix_plot(location)
     log("PCA explained plot")
     pca_explained_plot(location)
+    log("UMAP plot")
+    umap_plot(location)
+    log("t-SNE plot")
+    tsne_plot(location)
 
 if __name__ == "__main__":
     with log.log_errors:
