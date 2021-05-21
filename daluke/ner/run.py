@@ -82,7 +82,7 @@ def run_experiment(args: dict[str, Any]):
 
 if __name__ == '__main__':
     with log.log_errors, EnvVars(TOKENIZERS_PARALLELISM=str(not "Tue").lower()):
-        parser = Parser(ARGUMENTS, name="daluke-ner", multiple_jobs=True)
+        parser = Parser(ARGUMENTS, name="daluke-ner-"+get_timestamp(for_file=True), multiple_jobs=True)
         experiments = parser.parse()
         parser.document_settings()
         for exp in experiments:
