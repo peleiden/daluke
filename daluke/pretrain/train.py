@@ -263,10 +263,10 @@ def train(
     scaler = amp.GradScaler() if params.fp16 else None
     scheduler = get_linear_schedule_with_warmup(optimizer, int(params.warmup_prop * num_updates_all), num_updates_all)
     if resume:
-        optimizer.load_state_dict(torch.load(fpath((TrainResults.subfolder, OPTIMIZER_OUT.format(i=res.epoch)))))
-        scheduler.load_state_dict(torch.load(fpath((TrainResults.subfolder, SCHEDULER_OUT.format(i=res.epoch)))))
+        optimizer.load_state_dict(torch.load(fpath((TrainResults.subfolder, OPTIMIZER_OUT.format(i=res.epoch))), map_location=device))
+        scheduler.load_state_dict(torch.load(fpath((TrainResults.subfolder, SCHEDULER_OUT.format(i=res.epoch))), map_location=device))
         if params.fp16:
-            scaler.load_state_dict(torch.load(fpath((TrainResults.subfolder, SCALER_OUT.format(i=res.epoch)))))
+            scaler.load_state_dict(torch.load(fpath((TrainResults.subfolder, SCALER_OUT.format(i=res.epoch))), map_location=device))
         res.epoch += 1  # We saved the data at epoch i, but should now commence epoch i+1
 
     criterion = nn.CrossEntropyLoss(ignore_index=-1)
