@@ -72,6 +72,7 @@ if __name__ == '__main__':
         else:
             if not args["name"]:
                 args["name"] = "pretrain-results_" + get_timestamp(for_file=True)
+        if not args["resume"]:
             parser.document_settings(args["name"])
 
         if torch.cuda.device_count() > 1:
