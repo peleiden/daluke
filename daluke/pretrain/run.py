@@ -35,7 +35,7 @@ ARGUMENTS = {
     "quiet":           { "action": "store_true", "help": "Don't show debug logging" },
 }
 
-def _run_training(rank: int, world_size: int, args: dict[str, Any]):
+def _run_training(rank: int, world_size: int, explicit_args: list[set[str]], args: dict[str, Any]):
     """ Wrapper function for train for easy use with mp.spawn """
     return train(
         rank,
@@ -46,14 +46,15 @@ def _run_training(rank: int, world_size: int, args: dict[str, Any]):
         quiet          = args.pop("quiet"),
         save_every     = args.pop("save_every"),
         bert_attention = args.pop("bert_attention"),
+        explicit_args  = explicit_args[0],
         params         = Hyperparams(**args),
     )
 
-def run(args: dict[str, Any]):
+def _run_distributed(explicit_args: list[set[str]], args: dict[str, Any]):
     """ Initializes training on multiple GPU's """
     mp.spawn(
         _run_training,
-        args   = (torch.cuda.device_count(), args),
+        args   = (torch.cuda.device_count(), explicit_args, args),
         nprocs = torch.cuda.device_count(),
         join   = True,
     )
@@ -61,7 +62,7 @@ def run(args: dict[str, Any]):
 if __name__ == '__main__':
     with log.log_errors, EnvVars(OMP_NUM_THREADS=1):
         parser = Parser(ARGUMENTS, name="daluke-pretrain", multiple_jobs=False)
-        args = parser.parse()[0]
+        args = parser.parse()
 
         if args["resume"] and not args["name"]:
             # Load last created save
@@ -76,6 +77,6 @@ if __name__ == '__main__':
             parser.document_settings(args["name"])
 
         if torch.cuda.device_count() > 1:
-            run(args)
+            _run_distributed(parser.explicit_args, args)
         else:
-            _run_training(-1, 1, args)
+            _run_training(-1, 1, parser.explicit_args, args)

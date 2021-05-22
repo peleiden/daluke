@@ -18,7 +18,6 @@ import numpy as np
 from transformers import AutoConfig, AutoModelForPreTraining, AdamW, get_linear_schedule_with_warmup
 from pelutils import DataStorage, thousand_seps, TT
 from pelutils.logger import log, Levels
-from pelutils.ds import reset_cuda
 
 from .data import DataLoader, load_entity_vocab
 from .data.build import DatasetBuilder
@@ -113,16 +112,17 @@ def save_training(
     return paths
 
 def train(
-    rank: int,
+    rank:       int,
     world_size: int,
     *,
-    resume: bool,
-    location: str,
-    name: str,
-    quiet: bool,
-    save_every: int,
+    resume:         bool,
+    location:       str,
+    name:           str,
+    quiet:          bool,
+    save_every:     int,
     bert_attention: bool,
-    params: Hyperparams,
+    explicit_args:  set[str],
+    params:         Hyperparams,
 ):
     # Get filepath within path context
     fpath = lambda path: os.path.join(location, path) if isinstance(path, str) else os.path.join(location, *path)
@@ -150,7 +150,11 @@ def train(
         log("Resuming from %s" % name)
         # Load results and hyperparameters from earlier training
         res = TrainResults.load(location)
-        params = Hyperparams.load(location)
+        loaded_params = Hyperparams.load(location)
+        # Overwrite ff-size if given explicitly
+        if "ff_size" in explicit_args:
+            loaded_params.ff_size = params.ff_size
+        params = loaded_params
     log.section("Starting pretraining with the following hyperparameters", params)
     log("Training using %i workers" % num_workers)
 
@@ -319,7 +323,7 @@ def train(
                     # Compute and backpropagate loss
                     word_loss = criterion(word_preds, batch.word_mask_labels)
                     ent_loss = criterion(ent_preds, batch.ent_mask_labels)
-                loss = params.word_ent_weight *  word_loss + (1 - params.word_ent_weight) * ent_loss
+                loss = params.word_ent_weight * word_loss + (1 - params.word_ent_weight) * ent_loss
                 loss /= grad_accumulation_steps
 
                 # Only sync parameters on grad updates, aka last pass of this loop
