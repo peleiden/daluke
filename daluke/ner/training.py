@@ -34,6 +34,7 @@ class TrainNER:
             warmup_prop: float = 0.06,
             weight_decay: float = 0.01,
             dev_dataloader: torch.utils.data.DataLoader | None = None,
+            loss_weight: bool = False,
         ):
         self.model = model
         self.device = device
@@ -56,7 +57,13 @@ class TrainNER:
         # Create LR scheduler
         num_updates = epochs * len(self.dataloader)
         self.scheduler = get_linear_schedule_with_warmup(self.optimizer, int(warmup_prop * num_updates), num_updates)
-        self.criterion = nn.CrossEntropyLoss(ignore_index=-1)
+        if loss_weight:
+            counts = torch.zeros(len(dataset.all_labels))
+            for _, e in self.dataloader.dataset:
+                # Do count on the non-padded labels
+                for label, count in zip(*e.entities.labels[:e.entities.N].unique(return_counts=True)):
+                    counts[label] += count
+        self.criterion = nn.CrossEntropyLoss(ignore_index=-1, weight=1/counts if loss_weight else None)
 
     def run(self):
         self.model.train()

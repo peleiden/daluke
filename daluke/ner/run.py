@@ -30,6 +30,7 @@ ARGUMENTS = {
     "dataset":         {"help": "Which dataset to use. Currently, only DaNE supported", "default": "DaNE"},
     "eval":            {"help": "Run evaluation on dev. set after each epoch", "action": "store_true"},
     "quieter":         {"help": "Don't show debug logging", "action": "store_true"},
+    "loss-weight":     {"help": "Weight loss contributions by class frequency", "action": "store_true"},
 }
 
 def run_experiment(args: dict[str, Any]):
@@ -57,6 +58,7 @@ def run_experiment(args: dict[str, Any]):
         warmup_prop     = args["warmup_prop"],
         weight_decay    = args["weight_decay"],
         dev_dataloader  = dev_dataloader,
+        loss_weight     = args["loss_weight"],
     )
     # Log important information out
     log.debug(training.model)
