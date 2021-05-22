@@ -83,7 +83,7 @@ def umap(A: np.ndarray, n_neighbours: int, min_dist: float) -> np.ndarray:
     return reducer.fit_transform(A_c)
 
 def tsne(A: np.ndarray, perplexity: float) -> np.ndarray:
-    reducer = TSNE()
+    reducer = TSNE(perplexity=perplexity)
     A_c = A - A.mean(0)
     return reducer.fit_transform(A_c)
 
@@ -94,7 +94,7 @@ def tsne(A: np.ndarray, perplexity: float) -> np.ndarray:
 @click.option("--reducer-subsample", default=None, type=int)
 @click.option("--tsne-perplexity", default=100.0, type=float)
 @click.option("--umap-neighbours", default=1000, type=int)
-@click.option("--umap-min-idst", default=0.001, type=float)
+@click.option("--umap-min-dist", default=0.001, type=float)
 def main(path: str, model: str, n_components: int, reducer_subsample: Optional[int], tsne_perplexity: float, umap_neighbours: int, umap_min_dist: float):
     log.configure(
         os.path.join(path, "geometry-analysis.log"), "daLUKE embedding geometry analysis",
