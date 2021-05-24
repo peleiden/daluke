@@ -53,11 +53,10 @@ def run_experiment(args: dict[str, Any]):
 if __name__ == '__main__':
     with log.log_errors:
         parser = Parser(ARGUMENTS, name="daluke-ner-eval", multiple_jobs=False)
-        experiments = parser.parse()
+        exp = parser.parse()
         parser.document_settings()
         log.configure(
             os.path.join(parser.location, "daluke_eval_ner.log"), "Finetune daLUKE for Danish NER",
-            print_level=Levels.INFO if experiments[0]["quieter"] else Levels.DEBUG
+            print_level=Levels.INFO if exp["quieter"] else Levels.DEBUG,
         )
-        for exp in experiments:
-            run_experiment(exp)
+        run_experiment(exp)

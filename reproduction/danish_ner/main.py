@@ -37,14 +37,13 @@ ARGUMENTS = {
 }
 def main():
     parser = Parser(ARGUMENTS, name="NER_Test", multiple_jobs=False)
-    experiments = parser.parse()
+    exp = parser.parse()
 
     log.configure(
         os.path.join(parser.location, "danish_ner.log"), "Benchmark Danish NER models",
     )
 
-    for experiment in experiments:
-        run_experiment(experiment)
+    run_experiment(exp)
 
 def run_experiment(args: dict[str, str]):
     if args["models"] == "all":
