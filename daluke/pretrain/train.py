@@ -44,8 +44,8 @@ class Hyperparams(DataStorage):
     warmup_prop:     float = 0.06
     word_ent_weight: float = 0.5
     bert_fix_prop:   float = 0.5
-    fp16:            bool  = False  # Note: If default is changed, change fp16 arg to fp32
-    ent_vocab_min:   int   = 0      # How many times an entity at least should mentioned to be kept. 0 for no limit
+    fp16:            bool  = False
+    ent_min_mention: int   = 0
 
     subfolder = None  # Set at runtime
     json_name = "params.json"
@@ -63,7 +63,7 @@ class Hyperparams(DataStorage):
         assert isinstance(self.fp16, bool)
         if self.fp16:
             assert torch.cuda.is_available(), "Half-precision cannot be used without CUDA access"
-        assert isinstance(self.ent_vocab_min, int) and self.ent_vocab_min >= 0
+        assert isinstance(self.ent_min_mention, int) and self.ent_min_mention >= 0
 
     def __str__(self):
         return json.dumps(self.__dict__, indent=4)
@@ -165,10 +165,10 @@ def train(
         entity_vocab = json.load(f)
     log("Loaded metadata:", json.dumps(metadata, indent=4))
     log(f"Loaded entity vocabulary of {len(entity_vocab)} entities")
-    if params.ent_vocab_min:
-        log("Removing entities with less than %i mentions" % params.ent_vocab_min)
+    if params.ent_min_mention:
+        log("Removing entities with less than %i mentions" % params.ent_min_mention)
         entity_vocab = { ent: info for ent, info in entity_vocab.items()
-            if info["count"] >= params.ent_vocab_min or ent in {"[PAD]", "[UNK]", "[MASK]"} }
+            if info["count"] >= params.ent_min_mention or ent in {"[PAD]", "[UNK]", "[MASK]"} }
         log("After filtering, entity vocab now has %i entities" % len(entity_vocab))
 
     # Device should be cuda:rank or just cuda if single gpu, else cpu

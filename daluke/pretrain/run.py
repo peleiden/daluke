@@ -28,7 +28,7 @@ ARGUMENTS = {
     "warmup-prop":     { "default": Hyperparams.warmup_prop, "type": float, "help": "Proportion of training steps used for optimizer warmup" },
     "word-ent-weight": { "default": Hyperparams.word_ent_weight, "type": float, "help": "0 for only entities, 1 for only words, 0.5 for equal weighting" },
     "bert-fix-prop":   { "default": Hyperparams.bert_fix_prop, "type": float, "help": "Share of epochs for which to fix base model weights" },
-    "ent-vocab-min":   { "default": Hyperparams.ent_vocab_min, "type": int, "help": "How many times an entity at least should mentioned to be kept. 0 for no limit" },
+    "ent-min-mention": { "default": Hyperparams.ent_min_mention, "type": int, "help": "How many times an entity at least should mentioned to be kept. 0 for no limit" },
     "fp16":            { "action": "store_true", "help": "Use automatic mixed precision" },
     "save-every":      { "default": 1, "type": int, "help": "Save progress after this many epochs" },
     "bert-attention":  { "action": "store_true", "help": "Use the original BERT attention mechanism instead of the entity aware LUKE variant" },
