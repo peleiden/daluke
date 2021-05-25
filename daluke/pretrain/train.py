@@ -33,19 +33,20 @@ SCHEDULER_OUT = "scheduler_epoch{i}.pt"
 SCALER_OUT = "scaler_epoch{i}.pt"
 
 
-@dataclass(frozen=True)
+@dataclass
 class Hyperparams(DataStorage):
-    epochs:          int   = 20
-    batch_size:      int   = 2048
-    lr:              float = 1e-4
-    ff_size:         int   = 16
-    ent_embed_size:  int   = 256
-    weight_decay:    float = 0.01
-    warmup_prop:     float = 0.06
-    word_ent_weight: float = 0.5
-    bert_fix_prop:   float = 0.5
-    fp16:            bool  = False
-    ent_min_mention: int   = 0
+    epochs:             int   = 20
+    batch_size:         int   = 2048
+    lr:                 float = 1e-4
+    ff_size:            int   = 16
+    ent_embed_size:     int   = 256
+    weight_decay:       float = 0.01
+    warmup_prop:        float = 0.06
+    word_ent_weight:    float = 0.5
+    bert_fix_prop:      float = 0.5
+    fp16:               bool  = False
+    ent_min_mention:    int   = 0
+    entity_loss_weight: bool  = False
 
     subfolder = None  # Set at runtime
     json_name = "params.json"
@@ -177,6 +178,16 @@ def train(
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    if params.entity_loss_weight:
+        log("Setting up loss function with entity loss weighting")
+        # Don't weigh special tokens
+        weights = torch.Tensor([0, 0, 0, *(1 / info["count"] for info in entity_vocab.values() if info["count"])]).to(device)
+        entity_criterion = nn.CrossEntropyLoss(weight=weights)
+    else:
+        log("Setting up loss function without entity loss weighting")
+        entity_criterion = nn.CrossEntropyLoss()
+    word_criterion = nn.CrossEntropyLoss()
+
     # Load dataset and training results
     data = DataLoader(location, metadata, entity_vocab, device)
     sampler = (DistributedSampler if is_distributed else RandomSampler)(data.examples)
@@ -273,8 +284,6 @@ def train(
             scaler.load_state_dict(torch.load(fpath((TrainResults.subfolder, SCALER_OUT.format(i=res.epoch))), map_location=device))
         res.epoch += 1  # We saved the data at epoch i, but should now commence epoch i+1
 
-    criterion = nn.CrossEntropyLoss(ignore_index=-1)
-
     log.section(f"Training of daLUKE for {params.epochs} epochs")
     model.zero_grad()  # To avoid tracking of model parameter manipulation
     model.train()
@@ -321,8 +330,8 @@ def train(
                 with amp.autocast() if params.fp16 else contextlib.ExitStack():
                     word_preds, ent_preds = model(batch)
                     # Compute and backpropagate loss
-                    word_loss = criterion(word_preds, batch.word_mask_labels)
-                    ent_loss = criterion(ent_preds, batch.ent_mask_labels)
+                    word_loss = word_criterion(word_preds, batch.word_mask_labels)
+                    ent_loss = entity_criterion(ent_preds, batch.ent_mask_labels)
                 loss = params.word_ent_weight * word_loss + (1 - params.word_ent_weight) * ent_loss
                 loss /= grad_accumulation_steps
 
