@@ -141,7 +141,7 @@ def train(
 
     # Setup logger
     log.configure(
-        os.path.join(location, name, f"pretraining{'-node=%s' % rank if is_distributed else ''}.log"),
+        os.path.join(location, name, "pretraining-worker=%s.log" % (rank if is_distributed else 0)),
         "DaLUKE pretraining on node %i" % rank,
         log_commit  = True,
         print_level = (Levels.INFO if quiet else Levels.DEBUG) if is_master else None,
@@ -258,7 +258,7 @@ def train(
             if n not in new_weights:
                 p.requires_grad = not fix
     fix_base_model_params(True)
-    del base_model  # Clear base model weights from memory
+
     # Unfixes params at this epoch
     unfix_base_model_params_epoch = round(params.bert_fix_prop * params.epochs)
     log("Unfixing base model params after %i epochs" % unfix_base_model_params_epoch)
