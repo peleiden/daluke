@@ -189,8 +189,10 @@ def train(
     word_criterion = nn.CrossEntropyLoss()
 
     # Load dataset and training results
+    log("Building dataset")
     data = DataLoader(location, metadata, entity_vocab, device)
     sampler = (DistributedSampler if is_distributed else RandomSampler)(data.examples)
+    log("Built %i examples" % len(data))
 
     loader = data.get_dataloader(params.ff_size, sampler)
     # Number of parameter updates each epoch

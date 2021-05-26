@@ -34,10 +34,12 @@ ARGUMENTS = {
     "save-every":         { "default": 1, "type": int, "help": "Save progress after this many epochs" },
     "bert-attention":     { "action": "store_true", "help": "Use the original BERT attention mechanism instead of the entity aware LUKE variant" },
     "quiet":              { "action": "store_true", "help": "Don't show debug logging" },
+    "max-workers":        { "default": torch.cuda.device_count(), "type": int, "help": "Maximum number of cuda devices to use" }
 }
 
 def _run_training(rank: int, world_size: int, explicit_args: list[set[str]], args: dict[str, Any]):
     """ Wrapper function for train for easy use with mp.spawn """
+    del args["max_workers"]
     return train(
         rank,
         world_size,
@@ -53,10 +55,11 @@ def _run_training(rank: int, world_size: int, explicit_args: list[set[str]], arg
 
 def _run_distributed(explicit_args: list[set[str]], args: dict[str, Any]):
     """ Initializes training on multiple GPU's """
+    n_devices = min(torch.cuda.device_count(), args["max_workers"])
     mp.spawn(
         _run_training,
-        args   = (torch.cuda.device_count(), explicit_args, args),
-        nprocs = torch.cuda.device_count(),
+        args   = (n_devices, explicit_args, args),
+        nprocs = n_devices,
         join   = True,
     )
 
@@ -77,7 +80,7 @@ if __name__ == '__main__':
         if not args["resume"]:
             parser.document_settings(args["name"])
 
-        if torch.cuda.device_count() > 1:
+        if torch.cuda.device_count() > 1 and args["max_workers"] > 1:
             _run_distributed(parser.explicit_args, args)
         else:
             _run_training(-1, 1, parser.explicit_args, args)

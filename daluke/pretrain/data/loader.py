@@ -53,10 +53,8 @@ class DataLoader:
         # Don't insert ids that are special tokens when performing random word insertion in the masking
         self.random_word_id_range = (self.word_mask_id + 1, self.tokenizer.vocab_size)
 
-        log.section("Building examples ...")
         with TT.profile("Building examples"):
             self.examples: list[Example] = self.build_examples()
-        log("Got %i examples" % len(self.examples))
 
     def __len__(self):
         return len(self.examples)
