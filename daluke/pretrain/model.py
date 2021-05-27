@@ -80,8 +80,8 @@ class BertAttentionPretrainTaskDaLUKE(PretrainTaskDaLUKE):
         word_size = ex.words.ids.size(1)
 
         # Exactly same as in DaLUKE
-        word_hidden    = self.word_embeddings(ex.words.ids, ex.words.segments)
-        entity_hidden  = self.entity_embeddings(ex.entities.ids, ex.entities.pos, ex.entities.segments)
+        word_hidden    = self.word_embeddings(ex.words.ids)
+        entity_hidden  = self.entity_embeddings(ex.entities.ids, ex.entities.pos)
         attention_mask = torch.cat((ex.words.attention_mask, ex.entities.attention_mask), dim=1).unsqueeze(1).unsqueeze(2)
         attention_mask = 10_000.0 * (attention_mask - 1.0)
 
@@ -97,7 +97,7 @@ class BertAttentionPretrainTaskDaLUKE(PretrainTaskDaLUKE):
 
         return word_scores, ent_scores
 
-def load_base_model_weights(daluke: PretrainTaskDaLUKE, base_model: nn.Module) -> set:
+def load_base_model_weights(daluke: PretrainTaskDaLUKE, base_model: nn.Module, bert_attention: bool) -> set:
     """
     Load a base model into this model. Assumes BERT for now
     Returns the set of keys that were not tansfered from base model
@@ -109,12 +109,16 @@ def load_base_model_weights(daluke: PretrainTaskDaLUKE, base_model: nn.Module) -
         "query": "Q_w",
         "key": "K",
         "value": "V",
+    } if not bert_attention else {
+        "embeddings": "word_embeddings",
     }
     multipart_map = {
         "attention.self": "attention",
         "attention.output": "self_output",
         "layer": "",
-        "cls.predictions": "mask_word_scorer"
+        "cls.predictions": "mask_word_scorer",
+    } if not bert_attention else {
+        "cls.predictions": "mask_word_scorer",
     }
     # Be safe in case some parts are subsets of others
     multipart_map = { ".%s." % key: ".%s." % value if value else "." for key, value in multipart_map.items() }

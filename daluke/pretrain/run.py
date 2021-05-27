@@ -31,8 +31,8 @@ ARGUMENTS = {
     "ent-min-mention":    { "default": Hyperparams.ent_min_mention, "type": int, "help": "How many times an entity at least should mentioned to be kept. 0 for no limit" },
     "fp16":               { "action": "store_true", "help": "Use automatic mixed precision" },
     "entity-loss-weight": { "action": "store_true", "help": "Weigh MLM entity loss by entity count" },
-    "save-every":         { "default": 1, "type": int, "help": "Save progress after this many epochs" },
     "bert-attention":     { "action": "store_true", "help": "Use the original BERT attention mechanism instead of the entity aware LUKE variant" },
+    "save-every":         { "default": 1, "type": int, "help": "Save progress after this many epochs" },
     "quiet":              { "action": "store_true", "help": "Don't show debug logging" },
     "max-workers":        { "default": torch.cuda.device_count(), "type": int, "help": "Maximum number of cuda devices to use" }
 }
@@ -48,7 +48,6 @@ def _run_training(rank: int, world_size: int, explicit_args: list[set[str]], arg
         name           = args.pop("name"),
         quiet          = args.pop("quiet"),
         save_every     = args.pop("save_every"),
-        bert_attention = args.pop("bert_attention"),
         explicit_args  = explicit_args[0],
         params         = Hyperparams(**args),
     )

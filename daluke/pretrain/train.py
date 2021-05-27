@@ -47,6 +47,7 @@ class Hyperparams(DataStorage):
     fp16:               bool  = False
     ent_min_mention:    int   = 0
     entity_loss_weight: bool  = False
+    bert_attention:     bool  = False
 
     subfolder = None  # Set at runtime
     json_name = "params.json"
@@ -127,15 +128,14 @@ def save_training(
     return paths
 
 def train(
-    rank:       int,
-    world_size: int,
+    rank:           int,
+    world_size:     int,
     *,
     resume:         bool,
     location:       str,
     name:           str,
     quiet:          bool,
     save_every:     int,
-    bert_attention: bool,
     explicit_args:  set[str],
     params:         Hyperparams,
 ):
@@ -250,7 +250,7 @@ def train(
     log("Bert config", bert_config.to_json_string())
 
     log("Initializing model")
-    model_cls = BertAttentionPretrainTaskDaLUKE if bert_attention else PretrainTaskDaLUKE
+    model_cls = BertAttentionPretrainTaskDaLUKE if params.bert_attention else PretrainTaskDaLUKE
     model = model_cls(
         bert_config,
         ent_vocab_size = len(entity_vocab),
@@ -261,9 +261,10 @@ def train(
     log("Loading base model parameters")
     with TT.profile("Loading base model parameters"):
         base_model = AutoModelForPreTraining.from_pretrained(metadata["base-model"])
-        new_weights = load_base_model_weights(model, base_model)
+        new_weights = load_base_model_weights(model, base_model, params.bert_attention)
     # Initialize self-attention query matrices to BERT word query matrix
-    model.init_queries()
+    if not params.bert_attention:
+        model.init_queries()
     if not resume and is_master:
         res.orig_params = model.all_params().cpu().numpy()
     log("Pretraining model initialized with %s parameters" % thousand_seps(len(model)))
