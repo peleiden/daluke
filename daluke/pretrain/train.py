@@ -85,11 +85,25 @@ def get_optimizer_params(params: list, do_decay: bool) -> list:
     include = lambda n: do_decay != any(nd in n for nd in NO_DECAY)
     return [p for n, p in params if p.requires_grad and include(n)]
 
+def clean_saved_epoch(loc: str, epoch: int) -> list[str]:
+    paths = {
+        os.path.join(loc, TrainResults.subfolder, MODEL_OUT.format(i=epoch)),
+        os.path.join(loc, TrainResults.subfolder, OPTIMIZER_OUT.format(i=epoch)),
+        os.path.join(loc, TrainResults.subfolder, SCHEDULER_OUT.format(i=epoch)),
+        os.path.join(loc, TrainResults.subfolder, SCALER_OUT.format(i=epoch)),
+    }
+    for path in paths:
+        if os.path.isfile(path):
+            os.remove(path)
+        else:
+            paths.remove(path)
+    return list(paths)
+
 def save_training(
-    loc: str,
-    params: Hyperparams,
-    model: PretrainTaskDaLUKE,
-    res: TrainResults,
+    loc:       str,
+    params:    Hyperparams,
+    model:     PretrainTaskDaLUKE,
+    res:       TrainResults,
     optimizer: Optimizer,
     scheduler,
     scaler=None,
@@ -224,6 +238,8 @@ def train(
             runtime      = np.zeros((0, num_updates_epoch)),
             epoch        = 0,
         )
+
+    save_epochs = set(range(res.epoch, params.epochs, save_every))
 
     # Build model, possibly by loading previous weights
     log.section("Setting up model ...")
@@ -417,9 +433,12 @@ def train(
             TT,
         )
         # Save results and model
-        if is_master and (i+1) % save_every == 0:
+        if is_master:
             paths = save_training(location, params, model.module if is_distributed else model, res, optimizer, scheduler, scaler)
             log.debug("Saved progress to", *paths)
+            if i > 0 and i - 1 not in save_epochs:
+                cleaned = clean_saved_epoch(location, i-1)
+                log.debug("Cleaned temporary files at", *cleaned)
 
     log.debug("Time distribution", TT)
 
