@@ -4,7 +4,7 @@ from typing import Any
 import os
 
 import torch
-from pelutils import log, Levels, Parser, EnvVars, get_timestamp
+from pelutils import log, Levels, Parser, EnvVars, get_timestamp, set_seeds
 
 from daluke.serialize import load_from_archive, save_to_archive, COLLECT_OUT, TRAIN_OUT
 from daluke.ner import load_dataset, load_model
@@ -35,6 +35,7 @@ ARGUMENTS = {
 
 def run_experiment(args: dict[str, Any]):
     log.section("Beginnig", args["name"])
+    set_seeds(seed=0)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     entity_vocab, metadata, state_dict = load_from_archive(args["model"])
     state_dict, ent_embed_size = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"])
