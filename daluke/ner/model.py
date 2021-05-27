@@ -70,7 +70,6 @@ def span_probs_to_preds(span_probs: dict[tuple[int], np.ndarray], seq_len: int, 
             for i in range(*span):
                 preds[i] = f"I-{label}"
             preds[span[0]] = f"B-{label}"
-    # Cut off the first element which is padding
     return preds
 
 # TODO: Move this to model - it is not specific for NER

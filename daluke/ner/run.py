@@ -53,13 +53,13 @@ def run_experiment(args: dict[str, Any]):
         model,
         dataloader,
         dataset,
-        device          = device,
-        epochs          = args["epochs"],
-        lr              = args["lr"],
-        warmup_prop     = args["warmup_prop"],
-        weight_decay    = args["weight_decay"],
-        dev_dataloader  = dev_dataloader,
-        loss_weight     = args["loss_weight"],
+        device           = device,
+        epochs           = args["epochs"],
+        lr               = args["lr"],
+        warmup_prop      = args["warmup_prop"],
+        weight_decay     = args["weight_decay"],
+        dev_dataloader   = dev_dataloader,
+        loss_weight      = args["loss_weight"],
     )
     # Log important information out
     log.debug(training.model)
@@ -71,8 +71,10 @@ def run_experiment(args: dict[str, Any]):
     results = training.run()
 
     if args["eval"]:
-        log("True dev. set distribution")
-        results.true_type_distribution = type_distribution(dataset.annotations[Split.DEV])
+        log("True dev. set distributions")
+        results.dev_true_type_distribution = type_distribution(dataset.annotations[Split.DEV])
+        log("True dev. set distributions")
+        results.train_true_type_distribution = type_distribution(dataset.annotations[Split.TRAIN])
     os.makedirs(args["location"], exist_ok=True)
     results.save(args["location"])
     outpath = os.path.join(args["location"], TRAIN_OUT)

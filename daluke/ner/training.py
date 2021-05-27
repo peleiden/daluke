@@ -13,10 +13,12 @@ from .data import Split, NERDataset
 @dataclass
 class TrainResults(DataStorage):
     losses: list[float]
-    running_evaluations: list[NER_Results]
-    pred_distributions: list[dict[str, int]]
-    true_type_distribution: dict[str, int]
-
+    running_train_statistics: list[dict]
+    train_pred_distributions: list[dict[str, int]]
+    train_true_type_distribution: dict[str, int]
+    running_dev_evaluations: list[NER_Results]
+    dev_pred_distributions: list[dict[str, int]]
+    dev_true_type_distribution: dict[str, int]
 
     subfolder = "train-results"
 
@@ -66,9 +68,17 @@ class TrainNER:
         self.criterion = nn.CrossEntropyLoss(ignore_index=-1, weight=1/counts if loss_weight else None)
 
     def run(self):
-        self.model.train()
-        res = TrainResults(losses=list(), running_evaluations=list(), pred_distributions=list(), true_type_distribution=dict())
+        res = TrainResults(
+            losses                       = list(),
+            running_train_statistics     = list(),
+            running_dev_evaluations      = list(),
+            dev_pred_distributions       = list(),
+            dev_true_type_distribution   = dict(),
+            train_pred_distributions     = list(),
+            train_true_type_distribution = dict()
+        )
         for i in range(self.epochs):
+            self.model.train()
             for j, batch in enumerate(self.dataloader):
                 scores = self.model(batch)
                 loss = self.criterion(scores.view(-1, self.model.output_shape), batch.entities.labels.view(-1))
@@ -84,9 +94,12 @@ class TrainNER:
             if self.dev_dataloader is not None:
                 log("Evaluating on development set ...")
                 dev_results = evaluate_ner(self.model, self.dev_dataloader, self.dataset, self.device, Split.DEV, also_no_misc=False)
-                res.running_evaluations.append(dev_results)
-                res.pred_distributions.append(type_distribution(dev_results.preds))
-                self.model.train()
+                res.running_dev_evaluations.append(dev_results)
+                res.dev_pred_distributions.append(type_distribution(dev_results.preds))
+                log("Evaluating on training set ...")
+                train_results = evaluate_ner(self.model, self.dataloader, self.dataset, self.device, Split.TRAIN, also_no_misc=False)
+                res.running_train_statistics.append(train_results.statistics)
+                res.train_pred_distributions.append(type_distribution(train_results.preds))
         return res
 
 
