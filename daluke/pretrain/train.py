@@ -212,14 +212,21 @@ def train(
     # Number of parameter updates each epoch
     grad_accumulation_steps = params.batch_size // (params.ff_size * num_workers)
     num_updates_epoch = len(loader) // grad_accumulation_steps
-    assert num_updates_epoch, "Batch size cannot be larger than number of sequences in dataset"
+    assert num_updates_epoch > 0, "Batch size cannot be larger than number of sequences in dataset"
     # Total number of parameter updates
     num_updates_all = num_updates_epoch * params.epochs
     log(
+        "Batches generated:               %i" % len(loader),
         "Subbatches per parameter update: %i" % grad_accumulation_steps,
         "Parameter updates per epoch:     %i" % num_updates_epoch,
         "Parameter updates in total:      %i" % num_updates_all,
     )
+    if resume and num_updates_epoch != res.losses.shape[1]:
+        raise ValueError(
+            f"The number of parameter updates per epoch ({num_updates_epoch}) does not match previously calculated ({res.losses.shape[1]}).\n"
+            "This can be caused by changes to sub-batch size and number of GPU's.\n"
+            "Please adjust your settings and try again."
+        )
 
     if not resume:
         top_k = [1, 3, 5, 10, 25, 50]
@@ -288,6 +295,7 @@ def train(
         log(f"Resuming training saved at epoch {res.epoch} and loaded model from {mpath}")
     if is_distributed:
         model = DDP(model, device_ids=[rank])
+
     # TODO: Consider whether this AdamW is sufficient or we should tune it in some way to LUKE
     optimizer = AdamW(
         [{"params": get_optimizer_params(model_params, do_decay=True),  "weight_decay": params.weight_decay},
@@ -376,16 +384,8 @@ def train(
                 with TT.profile("Accuracy"):
                     # Only calculate more than top 10 every 20th subbatch
                     top_k = res.top_k if k % 20 == 0 else [x for x in res.top_k if x <= 10]
-                    w_accuracies[k, :len(top_k)] = top_k_accuracy(
-                        batch.word_mask_labels,
-                        word_preds,
-                        top_k,
-                    )
-                    e_accuracies[k, :len(top_k)] = top_k_accuracy(
-                        batch.ent_mask_labels,
-                        ent_preds,
-                        top_k,
-                    )
+                    w_accuracies[k, :len(top_k)] = top_k_accuracy(batch.word_mask_labels, word_preds, top_k)
+                    e_accuracies[k, :len(top_k)] = top_k_accuracy(batch.ent_mask_labels, ent_preds, top_k)
 
                 TT.end_profile()
 
