@@ -7,7 +7,9 @@ from pelutils.ds.plot import figsize_std, figsize_wide, tab_colours
 
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 
+from daluke.pretrain.train import MODEL_OUT
 from daluke.analysis.pretrain import TrainResults
 from daluke.plot import setup_mpl
 setup_mpl()
@@ -157,6 +159,7 @@ def accuracy_plot(location: str):
 
 def lr_plot(location: str):
     res = TrainResults.load()
+
     plt.figure(figsize=figsize_std)
     plt.plot(res.lr.flat)
     plt.xlabel("Batch")
@@ -167,6 +170,33 @@ def lr_plot(location: str):
     plt.grid()
 
     _save(location, "lr.png")
+
+def _bins(data, spacing=lambda x, b: np.linspace(min(x), max(x), b), bins=10):
+    bins = spacing(data, bins+1)
+    hist, edges = np.histogram(data, bins=bins, density=True)
+    x = (edges[1:] + edges[:-1]) / 2
+    xx, yy = x[hist>0], hist[hist>0]
+    return xx, yy
+
+def weight_plot(location: str):
+    res = TrainResults.load()
+    bins = 50
+    samples = 10 ** 5
+    subsample = np.linspace(0, res.orig_params.size-1, samples, dtype=int)
+    model_state_dict = torch.load(os.path.join(location, MODEL_OUT.format(i=res.epoch)), map_location=torch.device("cpu"))
+    model_params = torch.cat([x.view(-1) for x in model_state_dict.values()])
+
+    plt.figure(figsize=figsize_std)
+    plt.plot(*_bins(model_params[subsample], bins=bins), ms=DOTSIZE/2, marker=".", label="Model after %i epochs" % (res.epoch+1))
+    plt.plot(*_bins(res.orig_params[subsample], bins=bins), ms=DOTSIZE/2, marker=".", label="Initial moodel")
+    plt.title("Distribution of Model Parameters")
+    plt.xlabel("Size of Parameters")
+    plt.ylabel("Probability Distribution")
+    plt.yscale("log")
+    plt.legend(loc=1)
+    plt.grid()
+
+    _save(location, "weights.png")
 
 @click.command()
 @click.argument("location")
@@ -181,6 +211,8 @@ def make_pretraining_plots(location: str):
     runtime_plot(location)
     log("Parameter plot")
     parameter_plot(location)
+    log("Weight distribution plot")
+    weight_plot(location)
     log("Accuracy plot")
     accuracy_plot(location)
     log("Learning rate plot")
