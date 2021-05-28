@@ -4,7 +4,6 @@ import json
 import pickle
 
 import torch
-from tqdm import tqdm
 from transformers import AutoTokenizer
 
 from pelutils import log, TT
@@ -61,10 +60,7 @@ class DataLoader:
 
     def build_examples(self) -> list[Example]:
         examples = list()
-        for seq_data in log.tqdm(tqdm(
-            load_jsonl(os.path.join(self.data_dir, DatasetBuilder.data_file)),
-            total=self.metadata["number-of-items"],
-        )):
+        for seq_data in load_jsonl(os.path.join(self.data_dir, DatasetBuilder.data_file)):
             try:
                 # Keep only entities in filtered entity vocab
                 seq_data["entity_ids"], seq_data["entity_spans"] = zip(
