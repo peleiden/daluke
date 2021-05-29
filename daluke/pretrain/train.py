@@ -196,11 +196,11 @@ def train(
         log("Setting up loss function with entity loss weighting")
         # Don't weigh special tokens
         weights = torch.Tensor([0, 0, 0, *(1 / info["count"] for info in entity_vocab.values() if info["count"])]).to(device)
-        entity_criterion = nn.CrossEntropyLoss(weight=weights)
+        entity_criterion = nn.CrossEntropyLoss(ignore_index=-1, weight=weights)
     else:
         log("Setting up loss function without entity loss weighting")
-        entity_criterion = nn.CrossEntropyLoss()
-    word_criterion = nn.CrossEntropyLoss()
+        entity_criterion = nn.CrossEntropyLoss(ignore_index=-1)
+    word_criterion = nn.CrossEntropyLoss(ignore_index=-1)
 
     # Load dataset and training results
     log("Building dataset")
