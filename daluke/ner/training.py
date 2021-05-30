@@ -66,7 +66,7 @@ class TrainNER:
                 # Do count on the non-padded labels
                 for label, count in zip(*e.entities.labels[:e.entities.N].unique(return_counts=True)):
                     counts[label] += count
-        self.criterion = nn.CrossEntropyLoss(ignore_index=-1, weight=1/counts if loss_weight else None)
+        self.criterion = nn.CrossEntropyLoss(ignore_index=-1, weight=1/counts.to(device) if loss_weight else None)
 
     def run(self):
         res = TrainResults(
