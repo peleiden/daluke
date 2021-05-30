@@ -26,18 +26,19 @@ class TrainNER:
     # These layers should not be subject to weight decay
     no_decay = {"bias", "LayerNorm.weight"}
 
-    def __init__(self,
-            model: nn.Module,
-            dataloader: torch.utils.data.DataLoader,
-            dataset: NERDataset,
-            device: torch.device,
-            epochs: int,
-            lr: float = 1e-5,
-            warmup_prop: float = 0.06,
-            weight_decay: float = 0.01,
-            dev_dataloader: torch.utils.data.DataLoader | None = None,
-            loss_weight: bool = False,
-        ):
+    def __init__(
+        self,
+        model: nn.Module,
+        dataloader: torch.utils.data.DataLoader,
+        dataset: NERDataset,
+        device: torch.device,
+        epochs: int,
+        lr: float,
+        warmup_prop: float,
+        weight_decay: float,
+        dev_dataloader: torch.utils.data.DataLoader | None = None,
+        loss_weight: bool = False,
+    ):
         self.model = model
         self.device = device
         self.dataloader = dataloader

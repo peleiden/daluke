@@ -24,13 +24,21 @@ def load_dataset(entity_vocab: list[dict], args: dict[str, Any], metadata: dict[
     )
     return dataset
 
-def load_model(state_dict: dict, dataset: NERDataset, metadata: dict[str, Any], device: torch.device, entity_embedding_size: int=None) -> NERDaLUKE:
+def load_model(
+    state_dict: dict,
+    dataset: NERDataset,
+    metadata: dict[str, Any],
+    device: torch.device,
+    entity_embedding_size: int=None,
+    dropout: float=None,
+) -> NERDaLUKE:
     bert_config = AutoConfig.from_pretrained(metadata["base-model"])
     model = NERDaLUKE(
         len(dataset.all_labels),
         bert_config,
         ent_vocab_size = 2, # Same reason as mutate_for_ner
         ent_embed_size = entity_embedding_size if entity_embedding_size is not None else get_ent_embed(state_dict).shape[1],
+        dropout = dropout,
     )
     model.load_state_dict(state_dict, strict=False)
     return model.to(device)

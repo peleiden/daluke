@@ -41,6 +41,8 @@ ARGUMENTS = {
                            "default": None, "type": int},
     "warmup-prop":     {"default": 0.06, "type": float},
     "weight-decay":    {"default": 0.01, "type": float},
+    "dropout":         {"default": None, "type": float},
+    "dataset":         {"help": "Which dataset to use. Currently, only DaNE supported", "default": "DaNE"},
     "eval":            {"help": "Run evaluation on dev. set after each epoch", "action": "store_true"},
     "quieter":         {"help": "Don't show debug logging", "action": "store_true"},
     "loss-weight":     {"help": "Weight loss contributions by class frequency", "action": "store_true"},
@@ -60,20 +62,20 @@ def run_experiment(args: dict[str, Any]):
     dev_dataloader = dataset.build(Split.DEV, args["batch_size"]) if args["eval"] else None
 
     log("Loading model ...")
-    model = load_model(state_dict, dataset, metadata, device, entity_embedding_size=ent_embed_size)
+    model = load_model(state_dict, dataset, metadata, device, entity_embedding_size=ent_embed_size, dropout=args["dropout"])
 
     log(f"Starting training of DaLUKE for NER on {args['dataset']}")
     training = TrainNER(
         model,
         dataloader,
         dataset,
-        device           = device,
-        epochs           = args["epochs"],
-        lr               = args["lr"],
-        warmup_prop      = args["warmup_prop"],
-        weight_decay     = args["weight_decay"],
-        dev_dataloader   = dev_dataloader,
-        loss_weight      = args["loss_weight"],
+        device         = device,
+        epochs         = args["epochs"],
+        lr             = args["lr"],
+        warmup_prop    = args["warmup_prop"],
+        weight_decay   = args["weight_decay"],
+        dev_dataloader = dev_dataloader,
+        loss_weight    = args["loss_weight"],
     )
     # Log important information out
     log.debug(training.model)
