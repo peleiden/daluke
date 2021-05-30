@@ -10,7 +10,7 @@ from daluke.ner.model import NERDaLUKE, get_ent_embed
 
 def load_dataset(entity_vocab: list[dict], args: dict[str, Any], metadata: dict[str, Any], device: torch.device) -> NERDataset:
     dataset_cls: Type[NERDataset] = getattr(datasets, args["dataset"])
-    return dataset_cls(
+    dataset = dataset_cls(
         entity_vocab,
         base_model      = metadata["base-model"],
         max_seq_length  = metadata["max-seq-length"],
@@ -18,6 +18,11 @@ def load_dataset(entity_vocab: list[dict], args: dict[str, Any], metadata: dict[
         max_entity_span = metadata["max-entity-span"] if args.get("max_entity_span") is None else args["max_entity_span"],
         device          = device,
     )
+    dataset.load(
+        plank_path   = args["plank_path"],
+        wikiann_path = args["wikiann_path"],
+    )
+    return dataset
 
 def load_model(state_dict: dict, dataset: NERDataset, metadata: dict[str, Any], device: torch.device, entity_embedding_size: int=None) -> NERDaLUKE:
     bert_config = AutoConfig.from_pretrained(metadata["base-model"])

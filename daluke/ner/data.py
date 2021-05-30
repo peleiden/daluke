@@ -1,10 +1,10 @@
 from __future__ import annotations
+import os
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from enum import IntEnum
 import math
 from itertools import chain
-from typing import Optional
 
 import numpy as np
 import torch
@@ -82,6 +82,7 @@ class Split(IntEnum):
 class Sequences:
     texts: list[list[str]]
     annotations: list[list[str]]
+    sentence_boundaries: list[list[int]]
 
 class NERDataset(ABC):
     null_label: str | None = None
@@ -108,26 +109,28 @@ class NERDataset(ABC):
 
         # To be set by load method
         self.data: dict[Split, Sequences] = dict()
+        self.loaded = False
 
         self.data_limit = None # To be used for debugging
 
     @abstractmethod
-    def load(self):
+    def load(self, **kwargs):
         pass
 
-    @abstractmethod
     def build(self, split: Split, batch_size: int) -> DataLoader:
-        pass
+        assert self.loaded, "Run .load() first, before building"
+        examples = self._build_examples(split)
+        return DataLoader(list(enumerate(examples)), batch_size=batch_size, collate_fn=self.collate, shuffle=split==split.TRAIN)
 
     @property
     def all_labels(self) -> list[str]:
         L = list() if self.null_label is None else [self.null_label]
         return [*L, *self.labels]
 
-    def _build_examples(self, sent_bounds: list[list[int]], split: Split) -> list[NERExample]:
+    def _build_examples(self, split: Split) -> list[NERExample]:
         examples = list()
 
-        for i, (text, annotation, bounds) in enumerate(zip(self.data[split].texts, self.data[split].annotations, sent_bounds)):
+        for i, (text, annotation, bounds) in enumerate(zip(self.data[split].texts, self.data[split].annotations, self.data[split].sentence_boundaries)):
             text_token_ids: list[list[int]] = self.tokenizer(text, add_special_tokens=False)["input_ids"]
             # We might have to split some sentences to respect the maximum sentence length
             bounds = self._add_extra_sentence_boundaries(bounds, text_token_ids)
@@ -268,19 +271,76 @@ class DaNE(NERDataset):
     null_label = "O"
     labels = ("LOC", "PER", "ORG", "MISC")
 
-    def load(self):
+    def load(self, **_): # Toss out kwargs
         # Get all three splits from DaNE and divide them in source texts and annotations
         datasets = DDT().load_as_simple_ner(predefined_splits=True)
         for (texts, annotations), split in zip(datasets, Split):
             self.data[split] = Sequences(
-                texts       = texts,
-                annotations = annotations,
+                texts               = texts,
+                annotations         = annotations,
+                # Sadly, we do not have access to where the DaNE sentences are divided into articles, so we let each sentence be an entire text.
+                sentence_boundaries = [[len(s)] for s in texts]
             )
         self.loaded = True
 
-    def build(self, split: Split, batch_size: int) -> DataLoader:
-        assert self.loaded, "Run .load() first, before building"
-        # Sadly, we do not have access to where the DaNE sentences are divided into articles, so we let each sentence be an entire text.
-        sentence_boundaries = [[len(s)] for s in self.data[split].texts]
-        examples = self._build_examples(sentence_boundaries, split)
-        return DataLoader(list(enumerate(examples)), batch_size=batch_size, collate_fn=self.collate, shuffle=split==split.TRAIN)
+class Plank(NERDataset):
+    null_label = "O"
+    labels = ("LOC", "PER", "ORG", "MISC")
+    data_files = {
+        Split.TRAIN: "da_ddt-ud-ner-train.conll",
+        Split.DEV: "da_ddt-ud-ner-dev.conll",
+        Split.TEST: "da_ddt-ud-ner-test.conll",
+    }
+
+    def load(self, plank_path, **_):
+        for split, file in self.data_files.items():
+            self.data[split] = Sequences(
+                texts               = list(),
+                annotations         = list(),
+                sentence_boundaries = list(),
+            )
+            with open(os.path.join(plank_path, file), "r") as f:
+                text, annotation = list(), list()
+                for l in f:
+                    if not l.split():
+                        self.data[split].texts.append(text)
+                        self.data[split].annotations.append(annotation)
+                        # We yet again hard-code sentence boundaries to only the last as we lack this data
+                        self.data[split].sentence_boundaries.append([len(text)])
+                        text, annotation = list(), list()
+                    else:
+                        t, a = l.split()
+                        text.append(t)
+                        annotation.append(a)
+        self.loaded = True
+
+class WikiANN(NERDataset):
+    null_label = "O"
+    labels = ("LOC", "PER", "ORG")
+    data_files = {
+        Split.TRAIN: "train",
+        Split.DEV:   "dev",
+        Split.TEST:  "test",
+    }
+
+    def load(self, wikiann_path, **_):
+        for split, file in self.data_files.items():
+            self.data[split] = Sequences(
+                texts               = list(),
+                annotations         = list(),
+                sentence_boundaries = list(),
+            )
+            with open(os.path.join(wikiann_path, file), "r") as f:
+                text, annotation = list(), list()
+                for l in f:
+                    if not l.split():
+                        self.data[split].texts.append(text)
+                        self.data[split].annotations.append(annotation)
+                        #TODO: Do we have to divide into sentence boundaries like this
+                        self.data[split].sentence_boundaries.append([len(text)])
+                        text, annotation = list(), list()
+                    else:
+                        t, a = l.replace("da:", "").split()
+                        text.append(t)
+                        annotation.append(a)
+        self.loaded = True

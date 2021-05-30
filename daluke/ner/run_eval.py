@@ -9,6 +9,7 @@ from pelutils import log, Levels, Parser
 from daluke.ner import load_dataset, load_model
 from daluke.ner.data import Split
 from daluke.ner.evaluation import evaluate_ner, type_distribution
+from daluke.ner.run import DATASET_ARGUMENTS
 
 from daluke.serialize import load_from_archive, TRAIN_OUT
 
@@ -25,7 +26,7 @@ ARGUMENTS = {
                             "default": None, "type": int},
     "quieter":    {"help": "Don't show debug logging", "action": "store_true"},
     "cpu":        {"help": "Run experiment on cpu",    "action": "store_true"},
-    "dataset":    {"help": "Which dataset to use. Currently, only DaNE supported", "default": "DaNE"},
+    **DATASET_ARGUMENTS
 }
 
 def run_experiment(args: dict[str, Any]):
@@ -34,7 +35,6 @@ def run_experiment(args: dict[str, Any]):
 
     log("Loading dataset ...")
     dataset = load_dataset(entity_vocab, args, metadata, device)
-    dataset.load()
     dataloader = dataset.build(Split.TEST, FP_SIZE)
 
     log("Loading model ...")
@@ -48,6 +48,7 @@ def run_experiment(args: dict[str, Any]):
     log("Starting evaluation of daLUKE for NER")
     results = evaluate_ner(model, dataloader, dataset, device, Split.TEST)
 
+    results.subfolder += f"-{args['dataset']}"
     results.save(args["location"])
     type_distribution(results.preds)
 
