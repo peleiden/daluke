@@ -27,7 +27,6 @@ class NERDaLUKE(DaLUKE):
         """
         super().__init__(bert_config, ent_vocab_size, ent_embed_size)
         self.output_shape = output_shape
-        print(dropout)
         self.drop = nn.Dropout(dropout if dropout is not None else bert_config.hidden_dropout_prob)
         self.classifier = nn.Linear(bert_config.hidden_size*3, self.output_shape)
 

@@ -31,7 +31,7 @@ class GeometryResults(DataStorage):
 
     subfolder = "geometry"
 
-def collect_representations(modelpath: str, device: torch.device, target_device) -> tuple[np.ndarray, np.ndarray]:
+def collect_representations(modelpath: str, device: torch.device, target_device: torch.device, only_positives: bool) -> tuple[np.ndarray, np.ndarray]:
     entity_vocab, metadata, state_dict = load_from_archive(modelpath)
     state_dict, ent_embed_size = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"])
     log("Loading dataset")
@@ -51,6 +51,8 @@ def collect_representations(modelpath: str, device: torch.device, target_device)
         representations = torch.cat([start_word_representations, end_word_representations, entity_representations], dim=2)
         # We dont want padding
         mask = batch.entities.attention_mask.bool()
+        if only_positives:
+            mask = mask & (batch.entities.labels != 0)
         batch_representations.append(
             representations[mask].contiguous().to(target_device)
         )
@@ -95,14 +97,15 @@ def tsne(A: np.ndarray, perplexity: float) -> np.ndarray:
 @click.option("--tsne-perplexity", default=100.0, type=float)
 @click.option("--umap-neighbours", default=1000, type=int)
 @click.option("--umap-min-dist", default=0.001, type=float)
-def main(path: str, model: str, n_components: int, reducer_subsample: Optional[int], tsne_perplexity: float, umap_neighbours: int, umap_min_dist: float):
+@click.option("--only-positives", is_flag=True)
+def main(path: str, model: str, n_components: int, reducer_subsample: Optional[int], tsne_perplexity: float, umap_neighbours: int, umap_min_dist: float, only_positives: bool):
     log.configure(
         os.path.join(path, "geometry-analysis.log"), "daLUKE embedding geometry analysis",
         print_level=Levels.DEBUG
     )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     with torch.no_grad():
-        representations, labels = collect_representations(model, device, target_device=torch.device("cpu"))
+        representations, labels = collect_representations(model, device, torch.device("cpu"), only_positives)
     log(f"Acquired representations of shape {representations.shape}")
     log("Performing principal component analysis")
     pca_transformed, principal_components = pca(representations, n_components)

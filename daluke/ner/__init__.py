@@ -19,8 +19,8 @@ def load_dataset(entity_vocab: list[dict], args: dict[str, Any], metadata: dict[
         device          = device,
     )
     dataset.load(
-        plank_path   = args["plank_path"],
-        wikiann_path = args["wikiann_path"],
+        plank_path   = args.get("plank_path"),
+        wikiann_path = args.get("wikiann_path"),
     )
     return dataset
 
