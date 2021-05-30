@@ -34,6 +34,7 @@ def run_experiment(args: dict[str, Any]):
 
     log("Loading dataset ...")
     dataset = load_dataset(entity_vocab, args, metadata, device)
+    dataset.load()
     dataloader = dataset.build(Split.TEST, FP_SIZE)
 
     log("Loading model ...")
@@ -42,7 +43,7 @@ def run_experiment(args: dict[str, Any]):
     # Print some important information to stdout
     log.debug(model)
     dataset.document(dataloader, Split.TEST)
-    type_distribution(dataset.annotations[Split.TEST])
+    type_distribution(dataset.data[Split.TEST].annotations)
 
     log("Starting evaluation of daLUKE for NER")
     results = evaluate_ner(model, dataloader, dataset, device, Split.TEST)

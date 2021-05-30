@@ -42,6 +42,7 @@ def run_experiment(args: dict[str, Any]):
 
     log("Loading dataset ...")
     dataset = load_dataset(entity_vocab, args, metadata, device)
+    dataset.load()
     dataloader = dataset.build(Split.TRAIN, args["batch_size"])
     dev_dataloader = dataset.build(Split.DEV, args["batch_size"]) if args["eval"] else None
 
@@ -66,15 +67,15 @@ def run_experiment(args: dict[str, Any]):
     log.debug(training.scheduler)
     log.debug(training.optimizer)
     dataset.document(dataloader, Split.TRAIN)
-    type_distribution(dataset.annotations[Split.TRAIN])
+    type_distribution(dataset.data[Split.TRAIN].annotations)
 
     results = training.run()
 
     if args["eval"]:
         log("True dev. set distributions")
-        results.dev_true_type_distribution = type_distribution(dataset.annotations[Split.DEV])
+        results.dev_true_type_distribution = type_distribution(dataset.data[Split.DEV].annotations)
         log("True dev. set distributions")
-        results.train_true_type_distribution = type_distribution(dataset.annotations[Split.TRAIN])
+        results.train_true_type_distribution = type_distribution(dataset.data[Split.TRAIN].annotations)
     os.makedirs(args["location"], exist_ok=True)
     results.save(args["location"])
     outpath = os.path.join(args["location"], TRAIN_OUT)

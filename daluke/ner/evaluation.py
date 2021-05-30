@@ -31,7 +31,7 @@ class NER_Results(DataStorage):
 
 def evaluate_ner(model: nn.Module, dataloader: torch.utils.data.DataLoader, dataset: NERDataset, device: torch.device, split: Split, also_no_misc=True) -> NER_Results:
     model.eval()
-    annotations, texts = dataset.annotations[split], dataset.texts[split]
+    annotations, texts = dataset.data[split].annotations, dataset.data[split].texts
     span_probs: list[dict[tuple[int, int], np.ndarray]] = list(dict() for _ in range(len(texts)))
     log.debug(f"Forward passing {len(dataloader)} batches")
     for batch in tqdm(dataloader):

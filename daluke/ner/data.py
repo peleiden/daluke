@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from enum import IntEnum
 import math
 from itertools import chain
+from typing import Optional
 
 import numpy as np
 import torch
@@ -77,6 +78,11 @@ class Split(IntEnum):
     DEV = 1
     TEST = 2
 
+@dataclass
+class Sequences:
+    texts: list[list[str]]
+    annotations: list[list[str]]
+
 class NERDataset(ABC):
     null_label: str | None = None
     labels: tuple[str] | None = None
@@ -100,11 +106,14 @@ class NERDataset(ABC):
         self.tokenizer = AutoTokenizer.from_pretrained(base_model)
         self.sep_id, self.cls_id, self.pad_id = get_special_ids(self.tokenizer)
 
-        # To be set in build method
-        self.texts: tuple[list[list[str]]] | None = None
-        self.annotations: tuple[list[list[str]]] | None= None
+        # To be set by load method
+        self.data: dict[Split, Sequences] = dict()
 
         self.data_limit = None # To be used for debugging
+
+    @abstractmethod
+    def load(self):
+        pass
 
     @abstractmethod
     def build(self, split: Split, batch_size: int) -> DataLoader:
@@ -118,7 +127,7 @@ class NERDataset(ABC):
     def _build_examples(self, sent_bounds: list[list[int]], split: Split) -> list[NERExample]:
         examples = list()
 
-        for i, (text, annotation, bounds) in enumerate(zip(self.texts[split], self.annotations[split], sent_bounds)):
+        for i, (text, annotation, bounds) in enumerate(zip(self.data[split].texts, self.data[split].annotations, sent_bounds)):
             text_token_ids: list[list[int]] = self.tokenizer(text, add_special_tokens=False)["input_ids"]
             # We might have to split some sentences to respect the maximum sentence length
             bounds = self._add_extra_sentence_boundaries(bounds, text_token_ids)
@@ -252,18 +261,26 @@ class NERDataset(ABC):
         """
         examples = [ex for _, ex in loader.dataset]
         non_zeros = [(ex.entities.labels[ex.entities.labels != -1] != self.label_to_idx[self.null_label]).float().mean().item() for ex in examples]
-        log(f"Built dataset of {len(self.texts[split])} documents divided into {len(examples)} examples to be forward passed")
+        log(f"Built dataset of {len(self.data[split].texts)} documents divided into {len(examples)} examples to be forward passed")
         log(f"Average proportion of spans in each example that have positive labels: {np.mean(non_zeros)*100:.2f}%")
 
 class DaNE(NERDataset):
     null_label = "O"
     labels = ("LOC", "PER", "ORG", "MISC")
 
-    def build(self, split: Split, batch_size: int) -> DataLoader:
+    def load(self):
         # Get all three splits from DaNE and divide them in source texts and annotations
         datasets = DDT().load_as_simple_ner(predefined_splits=True)
-        self.texts, self.annotations = tuple(d[0] for d in datasets), tuple(d[1] for d in datasets)
+        for (texts, annotations), split in zip(datasets, Split):
+            self.data[split] = Sequences(
+                texts       = texts,
+                annotations = annotations,
+            )
+        self.loaded = True
+
+    def build(self, split: Split, batch_size: int) -> DataLoader:
+        assert self.loaded, "Run .load() first, before building"
         # Sadly, we do not have access to where the DaNE sentences are divided into articles, so we let each sentence be an entire text.
-        sentence_boundaries = [[len(s)] for s in self.texts[split]]
+        sentence_boundaries = [[len(s)] for s in self.data[split].texts]
         examples = self._build_examples(sentence_boundaries, split)
         return DataLoader(list(enumerate(examples)), batch_size=batch_size, collate_fn=self.collate, shuffle=split==split.TRAIN)
