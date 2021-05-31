@@ -90,7 +90,6 @@ class NERDataset(ABC):
     labels: tuple[str] | None = None
 
     def __init__(self,
-            entity_vocab: dict,
             base_model: str,
             max_seq_length: int,
             max_entities: int,
@@ -98,7 +97,6 @@ class NERDataset(ABC):
             device: torch.device,
         ):
         self.device = device
-        self.entity_vocab = entity_vocab
         self.max_seq_length = max_seq_length
         self.max_entities = max_entities
         self.max_entity_span = max_entity_span

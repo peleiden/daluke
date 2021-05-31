@@ -57,7 +57,7 @@ def run_experiment(args: dict[str, Any]):
     state_dict, ent_embed_size = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"])
 
     log(f"Loading dataset {args['dataset']} ...")
-    dataset = load_dataset(entity_vocab, args, metadata, device)
+    dataset = load_dataset(_, args, metadata, device)
     dataloader = dataset.build(Split.TRAIN, args["batch_size"])
     dev_dataloader = dataset.build(Split.DEV, args["batch_size"]) if args["eval"] else None
 
