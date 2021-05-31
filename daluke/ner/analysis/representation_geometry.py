@@ -28,22 +28,23 @@ class GeometryResults(DataStorage):
 
     labels: np.ndarray
     principal_components: np.ndarray
+    content: list[dict[str, int | list[tuple[int, int]]]]
 
     subfolder = "geometry"
 
-def collect_representations(modelpath: str, device: torch.device, target_device: torch.device, only_positives: bool) -> tuple[np.ndarray, np.ndarray]:
+def collect_representations(modelpath: str, device: torch.device, target_device: torch.device, only_positives: bool) -> tuple[np.ndarray, np.ndarray, list[dict[str, int | list[tuple[int, int]]]]]:
     entity_vocab, metadata, state_dict = load_from_archive(modelpath)
     state_dict, ent_embed_size = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"])
     log("Loading dataset")
     # Note: We dont fill out dict as we dont allow changing max-entities and max-entity-span here. If this results in an error for any dataset, we must change this.
-    dataset = load_dataset(entity_vocab,  dict(dataset="DaNE"), metadata, device)
+    dataset = load_dataset(dict(dataset="DaNE"), metadata, device)
     dataloader = dataset.build(Split.TRAIN, FP_SIZE, shuffle=False)
     log("Loading model")
     model = load_model(state_dict, dataset, metadata, device, entity_embedding_size=ent_embed_size)
     model.eval()
 
     log("Forward passing examples")
-    batch_representations, labels = list(), list()
+    batch_representations, labels, content = list(), list(), list()
     for batch in tqdm(dataloader):
         # Use super class as we want the represenations
         word_representations, entity_representations = super(type(model), model).forward(batch)
@@ -59,7 +60,13 @@ def collect_representations(modelpath: str, device: torch.device, target_device:
         labels.append(
             batch.entities.labels[mask].contiguous().to(target_device)
         )
-    return torch.cat(batch_representations).numpy(), torch.cat(labels).numpy()
+        for i, text_num in enumerate(batch.text_nums):
+            for j in range(batch.entities.N[i]):
+                content.append(dict(
+                    text_num    = text_num,
+                    span        = batch.entities.fullword_spans[i][j],
+                ))
+    return torch.cat(batch_representations).numpy(), torch.cat(labels).numpy(), content
 
 def pca(A: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -105,7 +112,7 @@ def main(path: str, model: str, n_components: int, reducer_subsample: Optional[i
     )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     with torch.no_grad():
-        representations, labels = collect_representations(model, device, torch.device("cpu"), only_positives)
+        representations, labels, content = collect_representations(model, device, torch.device("cpu"), only_positives)
     log(f"Acquired representations of shape {representations.shape}")
     log("Performing principal component analysis")
     pca_transformed, principal_components = pca(representations, n_components)
@@ -125,6 +132,7 @@ def main(path: str, model: str, n_components: int, reducer_subsample: Optional[i
             tsne_transformed     = tsne_transformed,
             labels               = labels,
             principal_components = principal_components,
+            content              = content,
         ).save(path),
     )
 
