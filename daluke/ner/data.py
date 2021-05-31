@@ -2,6 +2,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
+from typing import Optional
 from enum import IntEnum
 import math
 from itertools import chain
@@ -117,10 +118,10 @@ class NERDataset(ABC):
     def load(self, **kwargs):
         pass
 
-    def build(self, split: Split, batch_size: int) -> DataLoader:
+    def build(self, split: Split, batch_size: int, shuffle: Optional[bool]=None) -> DataLoader:
         assert self.loaded, "Run .load() first, before building"
         examples = self._build_examples(split)
-        return DataLoader(list(enumerate(examples)), batch_size=batch_size, collate_fn=self.collate, shuffle=split==split.TRAIN)
+        return DataLoader(list(enumerate(examples)), batch_size=batch_size, collate_fn=self.collate, shuffle=shuffle if shuffle is not None else split==split.TRAIN)
 
     @property
     def all_labels(self) -> list[str]:
