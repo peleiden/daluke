@@ -37,7 +37,7 @@ def collect_representations(modelpath: str, device: torch.device, target_device:
     log("Loading dataset")
     # Note: We dont fill out dict as we dont allow changing max-entities and max-entity-span here. If this results in an error for any dataset, we must change this.
     dataset = load_dataset(entity_vocab,  dict(dataset="DaNE"), metadata, device)
-    dataloader = dataset.build(Split.TRAIN, FP_SIZE,)
+    dataloader = dataset.build(Split.TRAIN, FP_SIZE, shuffle=False)
     log("Loading model")
     model = load_model(state_dict, dataset, metadata, device, entity_embedding_size=ent_embed_size)
     model.eval()
@@ -52,7 +52,7 @@ def collect_representations(modelpath: str, device: torch.device, target_device:
         # We dont want padding
         mask = batch.entities.attention_mask.bool()
         if only_positives:
-            mask = mask & (batch.entities.labels != 0)
+            mask &= (batch.entities.labels != 0)
         batch_representations.append(
             representations[mask].contiguous().to(target_device)
         )
