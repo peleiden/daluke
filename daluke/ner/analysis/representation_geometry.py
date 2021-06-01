@@ -62,10 +62,11 @@ def collect_representations(modelpath: str, device: torch.device, target_device:
         )
         for i, text_num in enumerate(batch.text_nums):
             for j in range(batch.entities.N[i]):
-                content.append(dict(
-                    text_num    = text_num,
-                    span        = batch.entities.fullword_spans[i][j],
-                ))
+                if mask[i, j]:
+                    content.append(dict(
+                        text_num    = text_num,
+                        span        = batch.entities.fullword_spans[i][j],
+                    ))
     return torch.cat(batch_representations).numpy(), torch.cat(labels).numpy(), content
 
 def pca(A: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
