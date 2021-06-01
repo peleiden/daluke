@@ -11,7 +11,7 @@ from sklearn.manifold import TSNE
 import click
 from tqdm import tqdm
 
-from pelutils import log, DataStorage, Levels
+from pelutils import log, DataStorage, Levels, set_seeds
 
 from daluke.serialize import load_from_archive, COLLECT_OUT
 from daluke.ner import load_model, load_dataset
@@ -107,6 +107,7 @@ def tsne(A: np.ndarray, perplexity: float) -> np.ndarray:
 @click.option("--umap-min-dist", default=0.001, type=float)
 @click.option("--only-positives", is_flag=True)
 def main(path: str, model: str, n_components: int, reducer_subsample: Optional[int], tsne_perplexity: float, umap_neighbours: int, umap_min_dist: float, only_positives: bool):
+    set_seeds()
     log.configure(
         os.path.join(path, "geometry-analysis.log"), "daLUKE embedding geometry analysis",
         print_level=Levels.DEBUG
