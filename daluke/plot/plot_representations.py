@@ -21,6 +21,7 @@ def _scatter_transformed(Z1: np.ndarray, Z2: np.ndarray, labels: np.ndarray, axi
     nulls = labels == 0
     axis.scatter(Z1[nulls], Z2[nulls], c=colors[0], alpha=.1)
     axis.scatter(Z1[~nulls], Z2[~nulls], c=[cdict[l] for l in labels[~nulls]], alpha=.4)
+    axis.grid()
 
 def pca_explained_plot(location: str):
     lambdas = GeometryResults.load().principal_components
