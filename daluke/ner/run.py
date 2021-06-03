@@ -42,6 +42,8 @@ ARGUMENTS = {
     "warmup-prop":     {"default": 0.06, "type": float},
     "weight-decay":    {"default": 0.01, "type": float},
     "dropout":         {"default": None, "type": float},
+    "words-only":      {"action": "store_true", "help": "Use only start and end token CWR's for classification"},
+    "entities-only":   {"action": "store_true", "help": "Use only CER for classification"},
     "dataset":         {"help": "Which dataset to use. Currently, only DaNE supported", "default": "DaNE"},
     "eval":            {"help": "Run evaluation on dev. set after each epoch", "action": "store_true"},
     "quieter":         {"help": "Don't show debug logging", "action": "store_true"},
@@ -52,6 +54,7 @@ ARGUMENTS = {
 def run_experiment(args: dict[str, Any]):
     log.section("Beginnig", args["name"])
     set_seeds(seed=0)
+    assert not (args["words_only"] and args["entities_only"]), "--words-only and --entities-only cannot be used together"
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     entity_vocab, metadata, state_dict = load_from_archive(args["model"])
     state_dict, ent_embed_size = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"])
@@ -62,7 +65,16 @@ def run_experiment(args: dict[str, Any]):
     dev_dataloader = dataset.build(Split.DEV, args["batch_size"]) if args["eval"] else None
 
     log("Loading model ...")
-    model = load_model(state_dict, dataset, metadata, device, entity_embedding_size=ent_embed_size, dropout=args["dropout"])
+    model = load_model(
+        state_dict,
+        dataset,
+        metadata,
+        device,
+        words_only = args["words_only"],
+        entities_only = args["entities_only"],
+        entity_embedding_size = ent_embed_size,
+        dropout = args["dropout"],
+    )
 
     log(f"Starting training of DaLUKE for NER on {args['dataset']}")
     training = TrainNER(

@@ -28,6 +28,8 @@ def load_model(
     dataset: NERDataset,
     metadata: dict[str, Any],
     device: torch.device,
+    words_only: bool,
+    entities_only: bool,
     entity_embedding_size: int=None,
     dropout: float=None,
 ) -> NERDaLUKE:
@@ -38,6 +40,8 @@ def load_model(
         ent_vocab_size = 2, # Same reason as mutate_for_ner
         ent_embed_size = entity_embedding_size if entity_embedding_size is not None else get_ent_embed(state_dict).shape[1],
         dropout = dropout,
+        words_only = words_only,
+        entities_only = entities_only,
     )
     model.load_state_dict(state_dict, strict=False)
     return model.to(device)

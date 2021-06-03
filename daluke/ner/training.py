@@ -22,6 +22,7 @@ class TrainResults(DataStorage):
 
     subfolder = "train-results"
 
+
 class TrainNER:
     # These layers should not be subject to weight decay
     no_decay = {"bias", "LayerNorm.weight"}
@@ -36,8 +37,8 @@ class TrainNER:
         lr: float,
         warmup_prop: float,
         weight_decay: float,
+        loss_weight: bool,
         dev_dataloader: torch.utils.data.DataLoader | None = None,
-        loss_weight: bool = False,
     ):
         self.model = model
         self.device = device

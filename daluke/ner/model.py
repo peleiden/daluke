@@ -21,6 +21,8 @@ class NERDaLUKE(DaLUKE):
         ent_vocab_size: int,
         ent_embed_size: int,
         dropout: float,
+        words_only: bool,
+        entities_only: bool,
     ):
         """
         Build the architecture and setup the config
@@ -28,7 +30,16 @@ class NERDaLUKE(DaLUKE):
         super().__init__(bert_config, ent_vocab_size, ent_embed_size)
         self.output_shape = output_shape
         self.drop = nn.Dropout(dropout if dropout is not None else bert_config.hidden_dropout_prob)
-        self.classifier = nn.Linear(bert_config.hidden_size*3, self.output_shape)
+
+        self.words_only = words_only
+        self.entities_only = entities_only
+        if self.words_only:
+            concat_size = 2
+        elif self.entities_only:
+            concat_size = 1
+        else:
+            concat_size = 3
+        self.classifier = nn.Linear(concat_size*bert_config.hidden_size, self.output_shape)
 
     def forward(self, ex: NERBatchedExamples) -> torch.Tensor:
         """
@@ -39,7 +50,12 @@ class NERDaLUKE(DaLUKE):
         word_representations, ent_representations = super().forward(ex)
         # We gather the starting and ending words in each entity span
         start_word_representations, end_word_representations = self.collect_start_and_ends(word_representations, ex)
-        features = torch.cat([start_word_representations, end_word_representations, ent_representations], dim=2)
+        if self.words_only:
+            features = torch.cat([start_word_representations, end_word_representations], dim=2)
+        elif self.entities_only:
+            features = ent_representations
+        else:
+            features = torch.cat([start_word_representations, end_word_representations, ent_representations], dim=2)
         features = self.drop(features)
         return self.classifier(features)
 
