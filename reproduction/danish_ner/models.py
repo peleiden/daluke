@@ -11,8 +11,10 @@ from flair.data import Sentence, Token
 from polyglot.tag import NEChunker
 from polyglot.text import WordList
 from spacy.util import load_model_from_path as spacy_load
+from spacy.tokens import Doc
 from NERDA.datasets import download_dane_data
 from NERDA.precooked import DA_BERT_ML, DA_ELECTRA_DA
+from dacy import load as dacy_load
 import torch
 import pexpect
 
@@ -76,11 +78,9 @@ class Spacy(NER_TestModel):
     def predict(self, text: Generator[list[str]]) -> list[list[str]]:
         preds = list()
         for words in text:
-            pred = list()
             tok = self.model.tokenizer.tokens_from_list(words)
             self.model.entity(tok)
-            pred = ["O" if t.ent_iob_ == "O" else f"{t.ent_iob_}-{t.ent_type_}" for t in tok]
-            preds.append(pred)
+            preds.append(["O" if t.ent_iob_ == "O" else f"{t.ent_iob_}-{t.ent_type_}" for t in tok])
         return preds
 
 class Polyglot(NER_TestModel):
@@ -153,6 +153,22 @@ class Ælæctra(NER_TestModel):
     def predict(self, text: Generator[list[str]]) -> list[list[str]]:
         return self.model.predict(list(text))
 
+class Dacy(NER_TestModel):
+    model_name = "da_dacy_large_tft-0.0.0"
+    def setup(self):
+        self.model = dacy_load(self.model_name)
+
+    def predict(self, text: Generator[list[str]]) -> list[list[str]]:
+        preds = list()
+        transformer = self.model.get_pipe("transformer")
+        ner = self.model.get_pipe("ner")
+        for words in text:
+            doc = ner(transformer(Doc(self.model.vocab, words=words)))
+            preds.append(
+                ["O" if t.ent_iob_ == "O" else f"{t.ent_iob_}-{t.ent_type_}" for t in doc]
+            )
+        return preds
+
 ALL_MODELS = (
     Bert("BERT"),
     Flair("Flair"),
@@ -161,6 +177,7 @@ ALL_MODELS = (
     Daner("daner"),
     Mbert("mBERT"),
     Ælæctra("Ælæctra"),
+    Dacy("DaCy"),
 )
 
 def setup_models(names_to_setup: list[str], location: str, daner_path: str="daner") -> list[NER_TestModel]:
