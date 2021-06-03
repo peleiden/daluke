@@ -27,6 +27,11 @@ class TrainResults(DataStorage):
     param_diff_1: np.ndarray  # 1-norm distance to original parameters, epochs x param updates
     param_diff_2: np.ndarray  # 2-norm distance to original parameters, epochs x param updates
 
+    # Weights that do not exist in base model. Keys in state_dict
+    luke_exclusive_params: set[str]
+    # Query matrices that do not exist in base model but have been set from it. Subset of luke_exclusive_params
+    q_mats_from_base:      set[str]
+
     subfolder = None  # Set at runtime
     json_name = "pretrain_results.json"
     ignore_missing = True

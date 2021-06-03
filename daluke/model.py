@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 from transformers.models.bert.modeling_bert import (
     BertConfig,
     BertEmbeddings,
@@ -12,6 +12,12 @@ from transformers.models.bert.modeling_bert import (
 )
 
 from daluke.data import BatchedExamples
+
+
+def all_params(model: torch.nn.Module | dict) -> torch.Tensor:
+    """ Returns an array of all model parameters, given either from a Module or a state_dict """
+    state_dict = model.state_dict() if isinstance(model, torch.nn.Module) else model
+    return torch.cat([x.detach().view(-1) for n, x in state_dict.items() if n != "word_embeddings.position_ids"])
 
 
 class DaLUKE(nn.Module):
@@ -52,19 +58,26 @@ class DaLUKE(nn.Module):
             word_hidden, entity_hidden = encode(word_hidden, entity_hidden, attention_mask)
         return word_hidden, entity_hidden
 
-    def init_queries(self):
+    def init_queries(self) -> set[str]:
         """
         As the attention layers of DaLUKE have four query matrices and the BERT-based transformers only have one,
-        we might want to init the other three to this one word-to-word query matrix.
+        we might want to init the other three to this one word-to-word query matrix
+        Returns keys in state_dict set in this method
         """
-        for layer in self.encoder:
+        keys = set()
+        for i, layer in enumerate(self.encoder):
             layer.attention.Q_e.weight.data = layer.attention.Q_w.weight.data.detach().clone()
             layer.attention.Q_w2e.weight.data = layer.attention.Q_w.weight.data.detach().clone()
             layer.attention.Q_e2w.weight.data = layer.attention.Q_w.weight.data.detach().clone()
 
-    def all_params(self) -> torch.Tensor:
-        """ Returns an array of all model parameters """
-        return torch.cat([x.detach().view(-1) for n, x in self.state_dict().items() if n != "word_embeddings.position_ids"])
+            layer.attention.Q_e.bias.data = layer.attention.Q_w.bias.data.detach().clone()
+            layer.attention.Q_w2e.bias.data = layer.attention.Q_w.bias.data.detach().clone()
+            layer.attention.Q_e2w.bias.data = layer.attention.Q_w.bias.data.detach().clone()
+
+            for key in "Q_e", "Q_w2e", "Q_e2w":
+                keys = set.union(keys, {f"encoder.{i}.attention.{key}.weight", f"encoder.{i}.attention.{key}.bias"})
+
+        return keys
 
     def __len__(self):
         """ Number of model parameters. Further docs here: https://pokemondb.net/pokedex/numel """

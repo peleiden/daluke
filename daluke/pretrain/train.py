@@ -22,6 +22,7 @@ from pelutils.logger import log, Levels
 from .data import DataLoader, load_entity_vocab
 from .data.build import DatasetBuilder
 from .model import PretrainTaskDaLUKE, BertAttentionPretrainTaskDaLUKE, load_base_model_weights
+from ..model import all_params
 from ..analysis.pretrain import TrainResults, top_k_accuracy
 
 PORT = "3090"  # Are we sure this port is in stock?
@@ -246,6 +247,8 @@ def train(
             param_diff_2 = np.zeros((0, num_updates_epoch)),
             runtime      = np.zeros((0, num_updates_epoch)),
             epoch        = 0,
+            luke_exclusive_params = None,  # Set later
+            q_mats_from_base      = None,  # Set later
         )
 
     save_epochs = set(range(res.epoch, params.epochs, save_every))
@@ -271,11 +274,15 @@ def train(
     with TT.profile("Loading base model parameters"):
         base_model = AutoModelForPreTraining.from_pretrained(metadata["base-model"])
         new_weights = load_base_model_weights(model, base_model, params.bert_attention)
-    # Initialize self-attention query matrices to BERT word query matrix
+    # Initialize self-attention query matrices to BERT word query matrices
+    q_mat_keys = set()
     if not params.bert_attention:
-        model.init_queries()
-    if not resume and is_master:
-        res.orig_params = model.all_params().cpu().numpy()
+        q_mat_keys = model.init_queries()
+    if not resume:
+        res.luke_exclusive_params = new_weights
+        res.q_mats_from_base = q_mat_keys
+        if is_master:
+            res.orig_params = all_params(model).cpu().numpy()
     log("Pretraining model initialized with %s parameters" % thousand_seps(len(model)))
 
     model_params = list(model.named_parameters())
@@ -416,7 +423,7 @@ def train(
             with TT.profile("Parameter changes"), torch.no_grad():
                 if is_master:
                     orig_pars = torch.from_numpy(res.orig_params).to(device)
-                    current_pars = (model.module if is_distributed else model).all_params()
+                    current_pars = all_params(model.module if is_distributed else model)
                     res.param_diff_1[i, j] = torch.abs(current_pars-orig_pars).sum().item()
                     res.param_diff_2[i, j] = torch.sqrt(((current_pars-orig_pars)**2).sum()).item()
                     del orig_pars
