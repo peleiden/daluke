@@ -135,10 +135,9 @@ class EntitySelfAttention(nn.Module):
             [torch.cat(a, dim=3) for a in ((A_w, A_w2e), (A_e2w, A_e))],
             dim=2,
         )
-
         # Attention is transformed to probability and matmul'ed with value layer, creating context
         attention = self.dropout(
-            F.softmax(attention/self.num_heads**0.5 + attention_mask, dim=-1)
+            F.softmax(attention/self.head_size**0.5 + attention_mask, dim=-1)
         )
         value = self.reshape_to_matrix(self.V(total_hidden))
         context = (attention @ value).permute(0, 2, 1, 3).contiguous()
