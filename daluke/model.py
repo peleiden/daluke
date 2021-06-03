@@ -58,17 +58,17 @@ class DaLUKE(nn.Module):
         we might want to init the other three to this one word-to-word query matrix.
         """
         for layer in self.encoder:
-            layer.attention.Q_e.weight.data = layer.attention.Q_w.weight.data
-            layer.attention.Q_w2e.weight.data = layer.attention.Q_w.weight.data
-            layer.attention.Q_e2w.weight.data = layer.attention.Q_w.weight.data
+            layer.attention.Q_e.weight.data = layer.attention.Q_w.weight.data.detach().clone()
+            layer.attention.Q_w2e.weight.data = layer.attention.Q_w.weight.data.detach().clone()
+            layer.attention.Q_e2w.weight.data = layer.attention.Q_w.weight.data.detach().clone()
 
     def all_params(self) -> torch.Tensor:
         """ Returns an array of all model parameters """
-        return torch.cat([x.detach().view(-1) for x in self.state_dict().values()])
+        return torch.cat([x.detach().view(-1) for n, x in self.state_dict().items() if n != "word_embeddings.position_ids"])
 
     def __len__(self):
-        """ Number of model parameters """
-        return sum(x.numel() for x in self.state_dict().values())
+        """ Number of model parameters. Further docs here: https://pokemondb.net/pokedex/numel """
+        return sum(x.numel() for n, x in self.state_dict().items() if n != "word_embeddings.position_ids")
 
 class EntityAwareLayer(nn.Module):
     """
