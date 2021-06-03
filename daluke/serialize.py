@@ -20,8 +20,10 @@ METADATA_FILE = "metadata.json"
 
 def load_from_archive(model: str) -> tuple[list[dict], dict[str, int | str], dict]:
     """
-    Reads the *.tar.gz archive  containing the model, the entity vocabulary and metadata
+    Reads the *.tar.gz archive containing the model, the entity vocabulary and metadata
     """
+    if not os.path.isfile(model):
+        raise FileNotFoundError(f"Model archive file '{model}' not found.")
     if shutil.which("tar"):
         # tar exists in system and is used for decompressing
         log.debug(f"Extracting {VOCAB_FILE}, {METADATA_FILE}, and {MODEL_OUT} using system tar tool...")
