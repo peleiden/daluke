@@ -107,23 +107,25 @@ def save_training(
     res:       TrainResults,
     optimizer: Optimizer,
     scheduler,
-    scaler=None,
+    scaler   = None,
+    epoch    = None,
 ) -> list[str]:
+    epoch = epoch if epoch is not None else res.epoch
     paths = list()
     # Save tracked statistics
     paths += res.save(loc)
     paths += params.save(loc)
     # Save model
-    paths.append(os.path.join(loc, TrainResults.subfolder, MODEL_OUT.format(i=res.epoch)))
+    paths.append(os.path.join(loc, TrainResults.subfolder, MODEL_OUT.format(i=epoch)))
     torch.save(model.state_dict(), paths[-1])
     # Save optimizer and scheduler states (these are dymanic over time)
-    paths.append(os.path.join(loc, TrainResults.subfolder, OPTIMIZER_OUT.format(i=res.epoch)))
+    paths.append(os.path.join(loc, TrainResults.subfolder, OPTIMIZER_OUT.format(i=epoch)))
     torch.save(optimizer.state_dict(), paths[-1])
-    paths.append(os.path.join(loc, TrainResults.subfolder, SCHEDULER_OUT.format(i=res.epoch)))
+    paths.append(os.path.join(loc, TrainResults.subfolder, SCHEDULER_OUT.format(i=epoch)))
     torch.save(scheduler.state_dict(), paths[-1])
     # Save scaler if using fp16
     if scaler:
-        paths.append(os.path.join(loc, TrainResults.subfolder, SCALER_OUT.format(i=res.epoch)))
+        paths.append(os.path.join(loc, TrainResults.subfolder, SCALER_OUT.format(i=epoch)))
         torch.save(scaler.state_dict(), paths[-1])
     return paths
 
@@ -314,6 +316,11 @@ def train(
     log.section(f"Training of daLUKE for {params.epochs} epochs")
     model.zero_grad()  # To avoid tracking of model parameter manipulation
     model.train()
+
+    # Save initial parameters
+    if is_master and not resume:
+        paths = save_training(location, params, model.module if is_distributed else model, res, optimizer, scheduler, scaler, -1)
+        log.debug("Saved progress to", *paths)
 
     for i in range(res.epoch, params.epochs):
         TT.profile("Epoch")
