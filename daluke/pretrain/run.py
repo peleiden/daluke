@@ -2,6 +2,7 @@
 from __future__ import annotations
 import os
 import re as reee
+from shutil import rmtree
 from typing import Any
 
 from pelutils import EnvVars, get_timestamp
@@ -40,17 +41,18 @@ ARGUMENTS = {
 def _run_training(rank: int, world_size: int, explicit_args: list[set[str]], args: dict[str, Any]):
     """ Wrapper function for train for easy use with mp.spawn """
     del args["max_workers"]
-    return train(
-        rank,
-        world_size,
-        resume         = args.pop("resume"),
-        location       = args.pop("location"),
-        name           = args.pop("name"),
-        quiet          = args.pop("quiet"),
-        save_every     = args.pop("save_every"),
-        explicit_args  = explicit_args[0],
-        params         = Hyperparams(**args),
-    )
+    with log.log_errors, EnvVars(OMP_NUM_THREADS=1):
+        train(
+            rank,
+            world_size,
+            resume         = args.pop("resume"),
+            location       = args.pop("location"),
+            name           = args.pop("name"),
+            quiet          = args.pop("quiet"),
+            save_every     = args.pop("save_every"),
+            explicit_args  = explicit_args[0],
+            params         = Hyperparams(**args),
+        )
 
 def _run_distributed(explicit_args: list[set[str]], args: dict[str, Any]):
     """ Initializes training on multiple GPU's """
@@ -63,23 +65,24 @@ def _run_distributed(explicit_args: list[set[str]], args: dict[str, Any]):
     )
 
 if __name__ == '__main__':
-    with log.log_errors, EnvVars(OMP_NUM_THREADS=1):
-        parser = Parser(ARGUMENTS, name="daluke-pretrain", multiple_jobs=False)
-        args = parser.parse()
+    parser = Parser(ARGUMENTS, name="daluke-pretrain", multiple_jobs=False)
+    args = parser.parse()
 
-        if args["resume"] and not args["name"]:
-            # Load last created save
-            args["name"] = next(
-                p for p in sorted(os.listdir(args["location"]), reverse=True)
-                if os.path.isdir(os.path.join(args["location"], p)) and reee.fullmatch(r"pretrain-results_[\-_0-9]+", p)
-            )
-        else:
-            if not args["name"]:
-                args["name"] = "pretrain-results_" + get_timestamp(for_file=True)
-        if not args["resume"]:
-            parser.document_settings(args["name"])
+    if args["resume"] and not args["name"]:
+        # Load last created save
+        args["name"] = next(
+            p for p in sorted(os.listdir(args["location"]), reverse=True)
+            if os.path.isdir(os.path.join(args["location"], p)) and reee.fullmatch(r"pretrain-results_[\-_0-9]+", p)
+        )
+    else:
+        if not args["name"]:
+            args["name"] = "pretrain-results_" + get_timestamp(for_file=True)
 
-        if torch.cuda.device_count() > 1 and args["max_workers"] > 1:
-            _run_distributed(parser.explicit_args, args)
-        else:
-            _run_training(-1, 1, parser.explicit_args, args)
+    if not args["resume"]:
+        rmtree(os.path.join(args["location"], args["name"]))
+        parser.document_settings(args["name"])
+
+    if torch.cuda.device_count() > 1 and args["max_workers"] > 1:
+        _run_distributed(parser.explicit_args, args)
+    else:
+        _run_training(-1, 1, parser.explicit_args, args)

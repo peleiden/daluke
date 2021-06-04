@@ -15,6 +15,6 @@ scikit-learn
 pyicu
 
 # Misc
-pelutils[ds]>=0.6.5
+pelutils[ds]>=0.6.6
 click>=7.0.0
 tqdm
