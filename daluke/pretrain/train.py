@@ -49,6 +49,10 @@ class Hyperparams(DataStorage):
     ent_min_mention:    int   = 0
     entity_loss_weight: bool  = False
     bert_attention:     bool  = False
+    word_mask_prob:     float = 0.15
+    word_unmask_prob:   float = 0.1
+    word_randword_prob: float = 0.1
+    ent_mask_prob:      float = 0.15
 
     subfolder = None  # Set at runtime
     json_name = "params.json"
@@ -63,6 +67,12 @@ class Hyperparams(DataStorage):
         assert 0 <= self.weight_decay < 1
         assert 0 <= self.warmup_prop < 1
         assert 0 <= self.word_ent_weight <= 1
+
+        assert 0 <  self.word_mask_prob < 1
+        assert 0 <= self.word_unmask_prob <= 1
+        assert 0 <= self.word_randword_prob <= 1
+
+        assert 0 < self.ent_mask_prob < 1
         assert isinstance(self.fp16, bool)
         if self.fp16:
             assert torch.cuda.is_available(), "Half-precision cannot be used without CUDA access"
@@ -207,7 +217,16 @@ def train(
 
     # Load dataset and training results
     log("Building dataset")
-    data = DataLoader(location, metadata, entity_vocab, device)
+    data = DataLoader(
+        location,
+        metadata,
+        entity_vocab,
+        device,
+        params.word_mask_prob,
+        params.word_unmask_prob,
+        params.word_randword_prob,
+        params.ent_mask_prob,
+    )
     sampler = (DistributedSampler if is_distributed else RandomSampler)(data.examples)
     log("Built %i examples" % len(data))
 

@@ -1,10 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass
-import random
-from typing import Union
 
 import torch
-from daluke.data import Example, Words, Entities, get_special_ids, BatchedExamples, Words, Entities
+from daluke.data import Example, Words, Entities, BatchedExamples, Words, Entities
 
 @dataclass
 class MaskedBatchedExamples(BatchedExamples):

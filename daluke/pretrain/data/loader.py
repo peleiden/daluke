@@ -1,32 +1,29 @@
 from __future__ import annotations
 import os
-import json
-import pickle
 
 import torch
 from transformers import AutoTokenizer
 
-from pelutils import log, TT
+from pelutils import TT
 
 from daluke.data import Example, Words, Entities, get_special_ids, Words, Entities
 from daluke.pretrain.data import load_jsonl
 from daluke.pretrain.data.build import DatasetBuilder
 from .masking import MaskedBatchedExamples
+from . import ENTITY_MASK_TOKEN
 
 class DataLoader:
 
     def __init__(
         self,
-        data_dir: str,
-        metadata: dict,
-        entity_vocab: dict,
-        device:   torch.device,
-        ent_mask_id:         int = 2,
-        max_sentence_len:    int = 512,
-        word_mask_prob:      float = 0.15,
-        word_unmask_prob:    float = 0.1,
-        word_randword_prob:  float = 0.1,
-        ent_mask_prob:       float = 0.15,
+        data_dir:           str,
+        metadata:           dict,
+        entity_vocab:       dict,
+        device:             torch.device,
+        word_mask_prob:     float,
+        word_unmask_prob:   float,
+        word_randword_prob: float,
+        ent_mask_prob:      float,
     ):
         """
         Loads a generated json dataset prepared by the preprocessing pipeline
@@ -36,7 +33,7 @@ class DataLoader:
         self.ent_ids = { info["id"] for info in entity_vocab.values() }
         self.device = device
 
-        self.max_sentence_len = max_sentence_len
+        self.max_sentence_len = metadata["max-seq-length"]
         self.max_entities = metadata["max-entities"]
         self.max_entity_span = metadata["max-entity-span"]
 
@@ -48,7 +45,7 @@ class DataLoader:
         self.tokenizer = AutoTokenizer.from_pretrained(metadata["base-model"])
         self.sep_id, self.cls_id, self.pad_id = get_special_ids(self.tokenizer)
         self.word_mask_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.mask_token)
-        self.ent_mask_id = ent_mask_id
+        self.ent_mask_id = entity_vocab[ENTITY_MASK_TOKEN]["id"]
         # Don't insert ids that are special tokens when performing random word insertion in the masking
         self.random_word_id_range = (self.word_mask_id + 1, self.tokenizer.vocab_size)
 
