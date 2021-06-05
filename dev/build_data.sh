@@ -2,10 +2,10 @@
 DATA_PATH=/work3/$USER/pdata2
 DUMP_FILE=da-dump-db.dump
 TOKENIZER="Maltehb/danish-bert-botxo"
-PREPROCESS=repeat-entities
 # ^ One of xlm-roberta-base, xlm-roberta-large, xlm-roberta-large-finetuned-conll02-dutch,
 # xlm-roberta-large-finetuned-conll02-spanish, xlm-roberta-large-finetuned-conll03-english,
 # xlm-roberta-large-finetuned-conll03-german, Maltehb/danish-bert-botxo, etc.
+PREPROCESS=repeat-entities  # default or repeat-entities
 DALUKE=$HOME/daluke
 LUKE=$DALUKE/luke
 export PYTHONPATH=$PYTHONPATH:$DALUKE:$LUKE
@@ -38,6 +38,6 @@ cd $DALUKE
 python3 daluke/pretrain/data/run.py\
     $DATA_PATH/../da-dump-db.dump\
     $DATA_PATH/../entity-vocab.jsonl\
-    Maltehb/danish-bert-botxo\
+    $TOKENIZER\
     $DATA_PATH
 

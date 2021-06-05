@@ -12,7 +12,7 @@ from tqdm import tqdm
 from transformers import AutoTokenizer, XLMRobertaTokenizer, RobertaTokenizer
 from wikipedia2vec.dump_db import DumpDB
 
-from daluke.pretrain.data import ICUSentenceTokenizer, load_entity_vocab, calculate_spans
+from daluke.pretrain.data import ICUSentenceTokenizer, load_entity_vocab, calculate_spans, ignore_title
 
 
 class DatasetBuilder:
@@ -58,10 +58,7 @@ class DatasetBuilder:
         self.max_articles = max_articles
 
         # Filter titles so only real articles are included
-        self.target_titles = [
-            title for title in self.dump_db.titles()
-            if not any(title.lower().startswith(word + ":") for word in ("billede", "fil", "kategori"))
-        ]
+        self.target_titles = [title for title in self.dump_db.titles() if not ignore_title(title)]
 
     def _tokenize(self, text: str, paragraph_text: str, idx: int) -> list[str]:
         text = re.sub(r"\s+", " ", text).rstrip().lower()

@@ -50,6 +50,9 @@ class ICUSentenceTokenizer:
             start_idx = end_idx
         return spans
 
+def ignore_title(title: str) -> bool:
+    return any(title.lower().startswith(word + ":") for word in ("billede", "fil", "kategori"))
+
 def load_jsonl(fpath: str, encoding=None) -> Generator:
     with open(fpath, encoding=encoding) as f:
         for line in f.readlines():
@@ -58,13 +61,15 @@ def load_jsonl(fpath: str, encoding=None) -> Generator:
 
 def load_entity_vocab(vocab_file: str) -> dict[str, dict[str, int]]:
     """ Loads an entity vocab in .jsonl format created by build-entity-vocab
-    { "entity": { "id": int, "count": int } } """
+    { "entity": { "id": int, "count": int } }
+    Kategory, images, and file pages are removed """
     entities = dict()
     for entity in load_jsonl(vocab_file):
-        entities[entity["entities"][0][0]] = {
-            "id": entity["id"],
-            "count": entity["count"],
-        }
+        if not ignore_title(ent := entity["entities"][0][0]):
+            entities[ent] = {
+                "id": entity["id"],
+                "count": entity["count"],
+            }
     return entities
 
 def calculate_spans(tokens: list[str]) -> list[tuple[int, int]]:
