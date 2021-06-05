@@ -3,6 +3,7 @@ import json
 from typing import Generator
 
 from icu import Locale, BreakIterator
+from pelutils.jsonl import load_jsonl
 
 
 ENTITY_MASK_TOKEN = "[MASK]"
@@ -53,23 +54,18 @@ class ICUSentenceTokenizer:
 def ignore_title(title: str) -> bool:
     return any(title.lower().startswith(word + ":") for word in ("billede", "fil", "kategori"))
 
-def load_jsonl(fpath: str, encoding=None) -> Generator:
-    with open(fpath, encoding=encoding) as f:
-        for line in f.readlines():
-            if l := line.strip():
-                yield json.loads(l)
-
 def load_entity_vocab(vocab_file: str) -> dict[str, dict[str, int]]:
     """ Loads an entity vocab in .jsonl format created by build-entity-vocab
     { "entity": { "id": int, "count": int } }
     Kategory, images, and file pages are removed """
     entities = dict()
-    for entity in load_jsonl(vocab_file):
-        if not ignore_title(ent := entity["entities"][0][0]):
-            entities[ent] = {
-                "id": entity["id"],
-                "count": entity["count"],
-            }
+    with open(vocab_file) as vf:
+        for entity in load_jsonl(vf):
+            if not ignore_title(ent := entity["entities"][0][0]):
+                entities[ent] = {
+                    "id": entity["id"],
+                    "count": entity["count"],
+                }
     return entities
 
 def calculate_spans(tokens: list[str]) -> list[tuple[int, int]]:

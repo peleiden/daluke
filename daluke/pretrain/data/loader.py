@@ -5,9 +5,9 @@ import torch
 from transformers import AutoTokenizer
 
 from pelutils import TT
+from pelutils.jsonl import load_jsonl
 
 from daluke.data import Example, Words, Entities, get_special_ids, Words, Entities
-from daluke.pretrain.data import load_jsonl
 from daluke.pretrain.data.build import DatasetBuilder
 from .masking import MaskedBatchedExamples
 from . import ENTITY_MASK_TOKEN
@@ -57,35 +57,36 @@ class DataLoader:
 
     def build_examples(self) -> list[Example]:
         examples = list()
-        for seq_data in load_jsonl(os.path.join(self.data_dir, DatasetBuilder.data_file)):
-            try:
-                # Keep only entities in filtered entity vocab
-                seq_data["entity_ids"], seq_data["entity_spans"] = zip(
-                    *((id_, span) for id_, span in zip(seq_data["entity_ids"], seq_data["entity_spans"]) if id_ in self.ent_ids)
-                )
-            except ValueError:
-                # Happens if no entities in vocab
-                seq_data["entity_ids"] = list()
-                seq_data["entity_spans"] = list()
+        with open(os.path.join(self.data_dir, DatasetBuilder.data_file)) as df:
+            for seq_data in load_jsonl(df):
+                try:
+                    # Keep only entities in filtered entity vocab
+                    seq_data["entity_ids"], seq_data["entity_spans"] = zip(
+                        *((id_, span) for id_, span in zip(seq_data["entity_ids"], seq_data["entity_spans"]) if id_ in self.ent_ids)
+                    )
+                except ValueError:
+                    # Happens if no entities in vocab
+                    seq_data["entity_ids"] = list()
+                    seq_data["entity_spans"] = list()
 
-            examples.append(
-                Example(
-                    words = Words.build(
-                        torch.IntTensor(seq_data["word_ids"]),
-                        seq_data["word_spans"],
-                        max_len = self.max_sentence_len,
-                        sep_id  = self.sep_id,
-                        cls_id  = self.cls_id,
-                        pad_id  = self.pad_id,
-                    ),
-                    entities = Entities.build(
-                        torch.IntTensor(seq_data["entity_ids"]),
-                        list(seq_data["entity_spans"]),
-                        max_entities    = self.max_entities,
-                        max_entity_span = self.max_entity_span,
-                    ),
+                examples.append(
+                    Example(
+                        words = Words.build(
+                            torch.IntTensor(seq_data["word_ids"]),
+                            seq_data["word_spans"],
+                            max_len = self.max_sentence_len,
+                            sep_id  = self.sep_id,
+                            cls_id  = self.cls_id,
+                            pad_id  = self.pad_id,
+                        ),
+                        entities = Entities.build(
+                            torch.IntTensor(seq_data["entity_ids"]),
+                            list(seq_data["entity_spans"]),
+                            max_entities    = self.max_entities,
+                            max_entity_span = self.max_entity_span,
+                        ),
+                    )
                 )
-            )
         return examples
 
     def get_dataloader(self, batch_size: int, sampler: torch.utils.data.Sampler) -> DataLoader:
