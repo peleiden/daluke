@@ -67,6 +67,7 @@ class DataLoader:
                 # Happens if no entities in vocab
                 seq_data["entity_ids"] = list()
                 seq_data["entity_spans"] = list()
+
             examples.append(
                 Example(
                     words = Words.build(

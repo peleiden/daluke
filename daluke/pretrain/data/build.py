@@ -45,7 +45,13 @@ class DatasetBuilder:
         self.sentence_tokenizer = ICUSentenceTokenizer(self.tokenizer_language)
         log("Loading entity vocab at %s" % entity_vocab_file)
         self.entity_vocab = load_entity_vocab(entity_vocab_file)
-        log("Entity vocab has size %i" % len(self.entity_vocab))
+        # Make sure IDs on non-ignored entities are contiguous
+        num = 0
+        for entity, info in self.entity_vocab.items():
+            if not ignore_title(entity):
+                info["id"] = num
+                num += 1
+        log("Entity vocab has size %i" % num)
 
         self.out_dir             = out_dir
         self.max_seq_length      = max_seq_length
@@ -76,7 +82,6 @@ class DatasetBuilder:
 
     def build(self):
         log("Saving tokenizer config and word token config to %s" % self.out_dir)
-        self.tokenizer.save_pretrained(self.out_dir) # FIXME: Why do we do this? We don't alter it in any way?
         with open(path := os.path.join(self.out_dir, self.entity_vocab_file), "w", encoding="utf-8") as ev:
             log("Saving entity vocab to %s" % path)
             json.dump(self.entity_vocab, ev, indent=2)

@@ -352,7 +352,7 @@ def train(
     # Save initial parameters
     if is_master and not resume:
         paths = save_training(location, params, model.module if is_distributed else model, res, optimizer, scheduler, scaler, -1)
-        log.debug("Saved progress to", *paths)
+        log.debug("Saved initial state to", *paths)
 
     for i in range(res.epoch, params.epochs):
         TT.profile("Epoch")
