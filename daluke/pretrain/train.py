@@ -53,7 +53,8 @@ class Hyperparams(DataStorage):
     word_unmask_prob:   float = 0.1
     word_randword_prob: float = 0.1
     ent_mask_prob:      float = 0.15
-    lukeinit:          bool  = False
+    lukeinit:           bool  = False
+    no_base_model:      bool  = False
 
     subfolder = None  # Set at runtime
     json_name = "params.json"
@@ -293,13 +294,16 @@ def train(
     if params.lukeinit:
         model.apply(lambda module: model.init_weights(module, bert_config.initializer_range))
     # Load parameters from base model
-    log("Loading base model parameters")
-    with TT.profile("Loading base model parameters"):
-        base_model = AutoModelForPreTraining.from_pretrained(metadata["base-model"])
-        new_weights = load_base_model_weights(model, base_model, params.bert_attention)
+    if not params.no_base_model:
+        log("Loading base model parameters")
+        with TT.profile("Loading base model parameters"):
+            base_model = AutoModelForPreTraining.from_pretrained(metadata["base-model"])
+            new_weights = load_base_model_weights(model, base_model, params.bert_attention)
+    else:
+        new_weights = set(model.state_dict())
     # Initialize self-attention query matrices to BERT word query matrices
     q_mat_keys = set()
-    if not params.bert_attention:
+    if not params.bert_attention and not params.no_base_model:
         q_mat_keys = model.init_queries()
     if not resume:
         res.luke_exclusive_params = new_weights
