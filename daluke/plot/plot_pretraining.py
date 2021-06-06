@@ -4,6 +4,7 @@ import os
 import click
 from pelutils.logger import log
 from pelutils.ds.plot import figsize_std, figsize_wide, tab_colours
+from scipy.stats import norm
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -171,30 +172,75 @@ def lr_plot(location: str):
 
     _save(location, "lr.png")
 
-def _bins(data, spacing=lambda x, b: np.linspace(min(x), max(x), b), bins=10):
+def _bins(data, spacing=lambda x, b: np.linspace(min(x), max(x), b), bins=10, weight: float=1):
     bins = spacing(data, bins+1)
     hist, edges = np.histogram(data, bins=bins, density=True)
     x = (edges[1:] + edges[:-1]) / 2
     xx, yy = x[hist>0], hist[hist>0]
-    return xx, yy
+    return xx, yy * weight
+
+def _sample(samples: int, x: torch.Tensor) -> torch.Tensor:
+    # Sample from a one-dimensional tensor
+    return x[np.linspace(0, len(x)-1, min(samples, len(x)), dtype=int)]
+
+def _normal_binning(x: np.ndarray, b: int) -> np.ndarray:
+    """ Creates bins that fit nicely to a normally distributed variable """
+    unispace = np.linspace(0, 1, b+2)[1:-1]
+    dist = norm(x.mean(), x.std())
+    return dist.ppf(unispace)
 
 def weight_plot(location: str):
     res = TrainResults.load()
     bins = 50
-    samples = 10 ** 5
-    subsample = np.linspace(0, res.orig_params.size-1, samples, dtype=int)
-    model_state_dict = torch.load(os.path.join(location, MODEL_OUT.format(i=res.epoch)), map_location=torch.device("cpu"))
-    model_params = torch.cat([x.view(-1) for x in model_state_dict.values()])
+    samples = 10 ** 6
 
-    plt.figure(figsize=figsize_std)
-    plt.plot(*_bins(model_params[subsample], bins=bins), ms=DOTSIZE/2, marker=".", label="Model after %i epochs" % (res.epoch+1))
-    plt.plot(*_bins(res.orig_params[subsample], bins=bins), ms=DOTSIZE/2, marker=".", label="Initial moodel")
-    plt.title("Distribution of Model Parameters")
-    plt.xlabel("Size of Parameters")
-    plt.ylabel("Probability Distribution")
-    plt.yscale("log")
-    plt.legend(loc=1)
-    plt.grid()
+    def plot_dist(epoch: int):
+        model_state_dict = torch.load(os.path.join(location, MODEL_OUT.format(i=epoch)), map_location=torch.device("cpu"))
+        del model_state_dict["word_embeddings.position_ids"]
+        from_base = set.difference(set(model_state_dict), set.difference(res.luke_exclusive_params, res.q_mats_from_base))
+        from_base_params = torch.cat([p.view(-1) for n, p in model_state_dict.items() if n in from_base])
+        not_from_base_params = torch.cat([p.view(-1) for n, p in model_state_dict.items() if n not in from_base])
+        model_params = torch.cat([x.view(-1) for x in model_state_dict.values()])
+
+        plt.plot(
+            *_bins(
+                _sample(samples, model_params),
+                spacing=_normal_binning,
+                bins=bins,
+            ),
+            label="DaLUKE",
+        )
+        plt.plot(
+            *_bins(
+                _sample(samples, from_base_params),
+                spacing=_normal_binning,
+                bins=bins,
+                weight=len(from_base_params)/len(model_params),
+            ),
+            label=r"DaLUKE $\cap$ da-BERT",
+        )
+        plt.plot(
+            *_bins(
+                _sample(samples, not_from_base_params),
+                spacing=_normal_binning,
+                bins=bins,
+                weight=len(not_from_base_params)/len(model_params),
+            ),
+            label=r"DaLUKE $\backslash$ da-BERT",
+        )
+        plt.title("Model Parameter Distribution After %i Epochs" % (epoch+1))
+        plt.xlabel("Size of Parameter")
+        if epoch == -1:
+            plt.ylabel("Probability Density")
+        plt.yscale("log")
+        plt.legend(loc=1)
+        plt.grid()
+
+    plt.figure(figsize=figsize_wide)
+    plt.subplot(121)
+    plot_dist(-1)
+    plt.subplot(122)
+    plot_dist(res.epoch)
 
     _save(location, "weights.png")
 
