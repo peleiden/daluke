@@ -104,12 +104,13 @@ def clean_saved_epoch(loc: str, epoch: int) -> list[str]:
         os.path.join(loc, TrainResults.subfolder, SCHEDULER_OUT.format(i=epoch)),
         os.path.join(loc, TrainResults.subfolder, SCALER_OUT.format(i=epoch)),
     }
+    removed_paths = paths.copy()
     for path in paths:
         if os.path.isfile(path):
             os.remove(path)
         else:
-            paths.remove(path)
-    return list(paths)
+            removed_paths.remove(path)
+    return list(removed_paths)
 
 def save_training(
     loc:       str,
