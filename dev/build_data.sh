@@ -11,12 +11,16 @@ LUKE=$DALUKE/luke
 export PYTHONPATH=$PYTHONPATH:$DALUKE:$LUKE
 module load python3/3.8.4
 
+echo "EMPTYING $DATA_PATH"
+rm -rf $DATA_PATH
 mkdir -p $DATA_PATH
+
+echo "DOWNLOADING WIKIDUMP"
 cd $DATA_PATH
-# wget https://dumps.wikimedia.org/dawiki/latest/dawiki-latest-pages-articles.xml.bz2
+# wget https://dumps.wikimedia.org/dawiki/20210301/dawiki-20210301-pages-articles.xml.bz2
 cd $DALUKE
 
-echo "PREPROCESSING WIKIDATA"
+echo "PREPROCESSING WIKIDUMP"
 cd $DALUKE
 python3 daluke/pretrain/data/preprocess.py $DATA_PATH/../dawiki-20210301-pages-articles.xml.bz2 --func $PREPROCESS
 
@@ -36,8 +40,7 @@ python3 -m luke.cli build-entity-vocab\
 echo "BUILD PRETRAINING DATASET"
 cd $DALUKE
 python3 daluke/pretrain/data/run.py\
-    $DATA_PATH/../da-dump-db.dump\
+    $DATA_PATH/$DUMP_FILE\
     $DATA_PATH/../entity-vocab.jsonl\
     $TOKENIZER\
     $DATA_PATH
-

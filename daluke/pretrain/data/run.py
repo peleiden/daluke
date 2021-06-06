@@ -20,8 +20,6 @@ def run_build_dataset():
     parser.add_argument("--max-articles", type=int, default=None)
     args = parser.parse_args()
 
-    shutil.rmtree(args.out_dir, ignore_errors=True)
-    os.makedirs(args.out_dir)
     log.configure(os.path.join(args.out_dir, "build-dataset.log"), "Build dataset", log_commit=True, print_level=Levels.DEBUG)
 
     builder = DatasetBuilder(**args.__dict__)
