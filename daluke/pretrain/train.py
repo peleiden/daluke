@@ -53,9 +53,11 @@ class Hyperparams(DataStorage):
     word_unmask_prob:   float = 0.1
     word_randword_prob: float = 0.1
     ent_mask_prob:      float = 0.15
+    lukeinit:          bool  = False
 
     subfolder = None  # Set at runtime
     json_name = "params.json"
+    ignore_missing = True
 
     def __post_init__(self):
         # Test parameter validity
@@ -288,7 +290,8 @@ def train(
         ent_vocab_size = len(entity_vocab),
         ent_embed_size = params.ent_embed_size,
     ).to(device)
-    # TODO: Maybe init fresh model weights manually (they do)
+    if params.lukeinit:
+        model.apply(lambda module: model.init_weights(module, bert_config.initializer_range))
     # Load parameters from base model
     log("Loading base model parameters")
     with TT.profile("Loading base model parameters"):

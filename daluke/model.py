@@ -79,6 +79,21 @@ class DaLUKE(nn.Module):
 
         return keys
 
+    @staticmethod
+    def init_weights(module: nn.Module, std: float):
+        if isinstance(module, nn.Linear):
+            module.weight.data.normal_(mean=0.0, std=std)
+        elif isinstance(module, nn.Embedding):
+            if module.embedding_dim == 1:  # Embedding for bias parameters
+                module.weight.data.zero_()
+            else:
+                module.weight.data.normal_(mean=0.0, std=std)
+        elif isinstance(module, nn.LayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
+        if isinstance(module, nn.Linear) and module.bias is not None:
+            module.bias.data.zero_()
+
     def __len__(self):
         """ Number of model parameters. Further docs here: https://pokemondb.net/pokedex/numel """
         return sum(x.numel() for n, x in self.state_dict().items() if n != "word_embeddings.position_ids")

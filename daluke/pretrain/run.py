@@ -37,6 +37,7 @@ ARGUMENTS = {
     "fp16":               { "action": "store_true", "help": "Use automatic mixed precision" },
     "entity-loss-weight": { "action": "store_true", "help": "Weigh MLM entity loss by entity count" },
     "bert-attention":     { "action": "store_true", "help": "Use the original BERT attention mechanism instead of the entity aware LUKE variant" },
+    "lukeinit":          { "action": "store_true", "help": "Initiliaze model weights the same way as in LUKE (excluding base model weights)" },
     "save-every":         { "default": 1, "type": int, "help": "Save progress after this many epochs" },
     "quiet":              { "action": "store_true", "help": "Don't show debug logging" },
     "max-workers":        { "default": torch.cuda.device_count(), "type": int, "help": "Maximum number of cuda devices to use" }
