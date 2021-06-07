@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 import os
+import json
 from typing import Any
 
 import torch
@@ -10,20 +11,23 @@ from daluke.ner import load_dataset, load_model
 from daluke.ner.data import Split
 from daluke.ner.evaluation import evaluate_ner, type_distribution
 from daluke.ner.run import DATASET_ARGUMENTS
+from daluke.ner.training import TrainResults
 
 from daluke.serialize import load_from_archive, TRAIN_OUT
 
 FP_SIZE = 32
 
 ARGUMENTS = {
-    "model": {
-        "help": "directory or .tar.gz file containing fine-tuned model, metadata and entity vocab",
-        "default": os.path.join("local_data", TRAIN_OUT)
+    "max-entity-span": {
+        "help": "Max. length of spans used in data. If not given, use the one in pre-training metadata",
+        "default": None,
+        "type": int,
     },
-    "max-entity-span": {"help": "Max. length of spans used in data. If not given, use the one in pre-training metadata",
-                           "default": None, "type": int},
-    "max-entities":    {"help": "Max. enitites in each example. If not given, use the one in pre-training metadata",
-                            "default": None, "type": int},
+    "max-entities": {
+        "help": "Max. enitites in each example. If not given, use the one in pre-training metadata",
+        "default": None,
+        "type": int,
+    },
     "quieter":    {"help": "Don't show debug logging", "action": "store_true"},
     "cpu":        {"help": "Run experiment on cpu",    "action": "store_true"},
     **DATASET_ARGUMENTS
@@ -31,14 +35,16 @@ ARGUMENTS = {
 
 def run_experiment(args: dict[str, Any]):
     device = torch.device("cpu") if args["cpu"] or not torch.cuda.is_available() else torch.device("cuda")
-    _, metadata, state_dict = load_from_archive(args["model"])
+    _, metadata, state_dict = load_from_archive(os.path.join(args["location"], TRAIN_OUT))
+    with open(os.path.join(args["location"], "args.json")) as f:
+        train_args = json.load(f)
 
     log("Loading dataset ...")
     dataset = load_dataset(args, metadata, device)
     dataloader = dataset.build(Split.TEST, FP_SIZE)
 
     log("Loading model ...")
-    model = load_model(state_dict, dataset, metadata, device)
+    model = load_model(state_dict, dataset, metadata, device, train_args["words_only"], train_args["entities_only"])
 
     # Print some important information to stdout
     log.debug(model)

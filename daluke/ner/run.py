@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Any
 import os
+import json
 
 import torch
 from pelutils import log, Levels, Parser, EnvVars, get_timestamp, set_seeds
@@ -105,6 +106,8 @@ def run_experiment(args: dict[str, Any]):
         results.train_true_type_distribution = type_distribution(dataset.data[Split.TRAIN].annotations)
     os.makedirs(args["location"], exist_ok=True)
     results.save(args["location"])
+    with open(os.path.join(args["location"], "args.json"), "w") as f:
+        json.dump(args, f)
     outpath = os.path.join(args["location"], TRAIN_OUT)
     save_to_archive(outpath, entity_vocab, metadata, model)
     log("Training complete, saved model archive to", outpath)
