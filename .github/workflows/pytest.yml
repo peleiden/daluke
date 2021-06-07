@@ -4,15 +4,17 @@ on:
   push:
     branches: [ master ]
     paths: 
-       daluke/**.py
-       requirements.txt
-       .github/**
+       - daluke/**.py
+       - requirements.txt
+       - .github/**
+       
   pull_request:
     branches: [ master ]
     paths:
-       daluke/**.py
-       requirements.txt
-       .github/**
+       - daluke/**.py
+       - requirements.txt
+       - .github/**
+       
 jobs:
   build:
     runs-on: ubuntu-latest
