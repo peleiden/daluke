@@ -43,6 +43,7 @@ ARGUMENTS = {
     "warmup-prop":     {"default": 0.06, "type": float},
     "weight-decay":    {"default": 0.01, "type": float},
     "dropout":         {"default": None, "type": float},
+    "seed":            {"default": 1, "type": int},
     "words-only":      {"action": "store_true", "help": "Use only start and end token CWR's for classification"},
     "entities-only":   {"action": "store_true", "help": "Use only CER for classification"},
     "dataset":         {"help": "Which dataset to use. Currently, only DaNE supported", "default": "DaNE"},
@@ -57,7 +58,7 @@ def run_experiment(args: dict[str, Any]):
         os.path.join(args["location"], "daluke-train-ner.log"), args["name"] + "-fine-tuning",
         print_level=Levels.INFO if args["quieter"] else Levels.DEBUG,
     )
-    set_seeds(seed=0)
+    set_seeds(seed=args["seed"])
     assert not (args["words_only"] and args["entities_only"]), "--words-only and --entities-only cannot be used together"
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     entity_vocab, metadata, state_dict = load_from_archive(args["model"])
