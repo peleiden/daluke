@@ -189,6 +189,12 @@ def _normal_binning(x: np.ndarray, b: int) -> np.ndarray:
     dist = norm(x.mean(), x.std())
     return dist.ppf(unispace)
 
+def _cat(x: torch.Tensor) -> torch.Tensor:
+    try:
+        return torch.cat(x)
+    except RuntimeError:
+        return torch.Tensor()
+
 def weight_plot(location: str):
     res = TrainResults.load()
     bins = 50
@@ -198,9 +204,9 @@ def weight_plot(location: str):
         model_state_dict = torch.load(os.path.join(location, MODEL_OUT.format(i=epoch)), map_location=torch.device("cpu"))
         del model_state_dict["word_embeddings.position_ids"]
         from_base = set.difference(set(model_state_dict), set.difference(res.luke_exclusive_params, res.q_mats_from_base))
-        from_base_params = torch.cat([p.view(-1) for n, p in model_state_dict.items() if n in from_base])
-        not_from_base_params = torch.cat([p.view(-1) for n, p in model_state_dict.items() if n not in from_base])
-        model_params = torch.cat([x.view(-1) for x in model_state_dict.values()])
+        from_base_params = _cat([p.view(-1) for n, p in model_state_dict.items() if n in from_base])
+        not_from_base_params = _cat([p.view(-1) for n, p in model_state_dict.items() if n not in from_base])
+        model_params = _cat([x.view(-1) for x in model_state_dict.values()])
 
         plt.plot(
             *_bins(
