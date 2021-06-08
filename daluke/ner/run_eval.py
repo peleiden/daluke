@@ -32,12 +32,11 @@ ARGUMENTS = {
         "type": int,
     },
     "quieter":    {"help": "Don't show debug logging", "action": "store_true"},
-    "cpu":        {"help": "Run experiment on cpu",    "action": "store_true"},
     **DATASET_ARGUMENTS
 }
 
 def run_experiment(args: dict[str, Any]):
-    device = torch.device("cpu") if args["cpu"] or not torch.cuda.is_available() else torch.device("cuda")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     modelpath = os.path.join(args["location"], TRAIN_OUT) if args["model"] is None else args["model"]
     _, metadata, state_dict = load_from_archive(modelpath)
     with open(os.path.join(args["location"], "args.json")) as f:
