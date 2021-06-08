@@ -274,7 +274,7 @@ def train(
             q_mats_from_base      = None,  # Set later
         )
 
-    save_epochs = set(range(res.epoch or -1, params.epochs, save_every))
+    save_epochs = set(range(-1, params.epochs, save_every))
 
     # Build model, possibly by loading previous weights
     log.section("Setting up model ...")
