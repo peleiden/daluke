@@ -9,14 +9,15 @@ from daluke.pretrain.model import PretrainTaskDaLUKE
 def test_forward_pass():
     data = MaskedBatchedExamples.build([
         Example(
-            Words.build(torch.LongTensor([232, 13, 13, 21, 5, 1]), spans=[[0,1], [1, 3], [5, 6]]),
-            Entities.build(torch.LongTensor([5]), spans=[[1,3]]),
+            Words.build(torch.IntTensor([232, 13, 13, 21, 5, 1]), spans=[[0,1], [1, 3], [5, 6]]),
+            Entities.build(torch.IntTensor([5]), [[1,3]], 128, 30),
         ),
         Example(
-            Words.build(torch.LongTensor([29, 28, 5000, 22, 11, 55, 1, 1, 1, 1]), spans=[[0, 1], [1, 2], [2, 5], [5, 10]]),
-            Entities.build(torch.LongTensor([11, 5]), spans=[[0, 2], [2, 10]]),
+            Words.build(torch.IntTensor([29, 28, 5000, 22, 11, 55, 1, 1, 1, 1]), spans=[[0, 1], [1, 2], [2, 5], [5, 10]]),
+            Entities.build(torch.IntTensor([11, 5]), [[0, 2], [2, 10]], 128, 30),
         ),
         ],
+        torch.device("cpu"),
         42,
         11,
         0.1,

@@ -38,15 +38,24 @@ class TestData(MainTest):
             ]))
         metadata = {
             "number_of_items": 2,
-            "max_seq_length": 512,
-            "max_entity_length": 128,
-            "max_mention_length": 30,
-            "min_sentence_length": 5,
+            "max-seq-length": 512,
+            "max-entities": 128,
+            "max-entity-span": 30,
+            "min-sentence-length": 5,
             "base-model": "Maltehb/danish-bert-botxo",
             "tokenizer_class": "BertTokenizerFast",
             "language": "da",
         }
-        dl = DataLoader(self.test_dir, metadata)
+        dl = DataLoader(
+            self.test_dir,
+            metadata,
+            entity_vocab       = {"[MASK]": dict(id=2)},
+            device             = torch.device("cpu"),
+            word_mask_prob     = 0.1,
+            word_unmask_prob   = 0.1,
+            word_randword_prob = 0.1,
+            ent_mask_prob      = 0.1,
+        )
         assert len(dl.examples) == 2
         assert torch.all(dl.examples[1].entities.ids == 0)
         loader = dl.get_dataloader(1, torch.utils.data.RandomSampler(dl.examples))

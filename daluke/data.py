@@ -160,5 +160,5 @@ def features_from_str(words: list[str], entity_spans: list[tuple[int, int]], ent
         # FIXME: Consider entity casing
     return Example(
         words=Words.build(word_ids),
-        entities=Entities.build(ent_ids, entity_spans)
+        entities=Entities.build(ent_ids, entity_spans, 128, 30)
     )

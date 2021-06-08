@@ -5,13 +5,12 @@ from daluke.pretrain.data import mask_ent_batch, mask_word_batch
 
 def test_entity_masking():
     ents = Entities(
-        ids = torch.LongTensor([
+        ids = torch.IntTensor([
             [42]*100,
             [69]*10+[-1]*90,
         ]),
-        segments = None,
         attention_mask = None,
-        N = torch.LongTensor([100, 10]),
+        N = torch.IntTensor([100, 10]),
         spans = None,
         pos = None,
     )
@@ -22,16 +21,15 @@ def test_entity_masking():
 
 def test_word_masking():
     w = Words(
-        ids = torch.LongTensor([
+        ids = torch.IntTensor([
             [42]*10,
             [69, 5, 60, 60, 3] + [-1] * 5,
         ]),
-        segments = None,
         attention_mask = None,
-        N = torch.LongTensor([10, 5]),
+        N = torch.IntTensor([10, 5]),
         spans = [
-            torch.LongTensor([[0, 10]]),
-            torch.LongTensor([[0, 1], [2, 4]]),
+            torch.IntTensor([[0, 10]]),
+            torch.IntTensor([[0, 1], [2, 4]]),
         ]
     )
     w1 = deepcopy(w)
@@ -56,7 +54,7 @@ def test_word_masking():
     )
     assert sum(mask[0]) == 10
     assert sum(mask[1]) == 3
-    assert torch.equal(w3.ids, torch.LongTensor(
+    assert torch.equal(w3.ids, torch.IntTensor(
         [[69, 69, 69, 69, 69, 69, 69, 69, 69, 69],
          [69,  5, 69, 69,  3, -1, -1, -1, -1, -1]]))
 
