@@ -11,13 +11,16 @@ from daluke.ner import load_dataset, load_model
 from daluke.ner.data import Split
 from daluke.ner.evaluation import evaluate_ner, type_distribution
 from daluke.ner.run import DATASET_ARGUMENTS
-from daluke.ner.training import TrainResults
 
 from daluke.serialize import load_from_archive, TRAIN_OUT
 
 FP_SIZE = 32
 
 ARGUMENTS = {
+    "model": {
+        "help": ".tar.gz file containing fine-tuned model, metadata and entity vocab. If not given, will look in location",
+        "default": None,
+    },
     "max-entity-span": {
         "help": "Max. length of spans used in data. If not given, use the one in pre-training metadata",
         "default": None,
@@ -35,7 +38,8 @@ ARGUMENTS = {
 
 def run_experiment(args: dict[str, Any]):
     device = torch.device("cpu") if args["cpu"] or not torch.cuda.is_available() else torch.device("cuda")
-    _, metadata, state_dict = load_from_archive(os.path.join(args["location"], TRAIN_OUT))
+    modelpath = os.path.join(args["location"], TRAIN_OUT) if args["model"] is None else args["model"]
+    _, metadata, state_dict = load_from_archive(modelpath)
     with open(os.path.join(args["location"], "args.json")) as f:
         train_args = json.load(f)
 
