@@ -2,7 +2,6 @@
 from __future__ import annotations
 from typing import Any
 import os
-import json
 
 import torch
 from pelutils import log, Levels, Parser, EnvVars, get_timestamp, set_seeds
