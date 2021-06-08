@@ -64,6 +64,10 @@ def run_experiment(args: dict[str, Any]):
     entity_vocab, metadata, state_dict = load_from_archive(args["model"])
     state_dict, ent_embed_size = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"])
 
+    # Add new NER specific fields to metadata
+    metadata["NER-words-only"]    = args["words_only"]
+    metadata["NER-entities-only"] = args["entities_only"]
+
     log(f"Loading dataset {args['dataset']} ...")
     dataset = load_dataset(args, metadata, device)
     dataloader = dataset.build(Split.TRAIN, args["batch_size"])
@@ -75,8 +79,6 @@ def run_experiment(args: dict[str, Any]):
         dataset,
         metadata,
         device,
-        words_only = args["words_only"],
-        entities_only = args["entities_only"],
         entity_embedding_size = ent_embed_size,
         dropout = args["dropout"],
     )
@@ -110,8 +112,6 @@ def run_experiment(args: dict[str, Any]):
         results.train_true_type_distribution = type_distribution(dataset.data[Split.TRAIN].annotations)
     os.makedirs(args["location"], exist_ok=True)
     results.save(args["location"])
-    with open(os.path.join(args["location"], "args.json"), "w") as f:
-        json.dump(args, f)
     outpath = os.path.join(args["location"], TRAIN_OUT)
     save_to_archive(outpath, entity_vocab, metadata, model)
     log("Training complete, saved model archive to", outpath)

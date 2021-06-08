@@ -39,15 +39,13 @@ def run_experiment(args: dict[str, Any]):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     modelpath = os.path.join(args["location"], TRAIN_OUT) if args["model"] is None else args["model"]
     _, metadata, state_dict = load_from_archive(modelpath)
-    with open(os.path.join(args["location"], "args.json")) as f:
-        train_args = json.load(f)
 
     log("Loading dataset ...")
     dataset = load_dataset(args, metadata, device)
     dataloader = dataset.build(Split.TEST, FP_SIZE)
 
     log("Loading model ...")
-    model = load_model(state_dict, dataset, metadata, device, train_args["words_only"], train_args["entities_only"])
+    model = load_model(state_dict, dataset, metadata, device)
 
     # Print some important information to stdout
     log.debug(model)
