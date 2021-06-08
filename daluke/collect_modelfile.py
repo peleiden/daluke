@@ -12,7 +12,7 @@ from argparse import ArgumentParser
 
 from pelutils import log, Levels
 
-from daluke.serialize import COLLECT_OUT, MODEL_OUT, VOCAB_FILE, METADATA_FILE, save_to_archive
+from daluke.serialize import COLLECT_OUT, MODEL_OUT, VOCAB_FILE, METADATA_FILE
 from daluke.pretrain.train import MODEL_OUT as MODEL_FILE
 
 def _natural_sort(L: list) -> list:
@@ -42,19 +42,22 @@ def main():
         "performed by the pretraining module")
     parser.add_argument("inpath", type=str,
         help= "Path to the output folder of the pretraining containing the model file. "\
-            "Entity vocab. and metadata are assumed to be in parent folder of this"
+            "Entity vocab. and metadata are assumed to be in parent folder of this."\
+            "Can also be path to an exact model file, in which case this will be used instead of the newest."\
     )
     parser.add_argument("outpath", type=str, help="Folder in which the collected model is to be placed."\
             "Can also be file name for model.")
     args = parser.parse_args()
     log.configure(os.path.join(args.outpath if os.path.isdir(args.outpath) else os.path.dirname(args.outpath), "collect.log"), "Collector", print_level=Levels.DEBUG)
 
-    vocabfile, metafile = os.path.join(args.inpath, "..", VOCAB_FILE), os.path.join(args.inpath, "..", METADATA_FILE)
-    modelfile = os.path.join(args.inpath, _get_newest_model(args.inpath))
+    modelpath = args.inpath if os.path.isdir(args.inpath) else os.path.dirname(args.inpath)
+    vocabfile, metafile = os.path.join(modelpath, "..", VOCAB_FILE), os.path.join(modelpath, "..", METADATA_FILE)
+    modelfile = os.path.join(args.inpath, _get_newest_model(args.inpath)) if os.path.isdir(args.inpath) else args.inpath
+    log.debug(f"Using {modelfile}, {vocabfile}, {metafile}")
 
     outfile = os.path.join(args.outpath, COLLECT_OUT) if os.path.isdir(args.outpath) else args.outpath
 
-    # FIXME: Use `save_to_archive` from serialize
+    # Operate directly on disk as opposed to serialize.save_to_archive which requires us to load the data into mem.
     if shutil.which("tar"):
         log.debug(f"Compressing to {outfile} using system tar tool...")
         try:
