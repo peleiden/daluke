@@ -44,15 +44,17 @@ def main():
         help= "Path to the output folder of the pretraining containing the model file. "\
             "Entity vocab. and metadata are assumed to be in parent folder of this"
     )
-    parser.add_argument("outpath", type=str, help="Folder in which the collected model is to be placed")
+    parser.add_argument("outpath", type=str, help="Folder in which the collected model is to be placed."\
+            "Can also be file name for model.")
     args = parser.parse_args()
-    log.configure(os.path.join(args.outpath, "collect.log"), "Collector", print_level=Levels.DEBUG)
+    log.configure(os.path.join(args.outpath if os.path.isdir(args.outpath) else os.path.dirname(args.outpath), "collect.log"), "Collector", print_level=Levels.DEBUG)
 
     vocabfile, metafile = os.path.join(args.inpath, "..", VOCAB_FILE), os.path.join(args.inpath, "..", METADATA_FILE)
     modelfile = os.path.join(args.inpath, _get_newest_model(args.inpath))
 
-    outfile = os.path.join(args.outpath, COLLECT_OUT)
+    outfile = os.path.join(args.outpath, COLLECT_OUT) if os.path.isdir(args.outpath) else args.outpath
 
+    # FIXME: Use `save_to_archive` from serialize
     if shutil.which("tar"):
         log.debug(f"Compressing to {outfile} using system tar tool...")
         try:
