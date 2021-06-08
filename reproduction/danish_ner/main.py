@@ -40,7 +40,7 @@ def main():
     exp = parser.parse()
 
     log.configure(
-        os.path.join(parser.location, "danish_ner.log"), "Benchmark Danish NER models",
+        os.path.join(parser.location, "danish-ner.log"), "Benchmark Danish NER models",
     )
 
     run_experiment(exp)

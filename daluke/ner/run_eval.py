@@ -67,7 +67,7 @@ if __name__ == '__main__':
         exp = parser.parse()
         parser.document_settings()
         log.configure(
-            os.path.join(parser.location, "daluke_eval_ner.log"), "Finetune daLUKE for Danish NER",
+            os.path.join(parser.location, "daluke-eval-ner.log"), "Finetune daLUKE for Danish NER",
             print_level=Levels.INFO if exp["quieter"] else Levels.DEBUG,
         )
         run_experiment(exp)
