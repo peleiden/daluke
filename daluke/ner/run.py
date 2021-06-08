@@ -53,7 +53,10 @@ ARGUMENTS = {
 }
 
 def run_experiment(args: dict[str, Any]):
-    log.section("Beginnig", args["name"])
+    log.configure(
+        os.path.join(args["location"], "daluke-train-ner.log"), args["name"] + "-fine-tuning",
+        print_level=Levels.INFO if args["quieter"] else Levels.DEBUG,
+    )
     set_seeds(seed=0)
     assert not (args["words_only"] and args["entities_only"]), "--words-only and --entities-only cannot be used together"
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -116,10 +119,6 @@ if __name__ == '__main__':
     with log.log_errors, EnvVars(TOKENIZERS_PARALLELISM=str(not "Tue").lower()):
         parser = Parser(ARGUMENTS, name="daluke-ner-"+get_timestamp(for_file=True), multiple_jobs=True)
         experiments = parser.parse()
-        log.configure(
-            os.path.join(parser.location, "daluke-train-ner.log"), "Finetune daLUKE for Danish NER",
-            print_level=Levels.INFO if experiments[0]["quieter"] else Levels.DEBUG,
-        )
-        parser.document_settings()
         for exp in experiments:
+            parser.document_settings(exp["name"])
             run_experiment(exp)
