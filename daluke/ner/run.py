@@ -7,10 +7,10 @@ import json
 import torch
 from pelutils import log, Levels, Parser, EnvVars, get_timestamp, set_seeds
 
-from daluke.serialize import load_from_archive, save_to_archive, COLLECT_OUT, TRAIN_OUT
+from daluke.serialize import load_from_archive, save_to_archive, COLLECT_OUT, TRAIN_OUT, TRAIN_OUT_BEST
 from daluke.ner import load_dataset, load_model
 from daluke.ner.model import mutate_for_ner
-from daluke.ner.training import TrainNER
+from daluke.ner.training import TrainNER, TrainResults
 from daluke.ner.data import Split
 from daluke.ner.evaluation import type_distribution
 
@@ -83,12 +83,24 @@ def run_experiment(args: dict[str, Any]):
         dropout = args["dropout"],
     )
 
+    def save_training(res: TrainResults, is_best: bool):
+        log("Saving results and model to %s" % args["location"])
+        if is_best:
+            TrainResults.subfolder += "-best"
+        res.save(args["location"])
+        if is_best:
+            TrainResults.subfolder = res.subfolder[:-5]
+        outpath = os.path.join(args["location"], TRAIN_OUT_BEST if is_best else TRAIN_OUT)
+        save_to_archive(outpath, entity_vocab, metadata, model)
+        model.to(device)
+
     log(f"Starting training of DaLUKE for NER on {args['dataset']}")
     training = TrainNER(
         model,
         dataloader,
         dataset,
         device         = device,
+        save_fn        = save_training,
         epochs         = args["epochs"],
         lr             = args["lr"],
         warmup_prop    = args["warmup_prop"],
@@ -110,11 +122,8 @@ def run_experiment(args: dict[str, Any]):
         results.dev_true_type_distribution = type_distribution(dataset.data[Split.DEV].annotations)
         log("True dev. set distributions")
         results.train_true_type_distribution = type_distribution(dataset.data[Split.TRAIN].annotations)
-    os.makedirs(args["location"], exist_ok=True)
-    results.save(args["location"])
-    outpath = os.path.join(args["location"], TRAIN_OUT)
-    save_to_archive(outpath, entity_vocab, metadata, model)
-    log("Training complete, saved model archive to", outpath)
+
+    save_training(results, False)
 
 if __name__ == '__main__':
     with log.log_errors, EnvVars(TOKENIZERS_PARALLELISM=str(not "Tue").lower()):

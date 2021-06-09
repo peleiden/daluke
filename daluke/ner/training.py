@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
+import os
 
 import torch
 from torch import nn
@@ -7,11 +8,13 @@ from transformers import AdamW, get_linear_schedule_with_warmup
 
 from pelutils import log, DataStorage
 
+from daluke.serialize import save_to_archive, COLLECT_OUT, TRAIN_OUT
 from .evaluation import evaluate_ner, type_distribution, NER_Results
 from .data import Split, NERDataset
 
 @dataclass
 class TrainResults(DataStorage):
+    epoch: int
     losses: list[float]
     running_train_statistics: list[dict]
     train_pred_distributions: list[dict[str, int]]
@@ -33,6 +36,7 @@ class TrainNER:
         dataloader: torch.utils.data.DataLoader,
         dataset: NERDataset,
         device: torch.device,
+        save_fn,
         epochs: int,
         lr: float,
         warmup_prop: float,
@@ -42,6 +46,7 @@ class TrainNER:
     ):
         self.model = model
         self.device = device
+        self.save_fn = save_fn
         self.dataloader = dataloader
         self.dataset = dataset
         self.dev_dataloader = dev_dataloader
@@ -71,6 +76,7 @@ class TrainNER:
 
     def run(self):
         res = TrainResults(
+            epoch                        = 0,
             losses                       = list(),
             running_train_statistics     = list(),
             running_dev_evaluations      = list(),
@@ -79,7 +85,10 @@ class TrainNER:
             train_pred_distributions     = list(),
             train_true_type_distribution = dict()
         )
+        best_epoch = (None, 0)  # (Epoch, micro f1 on dev set)
+
         for i in range(self.epochs):
+            res.epoch = i
             self.model.train()
             for j, batch in enumerate(self.dataloader):
                 scores = self.model(batch)
@@ -92,16 +101,22 @@ class TrainNER:
 
                 res.losses.append(loss.item())
                 log.debug(f"Epoch {i} / {self.epochs-1}, batch: {j} / {len(self.dataloader)-1}. LR: {self.scheduler.get_last_lr()[0]:.2e} Loss: {loss.item():.5f}.")
+
             # Perform running evaluation
             if self.dev_dataloader is not None:
                 log("Evaluating on development set ...")
                 dev_results = evaluate_ner(self.model, self.dev_dataloader, self.dataset, self.device, Split.DEV, also_no_misc=False)
                 res.running_dev_evaluations.append(dev_results)
                 res.dev_pred_distributions.append(type_distribution(dev_results.preds))
+
                 log("Evaluating on training set ...")
                 train_results = evaluate_ner(self.model, self.dataloader, self.dataset, self.device, Split.TRAIN, also_no_misc=False)
                 res.running_train_statistics.append(train_results.statistics)
                 res.train_pred_distributions.append(type_distribution(train_results.preds))
+                if (f1 := dev_results.statistics["micro avg"]["f1-score"]) > best_epoch[1] or i == 0:
+                    log("Found new best model at epoch %i with dev f1 %.4f" % (i, f1))
+                    best_epoch = (i, f1)
+                    self.save_fn(res, True)
         return res
 
 
