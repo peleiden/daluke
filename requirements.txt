@@ -4,6 +4,7 @@ matplotlib
 seqeval
 torch>=1.8.0
 transformers>=4.3.3
+wikipedia2vec
 # currently only used for analysis (should maybe be removed)
 umap-learn
 scikit-learn
