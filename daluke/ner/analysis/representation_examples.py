@@ -27,7 +27,6 @@ DUMMY_METADATA = {
     "base-model": "Maltehb/danish-bert-botxo",
 }
 
-
 def _show_examples(res: GeometryResults, X: np.ndarray, I: np.ndarray, data: Sequences):
     for i, idx in enumerate(I):
         num, span = res.content[idx]["text_num"], res.content[idx]["span"]

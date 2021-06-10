@@ -5,11 +5,16 @@ from itertools import combinations
 
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 
 from pelutils.logger import log
 from pelutils.ds.plot import tab_colours, figsize_std
 
+from daluke.ner import load_dataset
+from daluke.ner.data import Sequences, Split
 from daluke.ner.analysis.representation_geometry import GeometryResults
+from daluke.ner.analysis.representation_examples import DUMMY_METADATA
+
 from daluke.plot import setup_mpl
 
 setup_mpl()
@@ -77,6 +82,30 @@ def tsne_plot(location: str):
     plt.savefig(os.path.join(location, "geometry-plots", "tsne.png"))
     plt.close()
 
+
+def plots_vs_length(location: str):
+    res = GeometryResults.load()
+    # Hardcoded to train
+    log.debug("Loading data...")
+    data = load_dataset(dict(dataset="DaNE"), DUMMY_METADATA, torch.device("cpu")).data[Split.TRAIN]
+    seq_lengths =  np.array([len(data.texts[c["text_num"]]) for c in res.content])
+    span_lengths = np.array([c["span"][1] - c["span"][0] for c in res.content])
+    N = 4
+    for name, Z in zip(("PCA", "t-SNE", "UMAP"), (res.pca_transformed, res.tsne_transformed, res.umap_transformed)):
+        for dim in range(min(Z.shape[1], N)):
+            for lenname, lengths in zip(("sequence", "span"), (seq_lengths, span_lengths)):
+                log.debug(f"Plotting {name}{dim} on {lenname}")
+                _, ax = plt.subplots(figsize=figsize_std)
+                ax.set_title(f"{name} on CER, dim {dim} vs entity {lenname} length")
+                Z_ = Z[:, dim]
+                _scatter_transformed(lengths[:len(Z_)], Z_, res.labels[:len(Z_)], ax)
+                ax.set_ylabel(f"{name}_{dim}")
+                ax.set_xlabel(f"Entity example {lenname} length")
+
+                plt.tight_layout()
+                plt.savefig(os.path.join(location, "geometry-plots", f"{name}{dim}-{lenname}-len.png"))
+                plt.close()
+
 @click.command()
 @click.argument("location")
 def make_representation_plots(location: str):
@@ -90,6 +119,8 @@ def make_representation_plots(location: str):
     umap_plot(location)
     log("t-SNE plot")
     tsne_plot(location)
+    log("plots vs. length")
+    plots_vs_length(location)
 
 if __name__ == "__main__":
     with log.log_errors:
