@@ -17,7 +17,7 @@ FP_SIZE = 32
 
 ARGUMENTS = {
     "model": {
-        "help": ".tar.gz file containing fine-tuned model, metadata and entity vocab. If not given, will look in location",
+        "help": ".tar.gz file containing fine-tuned model, metadata and entity vocab",
         "default": None,
     },
     "max-entity-span": {
@@ -36,8 +36,7 @@ ARGUMENTS = {
 
 def run_experiment(args: dict[str, Any]):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    modelpath = os.path.join(args["location"], TRAIN_OUT) if args["model"] is None else args["model"]
-    _, metadata, state_dict = load_from_archive(modelpath)
+    _, metadata, state_dict = load_from_archive(args["model"])
 
     log("Loading dataset ...")
     dataset = load_dataset(args, metadata, device)
