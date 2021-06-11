@@ -12,7 +12,7 @@ from argparse import ArgumentParser
 
 from pelutils import log, Levels
 
-from daluke.serialize import COLLECT_OUT, MODEL_OUT, VOCAB_FILE, METADATA_FILE
+from daluke.serialize import MODEL_OUT, VOCAB_FILE, METADATA_FILE
 from daluke.pretrain.train import MODEL_OUT as MODEL_FILE
 
 def _natural_sort(L: list) -> list:
@@ -43,10 +43,9 @@ def main():
     parser.add_argument("inpath", type=str,
         help= "Path to the output folder of the pretraining containing the model file. "\
             "Entity vocab. and metadata are assumed to be in parent folder of this."\
-            "Can also be path to an exact model file, in which case this will be used instead of the newest."\
+            "Can also be path to an exact model file, in which case this will be used instead of the newest."
     )
-    parser.add_argument("outpath", type=str, help="Folder in which the collected model is to be placed."\
-            "Can also be file name for model.")
+    parser.add_argument("outpath", type=str, help="File path to the compressed model")
     args = parser.parse_args()
     log.configure(os.path.join(args.outpath if os.path.isdir(args.outpath) else os.path.dirname(args.outpath), "collect.log"), "Collector", print_level=Levels.DEBUG)
 
@@ -55,16 +54,16 @@ def main():
     modelfile = os.path.join(args.inpath, _get_newest_model(args.inpath)) if os.path.isdir(args.inpath) else args.inpath
     log.debug(f"Using {modelfile}, {vocabfile}, {metafile}")
 
-    outfile = os.path.join(args.outpath, COLLECT_OUT) if os.path.isdir(args.outpath) else args.outpath
+    os.makedirs(os.path.split(args.outpath)[0], exist_ok=True)
 
     # Operate directly on disk as opposed to serialize.save_to_archive which requires us to load the data into mem.
     if shutil.which("tar"):
-        log.debug(f"Compressing to {outfile} using system tar tool...")
+        log.debug(f"Compressing to {args.outpath} using system tar tool...")
         try:
             for f, n in zip((vocabfile, metafile, modelfile), (VOCAB_FILE, METADATA_FILE, MODEL_OUT)):
                 shutil.copy2(f, n)
             p = subprocess.Popen(
-                ["tar", "-czvf", outfile, VOCAB_FILE, METADATA_FILE, MODEL_OUT],
+                ["tar", "-czvf", args.outpath, VOCAB_FILE, METADATA_FILE, MODEL_OUT],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
@@ -76,11 +75,11 @@ def main():
                 except FileNotFoundError:
                     pass
     else:
-        with tarfile.open(outfile, "w:gz") as tar:
+        with tarfile.open(args.outpath, "w:gz") as tar:
             for f, n in zip((vocabfile, metafile, modelfile), (VOCAB_FILE, METADATA_FILE, MODEL_OUT)):
                 log.debug(f"Compressing {f} as {n} using build-in tar module (may take a while)...")
                 tar.add(f, arcname=n)
-    log("Succesfully compressed file saved to", outfile)
+    log("Succesfully compressed file saved to", args.outpath)
 
 if __name__ == '__main__':
     with log.log_errors:

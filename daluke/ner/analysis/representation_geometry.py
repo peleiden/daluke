@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from pelutils import log, DataStorage, Levels, set_seeds
 
-from daluke.serialize import load_from_archive, COLLECT_OUT
+from daluke.serialize import load_from_archive
 from daluke.ner import load_model, load_dataset
 from daluke.ner.model import mutate_for_ner
 from daluke.ner.data import Split
@@ -99,7 +99,7 @@ def tsne(A: np.ndarray, perplexity: float) -> np.ndarray:
 
 @click.command()
 @click.argument("path")
-@click.option("--model", default = os.path.join("local_data", COLLECT_OUT))
+@click.option("model")
 @click.option("--n-components", default = 10, type=int)
 @click.option("--reducer-subsample", default=None, type=int)
 @click.option("--tsne-perplexity", default=100.0, type=float)

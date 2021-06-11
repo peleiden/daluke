@@ -8,7 +8,7 @@ from transformers import AdamW, get_linear_schedule_with_warmup
 
 from pelutils import log, DataStorage
 
-from daluke.serialize import save_to_archive, COLLECT_OUT, TRAIN_OUT
+from daluke.serialize import save_to_archive, TRAIN_OUT
 from .evaluation import evaluate_ner, type_distribution, NER_Results
 from .data import Split, NERDataset
 

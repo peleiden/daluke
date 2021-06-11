@@ -11,7 +11,6 @@ from torch import nn
 
 from pelutils import log
 
-COLLECT_OUT = "daluke.tar.gz"
 TRAIN_OUT  = "daluke_ner.tar.gz"
 TRAIN_OUT_BEST = "daluke_ner_best.tar.gz"
 MODEL_OUT = "model.bin"
