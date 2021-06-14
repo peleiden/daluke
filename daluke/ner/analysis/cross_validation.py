@@ -82,7 +82,7 @@ def cross_validate(model: NERDaLUKE, dataset: NERDataset, k: int, train_args: di
             warmup_prop    = train_args["warmup_prop"],
             weight_decay   = train_args["weight_decay"],
             dev_dataloader = None, # Don't eval
-            loss_weight    = train_args["batch_size"]
+            loss_weight    = train_args["loss_weight"]
         )
         trainer.run()
 
