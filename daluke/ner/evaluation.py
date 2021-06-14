@@ -47,11 +47,10 @@ def _format_confmat(confmat: dict[str, dict[str, int]]) -> Table:
         ])
     return t
 
-def confusion_matrix(annotations, preds) -> dict[str, dict[str, int]]:
+def confusion_matrix(annotations, preds, classes: list[str]) -> dict[str, dict[str, int]]:
     """ Builds a confusion matrix with true and predicted labels """
     annotations = [x for y in annotations for x in y]
     preds = [x for y in preds for x in y]
-    classes = { _remove_iob(x) for x in preds }
     confmat = { c: { c_: 0 for c_ in classes } for c in classes }
     for ann, pred in zip(annotations, preds):
         confmat[_remove_iob(ann)][_remove_iob(pred)] += 1
@@ -77,7 +76,7 @@ def evaluate_ner(model: nn.Module, dataloader: torch.utils.data.DataLoader, data
         classification_report(annotations, preds, output_dict=True, zero_division=0)
     )
     log(classification_report(annotations, preds, zero_division=0, digits=4))
-    confmat = confusion_matrix(annotations, preds)
+    confmat = confusion_matrix(annotations, preds, dataset.all_labels)
     confmat_nomisc = dict()
     log("Prediction distribution", _format_confmat(confmat))
 
