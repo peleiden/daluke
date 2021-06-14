@@ -86,24 +86,12 @@ def run_experiment(args: dict[str, Any]):
         dropout = args["dropout"],
     )
 
-    def save_training(res: TrainResults, is_best: bool):
-        log("Saving results and model to %s" % args["location"])
-        if is_best:
-            TrainResults.subfolder += "-best"
-        res.save(args["location"])
-        if is_best:
-            TrainResults.subfolder = res.subfolder[:-5]
-        outpath = os.path.join(args["location"], TRAIN_OUT_BEST if is_best else TRAIN_OUT)
-        save_to_archive(outpath, entity_vocab, metadata, model)
-        model.to(device)
-
     log(f"Starting training of DaLUKE for NER on {args['dataset']}")
     training = TrainNER(
         model,
         dataloader,
         dataset,
         device         = device,
-        save_fn        = save_training,
         epochs         = args["epochs"],
         lr             = args["lr"],
         warmup_prop    = args["warmup_prop"],
@@ -120,13 +108,17 @@ def run_experiment(args: dict[str, Any]):
 
     results = training.run()
 
+    log("Saving results and model to %s" % args["location"])
+    results.save(args["location"])
+    save_to_archive(os.path.join(args["location"], TRAIN_OUT), entity_vocab, metadata, model)
+
     if args["eval"]:
         log("True dev. set distributions")
         results.dev_true_type_distribution = type_distribution(dataset.data[Split.DEV].annotations)
         log("True dev. set distributions")
         results.train_true_type_distribution = type_distribution(dataset.data[Split.TRAIN].annotations)
-
-    save_training(results, False)
+        log("Saving best model")
+        save_to_archive(os.path.join(args["location"], TRAIN_OUT_BEST), entity_vocab, metadata, training.best_model)
 
 if __name__ == '__main__':
     with log.log_errors, EnvVars(TOKENIZERS_PARALLELISM=str(not "Tue").lower()):

@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-import os
+from copy import deepcopy
 
 import torch
 from torch import nn
@@ -8,7 +8,6 @@ from transformers import AdamW, get_linear_schedule_with_warmup
 
 from pelutils import log, DataStorage
 
-from daluke.serialize import save_to_archive, TRAIN_OUT
 from .evaluation import evaluate_ner, type_distribution, NER_Results
 from .data import Split, NERDataset
 
@@ -16,6 +15,7 @@ from .data import Split, NERDataset
 class TrainResults(DataStorage):
     epoch: int
     losses: list[float]
+    best_epoch: int | None
     running_train_statistics: list[dict]
     train_pred_distributions: list[dict[str, int]]
     train_true_type_distribution: dict[str, int]
@@ -36,7 +36,6 @@ class TrainNER:
         dataloader: torch.utils.data.DataLoader,
         dataset: NERDataset,
         device: torch.device,
-        save_fn,
         epochs: int,
         lr: float,
         warmup_prop: float,
@@ -46,7 +45,6 @@ class TrainNER:
     ):
         self.model = model
         self.device = device
-        self.save_fn = save_fn
         self.dataloader = dataloader
         self.dataset = dataset
         self.dev_dataloader = dev_dataloader
@@ -73,11 +71,13 @@ class TrainNER:
                 for label, count in zip(*e.entities.labels[:e.entities.N].unique(return_counts=True)):
                     counts[label] += count
         self.criterion = nn.CrossEntropyLoss(ignore_index=-1, weight=1/counts.to(device) if loss_weight else None)
+        self.best_model = None
 
-    def run(self):
+    def run(self) -> TrainResults:
         res = TrainResults(
             epoch                        = 0,
             losses                       = list(),
+            best_epoch                   = None,
             running_train_statistics     = list(),
             running_dev_evaluations      = list(),
             dev_pred_distributions       = list(),
@@ -85,8 +85,6 @@ class TrainNER:
             train_pred_distributions     = list(),
             train_true_type_distribution = dict()
         )
-        best_epoch = (None, 0)  # (Epoch, micro f1 on dev set)
-
         for i in range(self.epochs):
             res.epoch = i
             self.model.train()
@@ -113,12 +111,12 @@ class TrainNER:
                 train_results = evaluate_ner(self.model, self.dataloader, self.dataset, self.device, Split.TRAIN, also_no_misc=False)
                 res.running_train_statistics.append(train_results.statistics)
                 res.train_pred_distributions.append(type_distribution(train_results.preds))
-                if (f1 := dev_results.statistics["micro avg"]["f1-score"]) > best_epoch[1] or i == 0:
-                    log("Found new best model at epoch %i with dev f1 %.4f" % (i, f1))
-                    best_epoch = (i, f1)
-                    self.save_fn(res, True)
+                if res.best_epoch is None or\
+                        (dev_results.statistics["micro avg"]["f1-score"]) > res.running_dev_evaluations[res.best_epoch].statistics["micro avg"]["f1-score"]:
+                    log(f"Found new best model at epoch {i}")
+                    self.best_model = deepcopy(self.model)
+                    res.best_epoch = i
         return res
-
 
     def _get_optimizer_params(self, params: list, do_decay: bool) -> list:
         # Only include the parameter if do_decay has reverse truth value of the parameter being in no_decay

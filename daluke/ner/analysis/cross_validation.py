@@ -76,7 +76,6 @@ def cross_validate(model: NERDaLUKE, dataset: NERDataset, k: int, train_args: di
             split_dataloader,
             split_dataset,
             device         = next(split_model.parameters()).device,
-            save_fn        = None, # Don't save
             epochs         = train_args["epochs"],
             lr             = train_args["lr"],
             warmup_prop    = train_args["warmup_prop"],
