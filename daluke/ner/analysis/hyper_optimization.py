@@ -43,7 +43,7 @@ class SetProduct(Sampler):
     def __init__(self, param_lists: dict[str, list]):
         self.param_lists = param_lists
         self.product = list(product(*param_lists.values()))
-        log.debug("Created Value combinations", list(self.param_lists.keys()), "\n".join(str(p) for p in self.product))
+        log(f"Created {len(self.product)} value combinations", list(self.param_lists.keys()), "\n".join(str(p) for p in self.product))
 
     def sample(self) -> None | dict[str, Any]:
         if not self.product:
@@ -57,31 +57,33 @@ SAMPLERS = {
 
 def objective_function(model: NERDaLUKE, dataset: NERDataset, args: dict[str, Any]) -> NER_Results:
     dataloader = dataset.build(Split.TRAIN, args["batch_size"])
+    dev_dataloader = dataset.build(Split.DEV, EVAL_BATCH)
     device = next(model.parameters()).device
-    TrainNER(
+    training = TrainNER(
         model,
         dataloader,
         dataset,
         device         = device,
-        save_fn        = None, # Don't save
         epochs         = args["epochs"],
         lr             = args["lr"],
         warmup_prop    = args["warmup_prop"],
         weight_decay   = args["weight_decay"],
-        dev_dataloader = None, # Don't eval
+        dev_dataloader = dev_dataloader,
         loss_weight    = args["batch_size"]
-    ).run()
+    )
+    res = training.run()
 
     log.debug("Evaluating")
-    dev_dataloader = dataset.build(Split.DEV, EVAL_BATCH)
-    return evaluate_ner(model, dev_dataloader, dataset, device, Split.DEV, also_no_misc=False)
+    best_res = res.running_dev_evaluations[res.best_epoch]
+    log(f"Best model achieved {best_res.statistics['micro avg']['f1-score']} in mic-F1")
+    return best_res
 
 def optimize(model: NERDaLUKE, dataset: NERDataset, args: dict[str, Any], sampler: Sampler):
     results, tried_params = list(), list()
     best = None
     i = 0
     while (sampled_params := sampler.sample()) is not None:
-        log(f"Sampling #{i}: chose", f(sampled_params))
+        log.section(f"Sampling #{i}: chose", f(sampled_params))
         result = objective_function(deepcopy(model), dataset, {**args, **sampled_params})
         score = result.statistics["micro avg"]["f1-score"]
         if best is None or score > results[best].statistics["micro avg"]["f1-score"]:

@@ -1,5 +1,4 @@
 {
-    "epochs": [5, 10],
     "batch_size": [16, 32],
     "weight_decay": [0.025, 0.075],
     "dropout": [0.025, 0.1, 0.3],
