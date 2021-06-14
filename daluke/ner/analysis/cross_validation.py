@@ -93,7 +93,7 @@ def cross_validate(model: NERDaLUKE, dataset: NERDataset, k: int, train_args: di
         split_dataset.document(split_dataloader, Split.TEST)
         type_distribution(split_dataset.data[Split.TEST].annotations)
         results.append(
-            evaluate_ner(split_model, split_test_dataloader, split_dataset, trainer.device, Split.TEST)
+            evaluate_ner(split_model, split_test_dataloader, split_dataset, trainer.device, Split.TEST, also_no_misc=False)
         )
     return results
 
