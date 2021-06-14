@@ -171,14 +171,6 @@ def load_base_model_weights(daluke: PretrainTaskDaLUKE, base_model: nn.Module, b
     # Load base model parameters into daluke
     load(daluke, prefix="")
 
-    # Log unused and unset keys
-    log.debug(
-        "%i keys from pretrained model not used" % len(unexpected_keys),
-        pformat(unexpected_keys, width=125, compact=True),
-    )
-    log.debug("%i keys not set from base model" % len(missing_keys),
-        pformat(missing_keys, width=125, compact=True),
-    )
     if error_msgs:
         raise RuntimeError("Errors in loading state_dict for %s:\n" % daluke.__class__.__name__ + "\n\t".join(error_msgs))
 
