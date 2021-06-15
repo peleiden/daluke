@@ -58,7 +58,9 @@ ARGUMENTS = {
 
 def run_experiment(args: dict[str, Any]):
     log.configure(
-        os.path.join(args["location"], "daluke-train-ner.log"), args["name"] + "-fine-tuning",
+        os.path.join(args["location"], "daluke-train-ner.log"),
+        args["name"] + " Fine-tuning",
+        logger=args["name"] + "-fine-tune",
         print_level=Levels.INFO if args["quieter"] else Levels.DEBUG,
     )
     set_seeds(seed=args["seed"])
