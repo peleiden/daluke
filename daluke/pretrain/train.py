@@ -298,7 +298,7 @@ def train(
         log("Loading base model parameters")
         with TT.profile("Loading base model parameters"):
             base_model = AutoModelForPreTraining.from_pretrained(metadata["base-model"])
-            new_weights = load_base_model_weights(model, base_model, params.bert_attention)
+            new_weights = load_base_model_weights(model, base_model.state_dict(), params.bert_attention)
     else:
         new_weights = set(model.state_dict())
     # Initialize self-attention query matrices to BERT word query matrices

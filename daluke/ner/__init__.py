@@ -2,11 +2,13 @@ from __future__ import annotations
 from typing import Any, Type
 
 import torch
+import torch.nn as nn
 from transformers import AutoConfig
 
 import daluke.ner.data as datasets
 from daluke.ner.data import NERDataset
 from daluke.ner.model import NERDaLUKE, get_ent_embed
+from daluke.pretrain.model import load_base_model_weights
 
 def load_dataset(args: dict[str, Any], metadata: dict[str, Any], device: torch.device) -> NERDataset:
     dataset_cls: Type[NERDataset] = getattr(datasets, args["dataset"])
@@ -28,6 +30,7 @@ def load_model(
     dataset: NERDataset,
     metadata: dict[str, Any],
     device: torch.device,
+    bert_attention: bool,
     entity_embedding_size: int=None,
     dropout: float=None,
 ) -> NERDaLUKE:
@@ -42,4 +45,7 @@ def load_model(
         entities_only = metadata.get("NER-entities-only", False),
     )
     model.load_state_dict(state_dict, strict=False)
+    if bert_attention:
+        load_base_model_weights(model, state_dict, bert_attention=False)
+        model.init_queries()
     return model.to(device)

@@ -49,6 +49,7 @@ ARGUMENTS = {
     "seed":            {"default": 1, "type": int},
     "words-only":      {"action": "store_true", "help": "Use only start and end token CWR's for classification"},
     "entities-only":   {"action": "store_true", "help": "Use only CER for classification"},
+    "bert-attention":  {"action": "store_true", "help": "Model given has been pretrained using Bert attention"},
     "dataset":         {"help": "Which dataset to use. Currently, only DaNE supported", "default": "DaNE"},
     "eval":            {"help": "Run evaluation on dev. set after each epoch", "action": "store_true"},
     "quieter":         {"help": "Don't show debug logging", "action": "store_true"},
@@ -84,6 +85,7 @@ def run_experiment(args: dict[str, Any]):
         dataset,
         metadata,
         device,
+        bert_attention = args["bert_attention"],
         entity_embedding_size = ent_embed_size,
         dropout = args["dropout"],
     )

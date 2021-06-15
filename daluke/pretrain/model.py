@@ -1,4 +1,5 @@
 from __future__ import annotations
+from collections import OrderedDict
 from pprint import pformat
 from typing import Callable
 
@@ -97,7 +98,7 @@ class BertAttentionPretrainTaskDaLUKE(PretrainTaskDaLUKE):
 
         return word_scores, ent_scores
 
-def load_base_model_weights(daluke: PretrainTaskDaLUKE, base_model: nn.Module, bert_attention: bool) -> set:
+def load_base_model_weights(daluke: PretrainTaskDaLUKE, base_model_state_dict: OrderedDict, bert_attention: bool) -> set:
     """
     Load a base model into this model. Assumes BERT for now
     Returns the set of keys that were not tansfered from base model
@@ -125,7 +126,7 @@ def load_base_model_weights(daluke: PretrainTaskDaLUKE, base_model: nn.Module, b
     # Remove these prefixes
     base_model_prefixes = ("bert.", "roberta.")
 
-    state_dict = base_model.state_dict().copy()
+    state_dict = base_model_state_dict.copy()
     # Remove base model naming from keys
     for bert_key in tuple(state_dict):
         # daluke_key is the key for this model and will be changed to fit naming scheme
