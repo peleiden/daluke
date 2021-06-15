@@ -99,7 +99,7 @@ def tsne(A: np.ndarray, perplexity: float) -> np.ndarray:
 
 @click.command()
 @click.argument("path")
-@click.option("model")
+@click.option("--model")
 @click.option("--n-components", default = 10, type=int)
 @click.option("--reducer-subsample", default=None, type=int)
 @click.option("--tsne-perplexity", default=100.0, type=float)
