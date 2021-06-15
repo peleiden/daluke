@@ -43,7 +43,7 @@ def run_experiment(args: dict[str, Any]):
     dataloader = dataset.build(Split.TEST, FP_SIZE)
 
     log("Loading model ...")
-    model = load_model(state_dict, dataset, metadata, device)
+    model = load_model(state_dict, dataset, metadata, device, bert_attention=False)
 
     # Print some important information to stdout
     log.debug(model)
