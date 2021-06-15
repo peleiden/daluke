@@ -86,7 +86,7 @@ def evaluate_ner(model: nn.Module, dataloader: torch.utils.data.DataLoader, data
             classification_report(_rm_misc(annotations, dataset.null_label), _rm_misc(preds, dataset.null_label), output_dict=True)
         )
         log(classification_report(_rm_misc(annotations, dataset.null_label), _rm_misc(preds, dataset.null_label), digits=4))
-        confmat_nomisc = confusion_matrix(_rm_misc(annotations, dataset.null_label), _rm_misc(preds, dataset.null_label))
+        confmat_nomisc = confusion_matrix(_rm_misc(annotations, dataset.null_label), _rm_misc(preds, dataset.null_label), dataset.all_labels)
         log("Prediction distribution", _format_confmat(confmat))
 
     return NER_Results(
