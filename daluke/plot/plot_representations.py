@@ -4,6 +4,7 @@ import click
 from itertools import combinations
 
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import numpy as np
 import torch
 
@@ -11,7 +12,7 @@ from pelutils.logger import log
 from pelutils.ds.plot import tab_colours, figsize_std
 
 from daluke.ner import load_dataset
-from daluke.ner.data import Sequences, Split
+from daluke.ner.data import Split, DaNE
 from daluke.ner.analysis.representation_geometry import GeometryResults
 from daluke.ner.analysis.representation_examples import DUMMY_METADATA
 
@@ -19,14 +20,25 @@ from daluke.plot import setup_mpl
 
 setup_mpl()
 
+COLORS = ["grey", "red", "yellow", "blue", "green"]
+NAMES = (DaNE.null_label, *DaNE.labels)
+
 def _scatter_transformed(Z1: np.ndarray, Z2: np.ndarray, labels: np.ndarray, axis):
-    colors = ["grey", "red", "yellow", "blue", "green"]
-    cdict = dict(enumerate(colors))
+    cdict = dict(enumerate(COLORS))
 
     nulls = labels == 0
-    axis.scatter(Z1[nulls], Z2[nulls], c=colors[0], alpha=.1)
+    axis.scatter(Z1[nulls], Z2[nulls], c=COLORS[0], alpha=.1)
     axis.scatter(Z1[~nulls], Z2[~nulls], c=[cdict[l] for l in labels[~nulls]], alpha=.4)
     axis.grid()
+
+def _get_h_l(only_pos: bool):
+    h, l = [
+        Line2D([], [], marker="o", ls="", color=c) for c in COLORS
+    ], list(NAMES)
+    if only_pos:
+        h.pop(0)
+        l.pop(0)
+    return h, l
 
 def pca_explained_plot(location: str):
     lambdas = GeometryResults.load().principal_components
@@ -36,7 +48,7 @@ def pca_explained_plot(location: str):
     ax.plot(range(0, show_k+1), [0, *np.cumsum(lambdas)[:show_k]/np.sum(lambdas)*100], color=tab_colours[0], linestyle="--", marker=".")
     ax.set_xlabel("Number of principal components")
     ax.set_ylabel("Data variance explained [%]")
-    ax.set_title("PCA on daLUKE contextualized entity representations for DaNE")
+    ax.set_title("PCA on DaLUKE contextualized entity representations for DaNE")
     ax.set_ylim(bottom=0, top=110)
 
     plt.grid()
@@ -46,27 +58,35 @@ def pca_explained_plot(location: str):
 
 def pca_matrix_plot(location: str):
     res = GeometryResults.load()
+    only_pos = not (res.labels == 0).any()
     V = res.pca_transformed
     N = 4
 
-    _, axes = plt.subplots(N-1, N-1, figsize=(20, 20))
-    # TODO: Dont create unused subplots
+    fig, axes = plt.subplots(N-1, N-1, figsize=(20, 20))
+    remaining_axes = list(axes.ravel())
     # j, i are switched around to get lower triangle
     for (j, i) in combinations(range(N), 2):
         ax = axes[i-1, j]
         _scatter_transformed(V[:, j], V[:, i], res.labels, ax)
         ax.set_xlabel(f"PC {j+1}")
         ax.set_ylabel(f"PC {i+1}")
-
+        remaining_axes.remove(ax)
+    # Make unused axes invisible
+    for ax in remaining_axes:
+        ax.set_axis_off()
+    fig.legend(*_get_h_l(only_pos), "center right", prop=dict(size=35))
+    fig.suptitle("PCA space of DaLUKE contextualized entity representations for DaNE", size="xx-large")
     plt.tight_layout()
     plt.savefig(os.path.join(location, "geometry-plots", "pca_matrix.png"))
     plt.close()
 
 def umap_plot(location: str):
     res = GeometryResults.load()
+    only_pos = not (res.labels == 0).any()
     _, ax = plt.subplots(figsize=figsize_std)
     _scatter_transformed(res.umap_transformed[:, 0], res.umap_transformed[:, 1], res.labels[:len(res.umap_transformed)], ax)
-    ax.set_title("UMAP space of daLUKE contextualized entity representations for DaNE")
+    ax.legend(*_get_h_l(only_pos), loc="lower left")
+    ax.set_title("UMAP space of DaLUKE contextualized entity representations for DaNE")
 
     plt.tight_layout()
     plt.savefig(os.path.join(location, "geometry-plots", "umap.png"))
@@ -74,17 +94,19 @@ def umap_plot(location: str):
 
 def tsne_plot(location: str):
     res = GeometryResults.load()
+    only_pos = not (res.labels == 0).any()
     _, ax = plt.subplots(figsize=figsize_std)
     _scatter_transformed(res.tsne_transformed[:, 0], res.tsne_transformed[:, 1], res.labels[:len(res.tsne_transformed)], ax)
-    ax.set_title("t-SNE space of daLUKE contextualized entity representations for DaNE")
+    ax.legend(*_get_h_l(only_pos), loc="lower left")
+    ax.set_title("t-SNE space of DaLUKE contextualized entity representations for DaNE")
 
     plt.tight_layout()
     plt.savefig(os.path.join(location, "geometry-plots", "tsne.png"))
     plt.close()
 
-
 def plots_vs_length(location: str):
     res = GeometryResults.load()
+    only_pos = not (res.labels == 0).any()
     # Hardcoded to train
     log.debug("Loading data...")
     data = load_dataset(dict(dataset="DaNE"), DUMMY_METADATA, torch.device("cpu")).data[Split.TRAIN]
@@ -96,9 +118,10 @@ def plots_vs_length(location: str):
             for lenname, lengths in zip(("sequence", "span"), (seq_lengths, span_lengths)):
                 log.debug(f"Plotting {name}{dim} on {lenname}")
                 _, ax = plt.subplots(figsize=figsize_std)
-                ax.set_title(f"{name} on CER, dim {dim} vs entity {lenname} length")
+                ax.set_title(f"{name} on CER, dim {dim+1} vs. entity {lenname} length")
                 Z_ = Z[:, dim]
                 _scatter_transformed(lengths[:len(Z_)], Z_, res.labels[:len(Z_)], ax)
+                ax.legend(*_get_h_l(only_pos), loc="lower right")
                 ax.set_ylabel(f"{name}_{dim}")
                 ax.set_xlabel(f"Entity example {lenname} length")
 
