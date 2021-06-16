@@ -177,11 +177,13 @@ class PretrainingPlots:
         return x[np.linspace(0, len(x)-1, min(samples, len(x)), dtype=int)]
 
     @staticmethod
-    def _normal_binning(x: np.ndarray, b: int) -> np.ndarray:
-        """ Creates bins that fit nicely to a normally distributed variable """
-        unispace = np.linspace(0, 1, b+2)[1:-1]
-        dist = norm(x.mean(), x.std())
-        return dist.ppf(unispace)
+    def _normal_binning(x: torch.Tensor, bins: int) -> np.ndarray:
+        """ Creates bins that fits nicely to a normally distributed variable
+        Bins are smaller close to the mean of x """
+        dist = norm(x.mean(), 2*x.std())
+        p = min(dist.cdf(x.min()), 1-dist.cdf(x.max()))
+        uniform_spacing = np.linspace(p, 1-p, bins)
+        return dist.ppf(uniform_spacing)
 
     @staticmethod
     def _cat(x: torch.Tensor) -> torch.Tensor:
@@ -191,21 +193,24 @@ class PretrainingPlots:
             return torch.Tensor()
 
     def weight_plot(self):
-        bins = 100
-        samples = 10 ** 7
+        bins = 200
+        samples = 10 ** 8
 
-        def plot_dist(epoch: int):
+        def plot_dist(self, epoch: int):
             model_state_dict = torch.load(os.path.join(self.location, MODEL_OUT.format(i=epoch)), map_location=torch.device("cpu"))
             del model_state_dict["word_embeddings.position_ids"]
             from_base = set.difference(set(model_state_dict), set.difference(self.res.luke_exclusive_params, self.res.q_mats_from_base))
             from_base_params = self._cat([p.view(-1) for n, p in model_state_dict.items() if n in from_base])
-            not_from_base_params = self._cat([p.view(-1) for n, p in model_state_dict.items() if n not in from_base])
             model_params = self._cat([x.view(-1) for x in model_state_dict.values()])
+            not_from_base_params = self._cat([p.view(-1) for n, p in model_state_dict.items() if n not in from_base])
+
+            # Ensure same binning for all plots
+            binning = lambda x, b: self._normal_binning(self._sample(samples, model_params), bins)
 
             plt.plot(
                 *self._bins(
                     self._sample(samples, model_params),
-                    spacing=self._normal_binning,
+                    spacing=binning,
                     bins=bins,
                 ),
                 label="DaLUKE",
@@ -213,7 +218,7 @@ class PretrainingPlots:
             plt.plot(
                 *self._bins(
                     self._sample(samples, from_base_params),
-                    spacing=self._normal_binning,
+                    spacing=binning,
                     bins=bins,
                     weight=len(from_base_params)/len(model_params),
                 ),
@@ -222,7 +227,7 @@ class PretrainingPlots:
             plt.plot(
                 *self._bins(
                     self._sample(samples, not_from_base_params),
-                    spacing=self._normal_binning,
+                    spacing=binning,
                     bins=bins,
                     weight=len(not_from_base_params)/len(model_params),
                 ),
@@ -232,15 +237,16 @@ class PretrainingPlots:
             plt.xlabel("Size of Parameter")
             if epoch == -1:
                 plt.ylabel("Probability Density")
-            plt.yscale("log")
             plt.legend(loc=1)
             plt.grid()
+            plt.xlim([-0.2, 0.2])
+            plt.ylim(bottom=0)
 
         plt.figure(figsize=figsize_wide)
         plt.subplot(121)
-        plot_dist(-1)
+        plot_dist(self, -1)
         plt.subplot(122)
-        plot_dist(self.res.epoch)
+        plot_dist(self, self.res.epoch)
 
         self._save("weights.png")
 
