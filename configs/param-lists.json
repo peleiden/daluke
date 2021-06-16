@@ -1,6 +1,7 @@
 {
-    "batch_size": [16, 32],
-    "weight_decay": [0.025, 0.075],
-    "dropout": [0.025, 0.1, 0.3],
+    "batch_size": [8, 16],
+    "lr": [1e-5, 5e-5],
+    "weight_decay": [0.01, 0.05],
+    "dropout": [0.025, 0.1],
     "loss_weight": [true, false]
 }
