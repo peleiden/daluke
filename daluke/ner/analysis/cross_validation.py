@@ -109,7 +109,15 @@ def run_experiment(args: dict[str, Any]):
     dataset = load_dataset(args, metadata, device)
 
     log("Loading model ...")
-    model = load_model(state_dict, dataset, metadata, device, entity_embedding_size=ent_embed_size)
+    model = load_model(
+        state_dict,
+        dataset,
+        metadata,
+        device,
+        entity_embedding_size=ent_embed_size,
+        bert_attention = args["bert_attention"],
+        dropout = args["dropout"]
+    )
 
     cv_results = cross_validate(model, dataset, args["k"], args)
 
