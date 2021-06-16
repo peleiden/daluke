@@ -153,8 +153,8 @@ class Ælæctra(NER_TestModel):
     def predict(self, text: Generator[list[str]]) -> list[list[str]]:
         return self.model.predict(list(text))
 
-class Dacy(NER_TestModel):
-    model_name = "da_dacy_large_tft-0.0.0"
+class DacyMedium(NER_TestModel):
+    model_name = "da_dacy_medium_tft-0.0.0"
     def setup(self):
         self.model = dacy_load(self.model_name)
 
@@ -169,6 +169,9 @@ class Dacy(NER_TestModel):
             )
         return preds
 
+class DacyLarge(DacyMedium):
+    model_name = "da_dacy_large_tft-0.0.0"
+
 ALL_MODELS = (
     Bert("BERT"),
     Flair("Flair"),
@@ -177,7 +180,8 @@ ALL_MODELS = (
     Daner("daner"),
     Mbert("mBERT"),
     Ælæctra("Ælæctra"),
-    Dacy("DaCy"),
+    DacyMedium("DaCyMedium"),
+    DacyLarge("DaCyLarge"),
 )
 
 def setup_models(names_to_setup: list[str], location: str, daner_path: str="daner") -> list[NER_TestModel]:
