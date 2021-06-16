@@ -13,11 +13,14 @@ from daluke.ner.data import Sequences, Split
 
 from daluke.ner.analysis.representation_geometry import GeometryResults
 
-# {field: axis}
-DIVISIONS = {
-    "pca_transformed" : 0,
-    "umap_transformed": 0,
-    "tsne_transformed": 1,
+# OF_INTEREST = {
+#     "pca_transformed": 1,
+# }
+OF_INTEREST = {
+    # {field: axis}
+    "pca_transformed" : 3,
+    "tsne_transformed": 0,
+    "umap_transformed": 1,
 }
 
 DUMMY_METADATA = {
@@ -34,11 +37,11 @@ def _show_examples(res: GeometryResults, X: np.ndarray, I: np.ndarray, data: Seq
         t.insert(span[0], "{")
         t.insert(span[1]+1, "}")
         t = " ".join(t)
-        log(f"{i} ({X[i]}) {a[span[0]].split('-')[1]}: {t}\n", with_info=False)
+        log(f"{i} ({X[idx]}) {a[span[0]].split('-')[1] if '-' in a[span[0]] else a[span[0]]}: {t}\n", with_info=False)
 
 @click.command()
 @click.argument("path")
-@click.option("--n", type=int, default=100)
+@click.option("--n", type=int, default=25)
 def main(path: str, n: int):
     log.configure(
         os.path.join(path, "geometry-examples.log"), "daLUKE examples",
@@ -49,8 +52,9 @@ def main(path: str, n: int):
     # Hardcoded to train
     data = load_dataset(dict(dataset="DaNE"), DUMMY_METADATA, device).data[Split.TRAIN]
     set_seeds()
+    GeometryResults.subfolder = ""
     res = GeometryResults.load(path)
-    for field, axis in DIVISIONS.items():
+    for field, axis in OF_INTEREST.items():
         log.section(field)
         X = getattr(res, field)
         order = X[:, axis].argsort()

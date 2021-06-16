@@ -118,12 +118,12 @@ def plots_vs_length(location: str):
             for lenname, lengths in zip(("sequence", "span"), (seq_lengths, span_lengths)):
                 log.debug(f"Plotting {name}{dim} on {lenname}")
                 _, ax = plt.subplots(figsize=figsize_std)
-                ax.set_title(f"{name} on CER, dim {dim+1} vs. entity {lenname} length")
+                ax.set_title(f"{name} Contextualized Entity Representations, Dim. {dim+1} vs. Example {lenname.title()} Length")
                 Z_ = Z[:, dim]
                 _scatter_transformed(lengths[:len(Z_)], Z_, res.labels[:len(Z_)], ax)
                 ax.legend(*_get_h_l(only_pos), loc="lower right")
-                ax.set_ylabel(f"{name}_{dim}")
-                ax.set_xlabel(f"Entity example {lenname} length")
+                ax.set_ylabel(f"{name}$_{dim+1}$")
+                ax.set_xlabel(f"Entity Example {lenname.title()} Length")
 
                 plt.tight_layout()
                 plt.savefig(os.path.join(location, "geometry-plots", f"{name}{dim}-{lenname}-len.png"))
