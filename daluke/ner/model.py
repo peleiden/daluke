@@ -5,11 +5,9 @@ import torch
 from torch import nn
 from transformers.models.bert.modeling_bert import BertConfig
 
-
-from daluke.model import DaLUKE
+from daluke.model import DaLUKE, get_ent_embed, ENTITY_EMBEDDING_KEY
 from daluke.ner.data import NERDataset, NERBatchedExamples
 
-ENTITY_EMBEDDING_KEY = "entity_embeddings.ent_embeds.weight"
 
 class NERDaLUKE(DaLUKE):
     """
@@ -87,10 +85,6 @@ def span_probs_to_preds(span_probs: dict[tuple[int], np.ndarray], seq_len: int, 
                 preds[i] = f"I-{label}"
             preds[span[0]] = f"B-{label}"
     return preds
-
-# TODO: Move this to model - it is not specific for NER
-def get_ent_embed(state_dict: dict) -> dict:
-    return state_dict[ENTITY_EMBEDDING_KEY]
 
 def mutate_for_ner(state_dict: dict, mask_id: int) -> (dict, int):
     """

@@ -14,11 +14,19 @@ from transformers.models.bert.modeling_bert import (
 from daluke.data import BatchedExamples
 
 
+ENTITY_EMBEDDING_KEY = "entity_embeddings.ent_embeds.weight"
+
+
 def all_params(model: torch.nn.Module | dict) -> torch.Tensor:
     """ Returns an array of all model parameters, given either from a Module or a state_dict """
     state_dict = model.state_dict() if isinstance(model, torch.nn.Module) else model
     return torch.cat([x.detach().view(-1) for n, x in state_dict.items() if n != "word_embeddings.position_ids"])
 
+def get_ent_embed(state_dict: dict) -> torch.nn.Module:
+    return state_dict[ENTITY_EMBEDDING_KEY]
+
+def get_ent_embed_size(state_dict: dict) -> int:
+    return get_ent_embed(state_dict).shape[1]
 
 class DaLUKE(nn.Module):
     """

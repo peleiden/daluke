@@ -6,8 +6,9 @@ import torch.nn as nn
 from transformers import AutoConfig
 
 import daluke.ner.data as datasets
+from daluke.model import get_ent_embed_size
 from daluke.ner.data import NERDataset
-from daluke.ner.model import NERDaLUKE, get_ent_embed
+from daluke.ner.model import NERDaLUKE
 from daluke.pretrain.model import load_base_model_weights
 
 def load_dataset(args: dict[str, Any], metadata: dict[str, Any], device: torch.device) -> NERDataset:
@@ -39,7 +40,7 @@ def load_model(
         len(dataset.all_labels),
         bert_config,
         ent_vocab_size = 2, # Same reason as mutate_for_ner
-        ent_embed_size = entity_embedding_size if entity_embedding_size is not None else get_ent_embed(state_dict).shape[1],
+        ent_embed_size = entity_embedding_size if entity_embedding_size is not None else get_ent_embed_size(state_dict),
         dropout = dropout,
         words_only = metadata.get("NER-words-only", False),
         entities_only = metadata.get("NER-entities-only", False),
