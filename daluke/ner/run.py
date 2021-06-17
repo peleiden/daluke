@@ -79,6 +79,9 @@ def run_experiment(args: dict[str, Any]):
     dataloader = dataset.build(Split.TRAIN, args["batch_size"])
     dev_dataloader = dataset.build(Split.DEV, args["batch_size"]) if args["eval"] else None
 
+    # Remember the dimensionality that the model will be trained with
+    metadata["output-size"] = len(dataset.all_labels)
+
     log("Loading model ...")
     model = load_model(
         state_dict,

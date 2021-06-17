@@ -37,7 +37,7 @@ def load_model(
 ) -> NERDaLUKE:
     bert_config = AutoConfig.from_pretrained(metadata["base-model"])
     model = NERDaLUKE(
-        len(dataset.all_labels),
+        metadata.get("output-size", len(dataset.all_labels)),
         bert_config,
         ent_vocab_size = 2, # Same reason as mutate_for_ner
         ent_embed_size = entity_embedding_size if entity_embedding_size is not None else get_ent_embed_size(state_dict),
