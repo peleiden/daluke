@@ -6,6 +6,7 @@ from icu import Locale, BreakIterator
 from pelutils.jsonl import load_jsonl
 
 
+ENTITY_UNK_TOKEN = "[UNK]"
 ENTITY_MASK_TOKEN = "[MASK]"
 
 class ICUSentenceTokenizer:

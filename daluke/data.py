@@ -114,7 +114,7 @@ class BatchedExamples(Example):
         # Stack the tensors in specific field for each example and send to device
         tensor_collate = lambda field, subfield, limit: torch.stack(tuple(getattr(getattr(e, field), subfield)[:limit] for e in ex)).to(device)
 
-        word_N = torch.tensor(tuple(e.words.N for e in ex)).to(device) + 1 # +1 for CLS
+        word_N = torch.tensor(tuple(e.words.N for e in ex)).to(device) + 2 # +2 for CLS, SEP
         ent_N = torch.tensor(tuple(e.entities.N for e in ex)).to(device)
         # It is here assumed that all word and entity ids already have been padded to exactly same length (as they have in their build methods)
         word_limit = max(word_N) if cut else len(ex[0].words.ids)
@@ -140,25 +140,3 @@ class BatchedExamples(Example):
 def get_special_ids(tokenizer: AutoTokenizer) -> (int, int, int):
     """ Returns seperator id, close id and pad id """
     return tuple(tokenizer.convert_tokens_to_ids(t) for t in (tokenizer.sep_token, tokenizer.cls_token, tokenizer.pad_token))
-
-# FIXME: A lot of the logic in here should call methods implemented in a Dataset class
-def features_from_str(words: list[str], entity_spans: list[tuple[int, int]], entity_vocab: dict[str, int], tokenizer: AutoTokenizer) -> Example:
-    """
-    A one-time feature generator used for inference of a single example - mostly practical as an example.
-    words: The sentence as tokenized list of strings e.g. ['Jeg', 'hedder', 'Wolfgang', 'Amadeus', 'Mozart', 'og', 'er', 'fra', 'Salzburg']
-    entity_spans: List of start (included) and end (excluded) indices of each entity e.g. [(2, 5), (8, 9)]
-    --
-    entity_vocab: Maps entity string to entity ids for forward passing
-    tokenizer: tokenizer used for word id computation
-    """
-    sep, cls_, pad = get_special_ids(tokenizer)
-    word_ids = torch.IntTensor(tokenizer.convert_tokens_to_ids(words))
-    ents = (" ".join(words[e[0]:e[1]]) for e in entity_spans)
-        # FIXME: Handle tokenization, e.g.: What if the entity is subword?
-    ent_ids = torch.IntTensor([entity_vocab.get(ent, entity_vocab["[UNK]"]) for ent in ents])
-        # FIXME: Make a class for entity vocab
-        # FIXME: Consider entity casing
-    return Example(
-        words=Words.build(word_ids),
-        entities=Entities.build(ent_ids, entity_spans, 128, 30)
-    )

@@ -3,8 +3,10 @@ from transformers import AutoConfig, AutoTokenizer
 
 import torch
 from daluke.model import DaLUKE, EntityEmbeddings
-from daluke.data import features_from_str, BatchedExamples
+from daluke.data import BatchedExamples
 from daluke import daBERT
+
+from . import features_from_str
 
 def _create_cfg():
     return AutoConfig.from_pretrained(daBERT)

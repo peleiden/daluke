@@ -1,7 +1,8 @@
 import torch
 from transformers import AutoTokenizer
 
-from daluke.data import Words, Entities, Example, features_from_str
+from daluke.data import Words, Entities, Example
+from . import features_from_str
 from daluke import daBERT
 
 def test_words():
