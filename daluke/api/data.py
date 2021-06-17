@@ -103,12 +103,13 @@ def masked_example_from_str(
         ent_mask            = torch.zeros_like(batched_examples.entities.ids, dtype=torch.bool),
     )
 
-class _SingletonNERData(NERDataset):
+class SingletonNERData(NERDataset):
     """
     A dataset for a single example to be forward passed
     """
     null_label = "O"
     labels = ("LOC", "PER", "ORG", "MISC")
+    all_labels = (null_label,) + labels
 
     def load(self, text: str, **_):
         words = text.split()
@@ -126,7 +127,7 @@ def ner_example_from_str(
     """
 
     """
-    data = _SingletonNERData(
+    data = SingletonNERData(
         base_model      = metadata["base-model"],
         max_seq_length  = metadata["max-seq-length"],
         max_entities    = metadata["max-entities"],
@@ -135,4 +136,4 @@ def ner_example_from_str(
     )
     data.load(text)
     # Extract example from singleton dataloader
-    return next(iter(data.build(Split.TEST, 1)))
+    return next(iter(data.build(Split.TEST, 8)))

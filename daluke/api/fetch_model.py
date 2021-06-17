@@ -1,3 +1,4 @@
+from __future__ import annotations
 import enum
 import os
 import pathlib
@@ -15,7 +16,7 @@ from daluke.ner.model import NERDaLUKE
 from daluke.pretrain.model import PretrainTaskDaLUKE
 
 _download_dir = os.path.join(str(pathlib.Path.home()), ".daluke")
-_device = torch.device("cuda:0" if torch.cuda.is_available else "cpu")
+_device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 class Models(enum.Enum):
@@ -38,11 +39,11 @@ def should_download(model: Models) -> bool:
     return False
 
 
-def fetch_model(model: Models, force_download=False) -> DaLUKE:
+def fetch_model(model: Models, force_download=False) -> tuple[DaLUKE, dict, dict]:
     # Make sure .tar.gz model file exists
     os.makedirs(_download_dir, exist_ok=True)
     if should_download(model) or force_download:
-        log("Downloading %s to %s" % (model, _model_files[model]))
+        log.debug("Downloading %s to %s" % (model, _model_files[model]))
         # Create status file
         pathlib.Path(_status_files[model]).touch()
         # Download
@@ -50,11 +51,11 @@ def fetch_model(model: Models, force_download=False) -> DaLUKE:
         # Remove status file
         os.remove(_status_files[model])
     else:
-        log("Using cached model %s at %s" % (model, _model_files[model]))
+        log.debug("Using cached model %s at %s" % (model, _model_files[model]))
 
     # Read model state dict along with metadata and entity vocab
     # This is done in a seperate working directory
-    log("Loading entity vocab, metadata, and state dict")
+    log.debug("Loading entity vocab, metadata, and state dict")
     with log.level(len(Levels)+1):
         cwd = os.getcwd()
         os.chdir(_download_dir)
@@ -62,7 +63,7 @@ def fetch_model(model: Models, force_download=False) -> DaLUKE:
         os.chdir(cwd)
 
     # Load model
-    log("Creating model")
+    log.debug("Creating model")
     bert_config = AutoConfig.from_pretrained(metadata["base-model"])
     if model == Models.DaLUKE:
         net = PretrainTaskDaLUKE(bert_config, len(entity_vocab), get_ent_embed_size(state_dict))
@@ -80,7 +81,7 @@ def fetch_model(model: Models, force_download=False) -> DaLUKE:
     net.load_state_dict(state_dict)
     net.eval()
 
-    return net
+    return net.to(_device), metadata, entity_vocab
 
 
 if __name__ == "__main__":
