@@ -1,12 +1,16 @@
 from __future__ import annotations
+
 from pelutils import log, Table
+from pelutils.ds import no_grad
 from transformers import AutoTokenizer
 import numpy as np
+import torch
 import torch.nn.functional as F
 
 from daluke.api.fetch_model import fetch_model, Models
-from daluke.api.data import masked_example_from_str, ner_example_from_str, SingletonNERData
+from daluke.api.data import masked_example_from_str, ner_example_from_str, SingletonNERData, example_from_str
 from daluke.ner.model import span_probs_to_preds
+from daluke.pretrain.data.masking import BatchedExamples
 
 
 def predict_mlm(masked_text: str) -> tuple[str, Table]:
@@ -20,7 +24,7 @@ def predict_mlm(masked_text: str) -> tuple[str, Table]:
         masked_text = masked_text.replace("[MASK][MASK]", "[MASK] [MASK]")
     example = masked_example_from_str(masked_text, list(), entity_vocab, metadata)
     log.debug("Forward passing example")
-    word_scores, _ = model(example)
+    word_scores, __ = model(example)
     top_k = np.argsort(word_scores.detach().cpu().numpy(), axis=1)[:, -5:]
     most_likely_ids = top_k[:, -1]
     tokens = tokenizer.convert_ids_to_tokens(most_likely_ids)
@@ -38,7 +42,7 @@ def predict_mlm(masked_text: str) -> tuple[str, Table]:
 def predict_ner(text: str) -> list[str]:
     """ Return list of entities corresponding """
     log.debug("Loading model")
-    model, metadata, _ = fetch_model(Models.DaLUKE_NER)
+    model, metadata, __ = fetch_model(Models.DaLUKE_NER)
     log.debug("Building example")
     example = ner_example_from_str(text, metadata)
     log.debug("Forward passing example")
@@ -52,3 +56,9 @@ def predict_ner(text: str) -> list[str]:
         })
     preds = span_probs_to_preds(span_probs, len(text.split()), SingletonNERData)
     return preds
+
+@no_grad
+def get_contextualized_representations(batch: BatchedExamples) -> tuple[torch.Tensor, torch.Tensor]:
+    """ Get contextualied word and entity representations. Gradients are not tracked """
+    model, __, __ = fetch_model(Models.DaLUKE)
+    return super(type(model), model).forward(batch)
