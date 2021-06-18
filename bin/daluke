@@ -1,0 +1,7 @@
+#!/usr/bin/env python3
+
+from pelutils import log
+from daluke.api.cli import cli
+
+with log.log_errors:
+    cli()

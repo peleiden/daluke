@@ -1,0 +1,6 @@
+danlp
+pyicu
+wikipedia2vec
+umap-learn
+scikit-learn
+scipy

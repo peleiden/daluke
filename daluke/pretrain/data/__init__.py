@@ -1,8 +1,11 @@
 from __future__ import annotations
-import json
-from typing import Generator
 
-from icu import Locale, BreakIterator
+try:
+    from icu import Locale, BreakIterator
+    icu_available = True
+except ImportError:
+    icu_available = False
+
 from pelutils.jsonl import load_jsonl
 
 
@@ -13,6 +16,8 @@ class ICUSentenceTokenizer:
     """ Segment text to sentences. """
 
     def __init__(self, locale: str):
+        if not icu_available:
+            raise RuntimeError("Pretrain data generation requires installation of the optional requirement `PyIcU`")
 
         # ICU includes lists of common abbreviations that can be used to filter, to ignore,
         # these false sentence boundaries for some languages.

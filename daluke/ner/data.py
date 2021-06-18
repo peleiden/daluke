@@ -12,7 +12,13 @@ import torch
 from torch.utils.data import DataLoader
 
 from transformers import AutoTokenizer
-from danlp.datasets import DDT
+
+try:
+    from danlp.datasets import DDT
+    danlp_available = False
+except ImportError:
+    danlp_available = True
+
 from pelutils import log
 
 from daluke.data import Entities, Example, BatchedExamples, Words, get_special_ids
@@ -272,6 +278,8 @@ class DaNE(NERDataset):
 
     def load(self, **_): # Toss out kwargs
         # Get all three splits from DaNE and divide them in source texts and annotations
+        if not danlp_available:
+            raise RuntimeError("DaNE dataset requires installation of the optional requirement `danlp`")
         datasets = DDT().load_as_simple_ner(predefined_splits=True)
         for (texts, annotations), split in zip(datasets, Split):
             self.data[split] = Sequences(

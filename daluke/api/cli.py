@@ -1,13 +1,8 @@
 import click
-import numpy as np
 from pelutils import log, Table, Levels
 from pelutils.ds import no_grad
-from transformers import AutoTokenizer
 
 from daluke.api.predict import predict_mlm, predict_ner
-from daluke.api.data import masked_example_from_str, ner_example_from_str
-from daluke.api.fetch_model import fetch_model, Models
-from daluke.analysis.pretrain import top_k_accuracy
 
 @click.group()
 def cli():
