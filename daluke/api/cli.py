@@ -9,12 +9,10 @@ def cli():
     pass
 
 @cli.command("masked")
-@click.option("--verbose", is_flag=True)
 @click.option("--filepath", default="")
 @click.option("--text", default="")
 @no_grad
-def masked(filepath: str, text: str, verbose: bool):
-    log.configure(print_level=Levels.DEBUG if verbose else Levels.INFO)
+def masked(filepath: str, text: str):
     if not filepath and not text:
         raise ValueError("Either filepath or text must be given")
     elif filepath and text:
@@ -24,16 +22,14 @@ def masked(filepath: str, text: str, verbose: bool):
             text = f.read()
 
     text, top_preds = predict_mlm(text)
-    log("The top 5 predictions for each [MASK] were", top_preds)
+    log("The top 5 predictions with likelihoods for each [MASK] were", top_preds)
     log("DaLUKE's best predictions were", text)
 
 @cli.command("ner")
-@click.option("--verbose", is_flag=True)
 @click.option("--filepath", default="")
 @click.option("--text", default="")
 @no_grad
-def ner(filepath: str, text: str, verbose: bool):
-    log.configure(print_level=Levels.DEBUG if verbose else Levels.INFO)
+def ner(filepath: str, text: str):
     if not filepath and not text:
         raise ValueError("Either filepath or text must be given")
     elif filepath and text:
@@ -51,5 +47,6 @@ def ner(filepath: str, text: str, verbose: bool):
 
 
 if __name__ == "__main__":
+    log.configure(print_level=Levels.DEBUG)
     with log.log_errors:
         cli()

@@ -25,7 +25,8 @@ def predict_mlm(masked_text: str) -> tuple[str, Table]:
     example = masked_example_from_str(masked_text, list(), entity_vocab, metadata)
     log.debug("Forward passing example")
     word_scores, __ = model(example)
-    top_k = np.argsort(word_scores.detach().cpu().numpy(), axis=1)[:, -5:]
+    probs = F.softmax(word_scores, dim=1)
+    top_k = np.argsort(probs.detach().cpu().numpy(), axis=1)[:, -5:]
     most_likely_ids = top_k[:, -1]
     tokens = tokenizer.convert_ids_to_tokens(most_likely_ids)
     for token in tokens:
@@ -35,7 +36,8 @@ def predict_mlm(masked_text: str) -> tuple[str, Table]:
     t = Table()
     t.add_header(["[MASK] no.", "Top 1", "Top 2", "Top 3", "Top 4", "Top 5"])
     for i, top_ids in enumerate(top_k):
-        t.add_row([i, *tokenizer.convert_ids_to_tokens(top_ids)[::-1]], [1, 0, 0, 0, 0, 0])
+        row = [("%s - % 3.2f %%" % (tokenizer.convert_ids_to_tokens([top_id])[0], 100 * probs[i, top_id])) for top_id in reversed(top_ids)]
+        t.add_row([i, *row], [1, 0, 0, 0, 0, 0])
 
     return masked_text, t
 
