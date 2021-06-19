@@ -73,8 +73,12 @@ def span_probs_to_preds(span_probs: dict[tuple[int], np.ndarray], seq_len: int, 
     positives = list()
     for span, probs in span_probs.items():
         max_idx = probs.argmax()
-        if (max_label := dataset.all_labels[max_idx]) != dataset.null_label:
-            positives.append((probs[max_idx], span, max_label))
+        try:
+            if (max_label := dataset.all_labels[max_idx]) != dataset.null_label:
+                positives.append((probs[max_idx], span, max_label))
+        # If the model predicted a class which is not in the dataset, we count it as O(utside annotation)
+        except IndexError:
+            pass
     # Initialize all predictions to null predictions
     preds = [dataset.null_label for _ in range(seq_len)]
     # Sort after max probability
