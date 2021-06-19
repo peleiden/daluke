@@ -15,9 +15,9 @@ from transformers import AutoTokenizer
 
 try:
     from danlp.datasets import DDT
-    danlp_available = False
-except ImportError:
     danlp_available = True
+except ImportError:
+    danlp_available = False
 
 from pelutils import log
 
