@@ -53,7 +53,6 @@ def run_experiment(args: dict[str, Any]):
     log("Starting evaluation of daLUKE for NER")
     results = evaluate_ner(model, dataloader, dataset, device, Split.TEST)
 
-    results.subfolder += f"-{args['dataset']}"
     results.save(args["location"])
     type_distribution(results.preds)
 
