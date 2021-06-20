@@ -13,7 +13,7 @@ from daluke.ner.data import Split
 from daluke.ner.evaluation import NER_Results
 from daluke.ner.analysis.representation_examples import DUMMY_METADATA
 
-classes = lambda s: {c.split("-")[-1] if "-" in c else c for c in s}
+cla = lambda s: s.split("-")[-1] if "-" in s else s
 
 @click.command()
 @click.argument("path")
@@ -29,7 +29,7 @@ def main(path: str, pred: str, truth: str):
     res = NER_Results.load(path)
     data = load_dataset(dict(dataset="DaNE"), DUMMY_METADATA, device).data[Split.TEST]
     for preds, truths, text in zip(res.preds, data.annotations, data.texts):
-        if pred in classes(preds) and truth in classes(truths):
+        if any(p != t and cla(p) == pred and cla(t) == truth for p, t in zip(preds, truths)):
             t = Table()
             t.add_row(["Text:"] + text)
             t.add_row(["Truth:"] + truths)
