@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
 
-from pelutils import log, Levels
-from daluke.api.cli import cli
-
-log.configure(print_level=Levels.DEBUG)
-with log.log_errors:
-    cli()
+from daluke.api.cli import main
+main()

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import click
 from pelutils import log, Table, Levels
 from pelutils.ds import no_grad
@@ -45,8 +46,10 @@ def ner(filepath: str, text: str):
         t.add_row([word, pred])
     log(t)
 
-
-if __name__ == "__main__":
+def main():
     log.configure(print_level=Levels.DEBUG)
     with log.log_errors:
         cli()
+
+if __name__ == "__main__":
+    main()

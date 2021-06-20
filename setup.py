@@ -1,4 +1,3 @@
-import os
 from setuptools import setup, find_packages
 
 with open('README.md') as f:
@@ -32,7 +31,7 @@ setup_args = dict(
     download_url                  = "https://pypi.org/project/daluke/",
     install_requires              = required,
     extras_require                = {"full": extras_require},
-    scripts                       = [os.path.join("bin", "daluke")],
+    entry_points                  = {"console_scripts": ["daluke = daluke.api.cli:main"]},
     keywords                      = [ "nlp", "ai", "pytorch", "ner" ],
     description                   = "A Danish-speaking language model with entity-aware self-attention",
     long_description              = readme,
