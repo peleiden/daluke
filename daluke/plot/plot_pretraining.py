@@ -82,7 +82,6 @@ class PretrainingPlots:
         norm1 = self.res.param_diff_1.ravel()
         norm2 = self.res.param_diff_2.ravel()
         D_big = ((norm1 / norm2) ** 2) / self.res.orig_params.size
-        epochs = np.arange(self.res.epoch+1) * self.res.param_diff_1.shape[1]
 
         _, (ax1, ax2) = plt.subplots(ncols=2, figsize=figsize_wide)
 
@@ -117,7 +116,7 @@ class PretrainingPlots:
         self._save("parameters.png")
 
     @staticmethod
-    def _rolling_avg(neighbours: int, x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    def rolling_avg(neighbours: int, x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         w = np.empty(2*neighbours+1)
         w[:neighbours+1] = np.arange(1, neighbours+2)
         w[neighbours+1:] = np.arange(neighbours, 0, -1)
@@ -129,7 +128,6 @@ class PretrainingPlots:
 
     def accuracy_plot(self):
         plt.figure(figsize=figsize_wide)
-        epochs = np.arange(self.res.epoch+1) * self.res.w_accuracies.shape[1]
         for i, (data, label) in enumerate(((self.res.w_accuracies, "Word"), (self.res.e_accuracies, "Entity"))):
             plt.subplot(1, 2, i+1)
             colours = iter(tab_colours)
@@ -137,7 +135,7 @@ class PretrainingPlots:
                 c = next(colours)
                 plt.plot(self.x, 100*data[..., j].ravel(), alpha=0.3, color="gray")
                 n = 7 if label == "Word" else 15
-                x, y = self._rolling_avg(n, self.x, 100*data[..., j].ravel())
+                x, y = self.rolling_avg(n, self.x, 100*data[..., j].ravel())
                 plt.plot(x, y, color=c, label="$k=%i$" % k)
 
             plt.xlim(left=0)

@@ -116,7 +116,6 @@ def run_experiment(args: dict[str, Any]):
     results = training.run()
 
     log("Saving results and model to %s" % args["location"])
-    results.save(args["location"])
     save_to_archive(os.path.join(args["location"], TRAIN_OUT), entity_vocab, metadata, model)
 
     if args["eval"]:
@@ -126,6 +125,8 @@ def run_experiment(args: dict[str, Any]):
         results.train_true_type_distribution = type_distribution(dataset.data[Split.TRAIN].annotations)
         log("Saving best model")
         save_to_archive(os.path.join(args["location"], TRAIN_OUT_BEST), entity_vocab, metadata, training.best_model)
+
+    results.save(args["location"])
 
 if __name__ == '__main__':
     with log.log_errors, EnvVars(TOKENIZERS_PARALLELISM=str(not "Tue").lower()):
