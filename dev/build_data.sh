@@ -1,4 +1,4 @@
-# Run from LUKE repo
+# Run from daluke repo
 DATA_PATH=/work3/$USER/pdata2
 DUMP_FILE=da-dump-db.dump
 TOKENIZER="Maltehb/danish-bert-botxo"
@@ -6,10 +6,9 @@ TOKENIZER="Maltehb/danish-bert-botxo"
 # xlm-roberta-large-finetuned-conll02-spanish, xlm-roberta-large-finetuned-conll03-english,
 # xlm-roberta-large-finetuned-conll03-german, Maltehb/danish-bert-botxo, etc.
 PREPROCESS=repeat-entities  # default or repeat-entities
-DALUKE=$HOME/daluke
+DALUKE="$(dirname "$0")"
 LUKE=$DALUKE/luke
 export PYTHONPATH=$PYTHONPATH:$DALUKE:$LUKE
-module load python3/3.8.4
 
 echo "EMPTYING $DATA_PATH"
 rm -rf $DATA_PATH
@@ -17,7 +16,7 @@ mkdir -p $DATA_PATH
 
 echo "DOWNLOADING WIKIDUMP"
 cd $DATA_PATH
-# wget https://dumps.wikimedia.org/dawiki/20210301/dawiki-20210301-pages-articles.xml.bz2
+wget https://dumps.wikimedia.org/dawiki/20210301/dawiki-20210301-pages-articles.xml.bz2
 cd $DALUKE
 
 echo "PREPROCESSING WIKIDUMP"
