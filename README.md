@@ -11,7 +11,7 @@ Implementation of the knowledge-enhanced transformer [LUKE](https://github.com/s
 ```
 pip install daluke
 ```
-For including optional requirements that are necessary for interacting with datasets and performing analysis:
+For including optional requirements that are necessary for training and general analysis:
 ```
 pip install daluke[full]
 ```
