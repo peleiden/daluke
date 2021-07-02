@@ -5,6 +5,9 @@ from itertools import combinations
 
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+import matplotlib as mpl
+from pelutils.ds.plot import rc_params
+
 import numpy as np
 import torch
 
@@ -16,9 +19,7 @@ from daluke.ner.data import Split, DaNE
 from daluke.ner.analysis.representation_geometry import GeometryResults
 from daluke.ner.analysis.representation_examples import DUMMY_METADATA
 
-from daluke.plot import setup_mpl
-
-setup_mpl()
+mpl.rcParams.update(rc_params)
 
 COLORS = ["grey", "red", "yellow", "blue", "green"]
 NAMES = (DaNE.null_label, *DaNE.labels)
@@ -48,7 +49,7 @@ def pca_explained_plot(location: str):
     ax.plot(range(0, show_k+1), [0, *np.cumsum(lambdas)[:show_k]/np.sum(lambdas)*100], color=tab_colours[0], linestyle="--", marker=".")
     ax.set_xlabel("Number of principal components")
     ax.set_ylabel("Data variance explained [%]")
-    ax.set_title("PCA on DaLUKE contextualized entity representations for DaNE")
+    ax.set_title("PCA on DaLUKE Representations for DaNE")
     ax.set_ylim(bottom=0, top=110)
 
     plt.grid()
@@ -75,7 +76,7 @@ def pca_matrix_plot(location: str):
     for ax in remaining_axes:
         ax.set_axis_off()
     fig.legend(*_get_h_l(only_pos), "center right", prop=dict(size=35))
-    fig.suptitle("PCA space of DaLUKE contextualized entity representations for DaNE", size="xx-large")
+    fig.suptitle("PCA Space of DaLUKE Representations for DaNE", size="xx-large")
     plt.tight_layout()
     plt.savefig(os.path.join(location, "geometry-plots", "pca_matrix.png"))
     plt.close()
@@ -86,7 +87,7 @@ def umap_plot(location: str):
     _, ax = plt.subplots(figsize=figsize_std)
     _scatter_transformed(res.umap_transformed[:, 0], res.umap_transformed[:, 1], res.labels[:len(res.umap_transformed)], ax)
     ax.legend(*_get_h_l(only_pos), loc="lower left")
-    ax.set_title("UMAP space of DaLUKE contextualized entity representations for DaNE")
+    ax.set_title("UMAP Space of DaLUKE Representations for DaNE")
 
     plt.tight_layout()
     plt.savefig(os.path.join(location, "geometry-plots", "umap.png"))
@@ -98,7 +99,7 @@ def tsne_plot(location: str):
     _, ax = plt.subplots(figsize=figsize_std)
     _scatter_transformed(res.tsne_transformed[:, 0], res.tsne_transformed[:, 1], res.labels[:len(res.tsne_transformed)], ax)
     ax.legend(*_get_h_l(only_pos), loc="lower left")
-    ax.set_title("t-SNE space of DaLUKE contextualized entity representations for DaNE")
+    ax.set_title("t-SNE Space of DaLUKE Representations for DaNE")
 
     plt.tight_layout()
     plt.savefig(os.path.join(location, "geometry-plots", "tsne.png"))
@@ -118,7 +119,7 @@ def plots_vs_length(location: str):
             for lenname, lengths in zip(("sequence", "span"), (seq_lengths, span_lengths)):
                 log.debug(f"Plotting {name}{dim} on {lenname}")
                 _, ax = plt.subplots(figsize=figsize_std)
-                ax.set_title(f"{name} Contextualized Entity Representations, Dim. {dim+1} vs. Example {lenname.title()} Length")
+                ax.set_title(f"{name} Representations, Dim. {dim+1} vs. Example {lenname.title()} Length")
                 Z_ = Z[:, dim]
                 _scatter_transformed(lengths[:len(Z_)], Z_, res.labels[:len(Z_)], ax)
                 ax.legend(*_get_h_l(only_pos), loc="lower right")
