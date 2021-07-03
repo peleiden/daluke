@@ -208,7 +208,6 @@ class EntityEmbeddings(nn.Module):
 
     def forward(self, entity_ids: torch.Tensor, pos_ids: torch.Tensor, typ_ids: torch.Tensor=None):
         """
-        Takes
         entity_ids: Vector of length X holding the vocab. ids of entities
         pos_ids: (X, max_position_embeddings) holding the position of entity i in the sequence
         typ_ids: Vector of length (X) holding types of entity tokens (0 or 1)

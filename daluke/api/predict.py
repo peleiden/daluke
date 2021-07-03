@@ -13,7 +13,7 @@ from daluke.ner.model import span_probs_to_preds
 from daluke.pretrain.data.masking import BatchedExamples
 
 
-def predict_mlm(masked_text: str) -> tuple[str, Table]:
+def predict_mlm(masked_text: str, entity_spans: list[tuple[int, 2]]) -> tuple[str, Table]:
     """ Given a text containing [MASK] tokens, returns a text with [MASK] replaced by DaLUKE's best guesses """
     log.debug("Loading model")
     model, metadata, entity_vocab = fetch_model(Models.DaLUKE)
@@ -22,7 +22,7 @@ def predict_mlm(masked_text: str) -> tuple[str, Table]:
     # Make sure there are spaces between [MASK] tokens
     while "[MASK][MASK]" in masked_text:
         masked_text = masked_text.replace("[MASK][MASK]", "[MASK] [MASK]")
-    example = masked_example_from_str(masked_text, list(), entity_vocab, metadata)
+    example = masked_example_from_str(masked_text, entity_spans, entity_vocab, metadata)
     log.debug("Forward passing example")
     word_scores, __ = model(example)
     probs = F.softmax(word_scores, dim=1)

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 import click
 from pelutils import log, Table, Levels
 from pelutils.ds import no_grad
@@ -12,8 +13,12 @@ def cli():
 @cli.command("masked")
 @click.option("--filepath", default="")
 @click.option("--text", default="")
+@click.option("--entity-spans", default="")
 @no_grad
-def masked(filepath: str, text: str):
+def masked(filepath: str, text: str, entity_spans: list[str]):
+    """ Entities are given as 'start1,end1;start2,end2 ...'
+    Ends are optional. If not given, they will be set to start+1
+    Spans are 1-indexed with inclusive ends """
     if not filepath and not text:
         raise ValueError("Either filepath or text must be given")
     elif filepath and text:
@@ -22,7 +27,9 @@ def masked(filepath: str, text: str):
         with open(filepath) as f:
             text = f.read()
 
-    text, top_preds = predict_mlm(text)
+    entity_spans = [(int(x.split(",")[0])-1, int(x.split(",")[1])) if "," in x else (int(x)-1, int(x)) for x in entity_spans.split(";") if x]
+
+    text, top_preds = predict_mlm(text, entity_spans)
     log("The top 5 predictions with likelihoods for each [MASK] were", top_preds)
     log("DaLUKE's best predictions were", text)
 
