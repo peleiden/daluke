@@ -22,7 +22,7 @@ For an explanation of the model, see our [bachelor's thesis](https://peleiden.gi
 
 ## Usage
 ### Inference on simple NER or MLM examples
-```
+```bash
 daluke ner --text "Thomas Delaney fører Danmark til sejr ved EM i fodbold."
 daluke masked --text "Slutresultatet af kampen mellem Danmark og Rusland bliver [MASK]-[MASK]."
 ```
@@ -34,7 +34,7 @@ This part shows how to recreate the entire DaLUKE training pipeline from dataset
 This guide is designed to be run in a bash shell.
 If you use Windows, you will probably have to make some modifications to the shell scripts used.
 
-```
+```bash
 # Download forked luke submodule
 git submodule update --init --recursive
 # Install requirements
