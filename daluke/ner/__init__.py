@@ -31,7 +31,7 @@ def load_model(
     dataset: NERDataset,
     metadata: dict[str, Any],
     device: torch.device,
-    bert_attention: bool,
+    bert_attention: bool=False,
     entity_embedding_size: int=None,
     dropout: float=None,
 ) -> NERDaLUKE:

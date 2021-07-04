@@ -32,15 +32,16 @@ class GeometryResults(DataStorage):
 
     subfolder = "geometry"
 
-def collect_representations(modelpath: str, device: torch.device, target_device: torch.device, only_positives: bool) -> tuple[np.ndarray, np.ndarray, list[dict[str, int | list[tuple[int, int]]]]]:
+def collect_representations(modelpath: str, device: torch.device, target_device: torch.device, only_positives: bool, fine_tuned: bool) -> tuple[np.ndarray, np.ndarray, list[dict[str, int | list[tuple[int, int]]]]]:
     entity_vocab, metadata, state_dict = load_from_archive(modelpath)
-    state_dict, ent_embed_size = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"])
     log("Loading dataset")
     # Note: We dont fill out dict as we dont allow changing max-entities and max-entity-span here. If this results in an error for any dataset, we must change this.
     dataset = load_dataset(dict(dataset="DaNE"), metadata, device)
     dataloader = dataset.build(Split.TRAIN, FP_SIZE, shuffle=False)
     log("Loading model")
-    model = load_model(state_dict, dataset, metadata, device, entity_embedding_size=ent_embed_size)
+    if not fine_tuned:
+        state_dict, ent_embed_size = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"])
+    model = load_model(state_dict, dataset, metadata, device, entity_embedding_size=ent_embed_size if not fine_tuned else None)
     model.eval()
 
     log("Forward passing examples")
@@ -106,7 +107,8 @@ def tsne(A: np.ndarray, perplexity: float) -> np.ndarray:
 @click.option("--umap-neighbours", default=1000, type=int)
 @click.option("--umap-min-dist", default=0.001, type=float)
 @click.option("--only-positives", is_flag=True)
-def main(path: str, model: str, n_components: int, reducer_subsample: Optional[int], tsne_perplexity: float, umap_neighbours: int, umap_min_dist: float, only_positives: bool):
+@click.option("--fine-tuned", is_flag=True)
+def main(path: str, model: str, n_components: int, reducer_subsample: Optional[int], tsne_perplexity: float, umap_neighbours: int, umap_min_dist: float, only_positives: bool, fine_tuned: bool):
     set_seeds()
     log.configure(
         os.path.join(path, "geometry-analysis.log"), "daLUKE embedding geometry analysis",
@@ -114,7 +116,7 @@ def main(path: str, model: str, n_components: int, reducer_subsample: Optional[i
     )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     with torch.no_grad():
-        representations, labels, content = collect_representations(model, device, torch.device("cpu"), only_positives)
+        representations, labels, content = collect_representations(model, device, torch.device("cpu"), only_positives, fine_tuned)
     log(f"Acquired representations of shape {representations.shape}")
     log("Performing principal component analysis")
     pca_transformed, principal_components = pca(representations, n_components)
