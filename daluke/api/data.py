@@ -1,15 +1,15 @@
 from __future__ import annotations
-from typing import Any
 from itertools import chain
 
 import numpy as np
 import torch
 from pelutils import log
-from transformers import AutoTokenizer, PreTrainedTokenizerFast
+from transformers import PreTrainedTokenizerFast
 
 from daluke.data import Words, Entities, Example, BatchedExamples, get_special_ids
 from daluke.pretrain.data import MaskedBatchedExamples, ENTITY_UNK_TOKEN
 from daluke.ner.data import NERBatchedExamples, NERDataset, Split, Sequences
+from daluke.api.automodels import AutoDaLUKE
 
 
 def get_subword_ids(text: str, tokenizer: PreTrainedTokenizerFast) -> list[list[int]]:
@@ -52,25 +52,23 @@ def get_entity_subword_spans(subword_ids: list[list[int]], entity_spans:list[tup
 def example_from_str(
         text:             str,
         entity_spans:     list[tuple[int, int]],
-        entity_vocab:     dict[str, dict[str, int]],
-        metadata:         dict[str, Any],
+        daluke:           AutoDaLUKE
     ) -> BatchedExamples:
-    tokenizer = AutoTokenizer.from_pretrained(metadata["base-model"])
-    subword_ids = get_subword_ids(text, tokenizer)
-    sep, cls_, pad = get_special_ids(tokenizer)
+    subword_ids = get_subword_ids(text, daluke.tokenizer)
+    sep, cls_, pad = get_special_ids(daluke.tokenizer)
 
     w = Words.build(
         ids     = get_word_id_tensor(subword_ids),
-        max_len = metadata["max-seq-length"],
+        max_len = daluke.metadata["max-seq-length"],
         sep_id  = sep,
         cls_id  = cls_,
         pad_id  = pad,
     )
     e = Entities.build(
-        ids             = get_entity_id_tensor(text, entity_spans, entity_vocab),
+        ids             = get_entity_id_tensor(text, entity_spans, daluke.entity_vocab),
         spans           = get_entity_subword_spans(subword_ids, entity_spans),
-        max_entities    = metadata["max-entities"],
-        max_entity_span = metadata["max-entity-span"],
+        max_entities    = daluke.metadata["max-entities"],
+        max_entity_span = daluke.metadata["max-entity-span"],
     )
     return BatchedExamples.build([
             Example(
@@ -84,14 +82,12 @@ def example_from_str(
 def masked_example_from_str(
         text:             str,
         entity_spans:     list[tuple[int, int]],
-        entity_vocab:     dict[str, dict[str, int]],
-        metadata:         dict[str, Any],
+        daluke:           AutoDaLUKE
     ) -> MaskedBatchedExamples:
     batched_examples = example_from_str(
-        text, entity_spans, entity_vocab, metadata,
+        text, entity_spans, daluke,
     )
-    tokenizer = AutoTokenizer.from_pretrained(metadata["base-model"])
-    mask_token = tokenizer.convert_tokens_to_ids(tokenizer.mask_token)
+    mask_token = daluke.tokenizer.convert_tokens_to_ids(daluke.tokenizer.mask_token)
     wordmask = torch.zeros_like(batched_examples.words.ids, dtype=torch.bool, device=batched_examples.words.ids.device)
     wordmask[batched_examples.words.ids == mask_token] = True
 
@@ -122,18 +118,15 @@ class SingletonNERData(NERDataset):
         self.loaded = True
 
 def ner_example_from_str(
-        text:       str,
-        metadata:   dict[str, Any],
+        text:      str,
+        daluke:    AutoDaLUKE
     ) -> NERBatchedExamples:
-    """
-
-    """
     data = SingletonNERData(
-        base_model      = metadata["base-model"],
-        max_seq_length  = metadata["max-seq-length"],
-        max_entities    = metadata["max-entities"],
-        max_entity_span = metadata["max-entity-span"],
-        device          = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+        base_model      = daluke.metadata["base-model"],
+        max_seq_length  = daluke.metadata["max-seq-length"],
+        max_entities    = daluke.metadata["max-entities"],
+        max_entity_span = daluke.metadata["max-entity-span"],
+        device          = torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
     )
     data.load(text)
     # Extract example from singleton dataloader

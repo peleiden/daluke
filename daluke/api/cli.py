@@ -4,6 +4,7 @@ import click
 from pelutils import log, Table, Levels
 from pelutils.ds import no_grad
 
+from daluke.api.automodels import AutoMLMDaLUKE, AutoNERDaLUKE
 from daluke.api.predict import predict_mlm, predict_ner
 
 @click.group()
@@ -29,7 +30,10 @@ def masked(filepath: str, text: str, entity_spans: list[str]):
 
     entity_spans = [(int(x.split(",")[0])-1, int(x.split(",")[1])) if "," in x else (int(x)-1, int(x)) for x in entity_spans.split(";") if x]
 
-    text, top_preds = predict_mlm(text, entity_spans)
+    log.debug("Loading model")
+    daluke_mlm = AutoMLMDaLUKE()
+
+    text, top_preds = predict_mlm(text, entity_spans, daluke_mlm)
     log("The top 5 predictions with likelihoods for each [MASK] were", top_preds)
     log("DaLUKE's best predictions were", text)
 
@@ -46,7 +50,10 @@ def ner(filepath: str, text: str):
         with open(filepath) as f:
             text = f.read()
 
-    preds = predict_ner(text)
+    log.debug("Loading model")
+    daluke_ner = AutoNERDaLUKE()
+
+    preds = predict_ner(text, daluke_ner)
     t = Table()
     t.add_header(["Word", "IOB NER Prediction"])
     for word, pred in zip(text.split(), preds):
