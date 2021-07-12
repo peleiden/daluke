@@ -69,7 +69,7 @@ class NERDaLUKE(DaLUKE):
 
         return torch.gather(word_representations, -2, ent_start_pos), torch.gather(word_representations, -2, ent_end_pos)
 
-def span_probs_to_preds(span_probs: dict[tuple[int], np.ndarray], seq_len: int, dataset: NERDataset) -> list[str]:
+def span_probs_to_preds(span_probs: dict[tuple[int, int], np.ndarray], seq_len: int, dataset: NERDataset) -> list[str]:
     positives = list()
     for span, probs in span_probs.items():
         max_idx = probs.argmax()

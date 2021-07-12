@@ -2,10 +2,8 @@ from __future__ import annotations
 import enum
 import os
 import pathlib
-import shutil
 import wget
 
-import click
 import torch
 from pelutils import log, Levels
 from transformers import AutoConfig
@@ -82,11 +80,3 @@ def fetch_model(model: Models, force_download=False) -> tuple[DaLUKE, dict, dict
     net.eval()
 
     return net.to(_device), metadata, entity_vocab
-
-
-if __name__ == "__main__":
-    with log.log_errors:
-        log.configure()
-        model = Models.DaLUKE
-        fetch_model(model)
-
