@@ -54,11 +54,10 @@ def fetch_model(model: Models, force_download=False) -> tuple[DaLUKE, dict, dict
     # Read model state dict along with metadata and entity vocab
     # This is done in a seperate working directory
     log.debug("Loading entity vocab, metadata, and state dict")
-    with log.level(len(Levels)+1):
-        cwd = os.getcwd()
-        os.chdir(_download_dir)
-        entity_vocab, metadata, state_dict = load_from_archive(_model_files[model])
-        os.chdir(cwd)
+    cwd = os.getcwd()
+    os.chdir(_download_dir)
+    entity_vocab, metadata, state_dict = load_from_archive(_model_files[model])
+    os.chdir(cwd)
 
     # Load model
     log.debug("Creating model")
