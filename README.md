@@ -4,7 +4,7 @@
 
 [![pytest](https://github.com/peleiden/daLUKE/actions/workflows/pytest.yml/badge.svg?branch=master)](https://github.com/peleiden/daLUKE/actions/workflows/pytest.yml)
 
-Implementation of the knowledge-enhanced transformer [LUKE](https://github.com/studio-ousia/luke) pretrained on the Danish Wikipedia and evaluated on named entity recognition.
+Implementation of the knowledge-enhanced transformer [LUKE](https://github.com/studio-ousia/luke) pretrained on the Danish Wikipedia and evaluated on named entity recognition (NER).
 
 ## Installation
 
@@ -21,7 +21,26 @@ Python 3.8 or newer is required.
 For an explanation of the model, see our [bachelor's thesis](https://peleiden.github.io/bug-free-guacamole/main.pdf) or the original [LUKE paper](https://www.aclweb.org/anthology/2020.emnlp-main.523/).
 
 ## Usage
-### Inference on simple NER or MLM examples
+### Inference on simple NER or masked language modeling (MLM) examples
+
+#### Python
+For NER
+```py
+from daluke import AutoNERDaLUKE, predict_ner
+
+daluke = AutoNERDaLUKE()
+predict_ner("Det Kgl. Bibliotek forvalter Danmarks største tekstsamling, der strækker sig fra middelalderen til det nyeste litteratur.", daluke)
+```
+
+```py
+from daluke import AutoMLMDaLUKE, predict_mlm
+
+daluke = AutoMLMDaLUKE()
+# Empty list => No entity annotations in the string
+predict_mlm("Professor i astrofysik, [MASK] [MASK], udtaler til avisen, at den nye måling sandsynligvis ikke er en fejl.", list(), daluke)
+```
+
+#### CLI
 ```bash
 daluke ner --text "Thomas Delaney fører Danmark til sejr ved EM i fodbold."
 daluke masked --text "Slutresultatet af kampen mellem Danmark og Rusland bliver [MASK]-[MASK]."
