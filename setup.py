@@ -23,7 +23,7 @@ with open('optional-requirements.txt') as f:
 
 setup_args = dict(
     name                          = "daluke",
-    version                       = "0.0.3",
+    version                       = "0.0.4",
     packages                      = find_packages(),
     author                        = "Søren Winkel Holm, Asger Laurits Schultz",
     author_email                  = "s18911@dtu.dk, s183912@dtu.dk",
