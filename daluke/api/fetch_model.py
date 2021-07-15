@@ -5,7 +5,6 @@ import pathlib
 import wget
 
 import torch
-from pelutils import log, Levels
 from transformers import AutoConfig
 
 from daluke.serialize import load_from_archive
@@ -41,26 +40,21 @@ def fetch_model(model: Models, force_download=False) -> tuple[DaLUKE, dict, dict
     # Make sure .tar.gz model file exists
     os.makedirs(_download_dir, exist_ok=True)
     if should_download(model) or force_download:
-        log.debug("Downloading %s to %s" % (model, _model_files[model]))
         # Create status file
         pathlib.Path(_status_files[model]).touch()
         # Download
         wget.download(model.value, out=_model_files[model])
         # Remove status file
         os.remove(_status_files[model])
-    else:
-        log.debug("Using cached model %s at %s" % (model, _model_files[model]))
 
     # Read model state dict along with metadata and entity vocab
     # This is done in a seperate working directory
-    log.debug("Loading entity vocab, metadata, and state dict")
     cwd = os.getcwd()
     os.chdir(_download_dir)
     entity_vocab, metadata, state_dict = load_from_archive(_model_files[model])
     os.chdir(cwd)
 
     # Load model
-    log.debug("Creating model")
     bert_config = AutoConfig.from_pretrained(metadata["base-model"])
     if model == Models.DaLUKE:
         net = PretrainTaskDaLUKE(bert_config, len(entity_vocab), get_ent_embed_size(state_dict))

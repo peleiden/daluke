@@ -7,6 +7,9 @@ from pelutils.ds import no_grad
 from daluke.api.automodels import AutoMLMDaLUKE, AutoNERDaLUKE
 from daluke.api.predict import predict_mlm, predict_ner
 
+def _no_log():
+    return log.level(max(Levels)+1)
+
 @click.group()
 def cli():
     pass
@@ -28,12 +31,16 @@ def masked(filepath: str, text: str, entity_spans: list[str]):
         with open(filepath) as f:
             text = f.read()
 
-    entity_spans = [(int(x.split(",")[0])-1, int(x.split(",")[1])) if "," in x else (int(x)-1, int(x)) for x in entity_spans.split(";") if x]
+    entity_spans = [
+        (int(x.split(",")[0])-1, int(x.split(",")[1])) if "," in x else (int(x)-1, int(x))
+        for x in entity_spans.split(";") if x
+    ]
 
-    log.debug("Loading model")
-    daluke_mlm = AutoMLMDaLUKE()
+    log.debug("Loading model and predicting")
+    with _no_log():
+        daluke_mlm = AutoMLMDaLUKE()
+        text, top_preds = predict_mlm(text, entity_spans, daluke_mlm)
 
-    text, top_preds = predict_mlm(text, entity_spans, daluke_mlm)
     log("The top 5 predictions with likelihoods for each [MASK] were", top_preds)
     log("DaLUKE's best predictions were", text)
 
@@ -50,10 +57,11 @@ def ner(filepath: str, text: str):
         with open(filepath) as f:
             text = f.read()
 
-    log.debug("Loading model")
-    daluke_ner = AutoNERDaLUKE()
+    log.debug("Loading model and predicting")
+    with _no_log():
+        daluke_ner = AutoNERDaLUKE()
+        preds = predict_ner(text, daluke_ner)
 
-    preds = predict_ner(text, daluke_ner)
     t = Table()
     t.add_header(["Word", "IOB NER Prediction"])
     for word, pred in zip(text.split(), preds):
@@ -62,8 +70,7 @@ def ner(filepath: str, text: str):
 
 def main():
     log.configure(print_level=Levels.DEBUG)
-    with log.log_errors:
-        cli()
+    cli()
 
 if __name__ == "__main__":
     main()

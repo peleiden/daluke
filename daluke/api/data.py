@@ -1,9 +1,9 @@
 from __future__ import annotations
+import warnings
 from itertools import chain
 
 import numpy as np
 import torch
-from pelutils import log
 from transformers import PreTrainedTokenizerFast
 
 from daluke.data import Words, Entities, Example, BatchedExamples, get_special_ids
@@ -21,7 +21,11 @@ def get_subword_ids(text: str, tokenizer: PreTrainedTokenizerFast) -> list[list[
 def get_word_id_tensor(subword_ids: list[list[int]]) -> torch.IntTensor:
     return torch.IntTensor(list(chain(*subword_ids)))
 
-def get_entity_id_tensor(text: str, entity_spans: list[tuple[int, int]], entity_vocab: dict[str, dict[str, int]]) -> torch.IntTensor:
+def get_entity_id_tensor(
+    text: str,
+    entity_spans: list[tuple[int, int]],
+    entity_vocab: dict[str, dict[str, int]],
+) -> torch.IntTensor:
     """ Maps the given entities to an id in the entity vocab """
     words = text.split()
     ids = list()
@@ -39,7 +43,7 @@ def get_entity_id_tensor(text: str, entity_spans: list[tuple[int, int]], entity_
             entity_vocab.get(entity, entity_vocab[ENTITY_UNK_TOKEN])["id"]
         )
         if ids[-1] == entity_vocab[ENTITY_UNK_TOKEN]["id"]:
-            log.warning("Unknown entity '%s'. Was your span correct?" % entity)
+            warnings.warn("Unknown entity '%s'. Was your span correct?" % entity)
     return torch.IntTensor(ids)
 
 def get_entity_subword_spans(subword_ids: list[list[int]], entity_spans:list[tuple[int, int]]) -> list[tuple[int, int]]:
