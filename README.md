@@ -24,20 +24,24 @@ For an explanation of the model, see our [bachelor's thesis](https://peleiden.gi
 ### Inference on simple NER or masked language modeling (MLM) examples
 
 #### Python
-For NER
+For performing NER predictions
 ```py
 from daluke import AutoNERDaLUKE, predict_ner
 
 daluke = AutoNERDaLUKE()
-predict_ner("Det Kgl. Bibliotek forvalter Danmarks største tekstsamling, der strækker sig fra middelalderen til det nyeste litteratur.", daluke)
+
+document = "Det Kgl. Bibliotek forvalter Danmarks største tekstsamling, der strækker sig fra middelalderen til det nyeste litteratur."
+iob_list = predict_ner(document, daluke)
 ```
 
+For testing MLM predictions
 ```py
 from daluke import AutoMLMDaLUKE, predict_mlm
 
 daluke = AutoMLMDaLUKE()
 # Empty list => No entity annotations in the string
-predict_mlm("Professor i astrofysik, [MASK] [MASK], udtaler til avisen, at den nye måling sandsynligvis ikke er en fejl.", list(), daluke)
+document = "Professor i astrofysik, [MASK] [MASK], udtaler til avisen, at den nye måling sandsynligvis ikke er en fejl."
+best_prediction, table = predict_mlm(document, list(), daluke)
 ```
 
 #### CLI
