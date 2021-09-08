@@ -20,7 +20,7 @@ def run_build_dataset():
 
     log.configure(os.path.join(args.out_dir, "build-dataset.log"), "Build dataset", log_commit=True, print_level=Levels.DEBUG)
 
-    builder = DatasetBuilder(**args.__dict__)
+    builder = DatasetBuilder(**vars(args))
     builder.build()
 
 if __name__ == "__main__":

@@ -3,6 +3,8 @@
 local_*
 *.tmp
 .vscode
+# Danish Gigaword Corpus
+dagw
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

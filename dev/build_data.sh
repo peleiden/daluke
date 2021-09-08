@@ -21,14 +21,9 @@ cd $DATA_PATH
 wget https://dumps.wikimedia.org/dawiki/$WIKIDATE/dawiki-$WIKIDATE-pages-articles.xml.bz2
 cd $DALUKE
 
-echo "PREPROCESSING WIKIDUMP"
-cd $DALUKE
-python3 daluke/pretrain/data/preprocess.py $DATA_PATH/../dawiki-$WIKIDATE-pages-articles.xml.bz2 --func $PREPROCESS
-
-echo "BUILD DUMP DATABASE"
+echo "BUILD TEMPORARY DUMP DATABASE"
 cd $LUKE
-rm -f $DATA_PATH/$DUMP_FILE
-rm -f $DATA_PATH/$DUMP_FILE-lock
+rm -f $DATA_PATH/$DUMP_FILE*
 python3 -m luke.cli build-dump-db\
     $DATA_PATH/../dawiki-$WIKIDATE-pages-articles.xml.$PREPROCESS.bz2\
     $DATA_PATH/$DUMP_FILE
@@ -37,6 +32,21 @@ echo "BUILD ENTITY VOCAB"
 python3 -m luke.cli build-entity-vocab\
     $DATA_PATH/$DUMP_FILE\
     $DATA_PATH/../entity-vocab.jsonl
+
+echo "PREPROCESSING WIKIDUMP"
+cd $DALUKE
+python3 daluke/pretrain/data/preprocess.py\
+    $DATA_PATH/../dawiki-20210901-pages-articles.xml.bz2\
+    --function $PREPROCESS\
+    --entity-vocab-file $DATA_PATH/../entity-vocab.jsonl\
+    --dagw-sections $DATA_PATH/../dagw/sektioner
+
+echo "BUILD DUMP DATABASE"
+cd $LUKE
+rm -f $DATA_PATH/$DUMP_FILE*
+python3 -m luke.cli build-dump-db\
+    $DATA_PATH/../dawiki-20210301-pages-articles.xml.$PREPROCESS.bz2\
+    $DATA_PATH/$DUMP_FILE
 
 echo "BUILD PRETRAINING DATASET"
 cd $DALUKE

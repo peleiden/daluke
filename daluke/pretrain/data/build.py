@@ -6,11 +6,7 @@ import re
 from pelutils import log, TT
 from tqdm import tqdm
 from transformers import AutoTokenizer, RobertaTokenizer
-try:
-    from wikipedia2vec.dump_db import DumpDB
-    wikipedia2vec_available = True
-except ImportError:
-    wikipedia2vec_available = False
+from wikipedia2vec.dump_db import DumpDB
 
 
 from daluke.pretrain.data import ICUSentenceTokenizer, load_entity_vocab, calculate_spans, ignore_title
@@ -36,8 +32,6 @@ class DatasetBuilder:
         min_sentence_length: int,  # Minimum number of tokens a sentence must span to be included
         max_articles:        int | None,
     ):
-        if not wikipedia2vec_available:
-            raise RuntimeError("Pretrain data generation requires installation of the optional requirement `wikipedia2vec`")
         log("Reading dump database at %s" % dump_db_file)
         self.dump_db = DumpDB(dump_db_file)
         log("Building tokeninizer: %s" % tokenizer_name)

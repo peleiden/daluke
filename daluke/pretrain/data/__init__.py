@@ -58,7 +58,7 @@ class ICUSentenceTokenizer:
         return spans
 
 def ignore_title(title: str) -> bool:
-    return any(title.lower().startswith(word + ":") for word in ("billede", "fil", "kategori"))
+    return any(title.lower().startswith(word + ":") for word in ("billede", "fil", "kategori", "wikipedia"))
 
 def load_entity_vocab(vocab_file: str) -> dict[str, dict[str, int]]:
     """ Loads an entity vocab in .jsonl format created by build-entity-vocab
