@@ -6,6 +6,8 @@ TOKENIZER="Maltehb/danish-bert-botxo"
 # xlm-roberta-large-finetuned-conll02-spanish, xlm-roberta-large-finetuned-conll03-english,
 # xlm-roberta-large-finetuned-conll03-german, Maltehb/danish-bert-botxo, etc.
 PREPROCESS=repeat-entities  # default or repeat-entities
+WIKIDATE=20210901
+
 DALUKE="$(dirname "$0")"
 LUKE=$DALUKE/luke
 export PYTHONPATH=$PYTHONPATH:$DALUKE:$LUKE
@@ -16,19 +18,19 @@ mkdir -p $DATA_PATH
 
 echo "DOWNLOADING WIKIDUMP"
 cd $DATA_PATH
-wget https://dumps.wikimedia.org/dawiki/20210301/dawiki-20210301-pages-articles.xml.bz2
+wget https://dumps.wikimedia.org/dawiki/$WIKIDATE/dawiki-$WIKIDATE-pages-articles.xml.bz2
 cd $DALUKE
 
 echo "PREPROCESSING WIKIDUMP"
 cd $DALUKE
-python3 daluke/pretrain/data/preprocess.py $DATA_PATH/../dawiki-20210301-pages-articles.xml.bz2 --func $PREPROCESS
+python3 daluke/pretrain/data/preprocess.py $DATA_PATH/../dawiki-$WIKIDATE-pages-articles.xml.bz2 --func $PREPROCESS
 
 echo "BUILD DUMP DATABASE"
 cd $LUKE
 rm -f $DATA_PATH/$DUMP_FILE
 rm -f $DATA_PATH/$DUMP_FILE-lock
 python3 -m luke.cli build-dump-db\
-    $DATA_PATH/../dawiki-20210301-pages-articles.xml.$PREPROCESS.bz2\
+    $DATA_PATH/../dawiki-$WIKIDATE-pages-articles.xml.$PREPROCESS.bz2\
     $DATA_PATH/$DUMP_FILE
 
 echo "BUILD ENTITY VOCAB"
