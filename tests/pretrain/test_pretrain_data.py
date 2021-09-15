@@ -1,9 +1,9 @@
 import os
-import json
 
 import torch
 from pelutils import MainTest
 
+from daluke import daBERT
 from daluke.data import BatchedExamples
 from daluke.pretrain.data import load_entity_vocab, DataLoader, calculate_spans
 from daluke.pretrain.data.build import DatasetBuilder
@@ -42,7 +42,7 @@ class TestData(MainTest):
             "max-entities": 128,
             "max-entity-span": 30,
             "min-sentence-length": 5,
-            "base-model": "Maltehb/danish-bert-botxo",
+            "base-model": daBERT,
             "tokenizer_class": "BertTokenizerFast",
             "language": "da",
         }

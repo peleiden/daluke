@@ -93,7 +93,6 @@ def calculate_spans(tokens: list[str]) -> list[tuple[int, int]]:
 
 
 # Imported for API availability
-from daluke import daBERT
 from daluke.data import BatchedExamples
 from .loader import DataLoader
 from .masking import MaskedBatchedExamples, mask_ent_batch, mask_word_batch

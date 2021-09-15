@@ -12,6 +12,7 @@ from transformers import AutoConfig, AutoModelForPreTraining
 
 from daluke.pretrain.data import DataLoader
 from daluke.pretrain.data.build import DatasetBuilder
+from daluke import daBERT
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -26,7 +27,7 @@ def word_preds(datadir: str, ff_size: int):
     with open(os.path.join(datadir, DatasetBuilder.metadata_file)) as f:
         metadata = json.load(f)
     log("Loading model")
-    dabert = AutoModelForPreTraining.from_pretrained("Maltehb/danish-bert-botxo").to(device)
+    dabert = AutoModelForPreTraining.from_pretrained(daBERT).to(device)
     log("Loading data")
     dataloader = DataLoader(
         datadir,

@@ -9,6 +9,8 @@ from sklearn.calibration import calibration_curve
 
 from pelutils.logger import log
 from pelutils.ds.plot import figsize_std
+
+from daluke import daBERT
 from daluke.ner import load_dataset
 from daluke.ner.data import Split, DaNE
 from daluke.ner.evaluation import NER_Results, Split
@@ -16,11 +18,10 @@ from daluke.plot import setup_mpl
 
 setup_mpl()
 
-DEFAULT_METADATA = { #TODO: Make this user-customizable
+DEFAULT_METADATA = { # FIXME: Make this user-customizable
     "max-seq-length":  512,
     "max-entities":    128,
     "max-entity-span": 30,
-    "base-model":      "Maltehb/danish-bert-botxo",
 }
 
 COLORS = ["grey", "red", "gold", "blue", "green"]
@@ -52,13 +53,14 @@ def calibration_plot(preds, truths, location):
 
 @click.command()
 @click.argument("location")
-def make_cal_plots(location: str):
+@click.option("base_model", default=daBERT)
+def make_cal_plots(location: str, base_model: str):
     log.configure(os.path.join(location, "calibration-plot.log"))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     results = NER_Results.load(location)
 
     log("Loading data")
-    dataset = load_dataset(dict(dataset="DaNE"), DEFAULT_METADATA, device)
+    dataset = load_dataset(dict(dataset="DaNE"), {**DEFAULT_METADATA, **{"base-model": base_model}}, device)
     dataloader = dataset.build(Split.TEST, 1, shuffle=False)
     log("Fetching probs and labels")
     truths = [dict() for _ in range(len(results.span_probs))]

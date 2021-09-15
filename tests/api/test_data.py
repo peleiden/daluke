@@ -1,6 +1,6 @@
 import torch
 from transformers import AutoTokenizer
-from daluke import example_from_str, masked_example_from_str, ner_example_from_str
+from daluke import example_from_str, masked_example_from_str, ner_example_from_str, daBERT
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -12,7 +12,7 @@ class DummyDaLUKE:
         "max-entities": 128,
         "max-entity-span": 30,
         "min-sentence-length": 5,
-        "base-model": "Maltehb/danish-bert-botxo",
+        "base-model": daBERT,
         "tokenizer-class": "BertTokenizerFast",
         "language": "da"
     }
@@ -23,7 +23,7 @@ class DummyDaLUKE:
     "Danmark": { "id": 3, "count": 27787 },
     "USA": { "id": 4, "count": 25768 },
     }
-    tokenizer = AutoTokenizer.from_pretrained("Maltehb/danish-bert-botxo")
+    tokenizer = AutoTokenizer.from_pretrained(daBERT)
 
 def test_examples_from_str():
     res = example_from_str("Hej med dig, kommer du fra Danmark eller Norge?", [(6, 7)], DummyDaLUKE())

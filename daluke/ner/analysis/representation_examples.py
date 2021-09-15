@@ -12,6 +12,7 @@ from daluke.ner import load_dataset
 from daluke.ner.data import Sequences, Split
 
 from daluke.ner.analysis.representation_geometry import GeometryResults
+from daluke import daBERT
 
 # OF_INTEREST = {
 #     "pca_transformed": 1,
@@ -27,7 +28,9 @@ DUMMY_METADATA = {
     "max-seq-length": None,
     "max-entities": None,
     "max-entity-span": None,
-    "base-model": "Maltehb/danish-bert-botxo",
+    # Here, hardcoding is no problem, as this base-model is never used (.build is never called on the dataset class)
+    # It is just here to avoid errors when the dataset class loads a tokenizer in __init__
+    "base-model": daBERT
 }
 
 def _show_examples(res: GeometryResults, X: np.ndarray, I: np.ndarray, data: Sequences):
