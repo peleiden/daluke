@@ -1,5 +1,8 @@
 # History
 
+## 0.0.5
+    - Added batching in Python API NER forward passing
+
 ## 0.0.4
     - Added a Python API for maintaining a stateful model and performing CWR, MLM and NER predictions
 
