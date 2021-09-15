@@ -1,6 +1,7 @@
 from __future__ import annotations
 import os
 import json
+import random
 import re
 
 from pelutils import log, TT
@@ -27,6 +28,7 @@ class DatasetBuilder:
         tokenizer_name:      str,  # Tokenizer to use, e.g. Maltehb/danish-bert-botxo for Danish BERT
         entity_vocab_file:   str,  # Build by build-entity-vocab
         out_dir:             str,  # Where to put finished dataset. All contents will be removed before saving dataset
+        validation_prob:     float, # Chance of each finished document to be marked as part of validation set
         max_entities:        int,  # Only up to this many entities are included in each sequence
         max_entity_span:     int,  # Maximum number tokens an entity can span before sequence is discarded
         min_sentence_length: int,  # Minimum number of tokens a sentence must span to be included
@@ -50,6 +52,7 @@ class DatasetBuilder:
 
         self.out_dir             = out_dir
         self.max_seq_length      = self.tokenizer.model_max_length
+        self.validation_prob     = validation_prob
         self.max_entities        = max_entities
         self.max_entity_span     = max_entity_span
         self.min_sentence_length = min_sentence_length
@@ -80,13 +83,14 @@ class DatasetBuilder:
             json.dump(self.entity_vocab, ev, indent=2)
 
         log.section("Processing pages")
-        n_seqs, n_ents = 0, 0
+        n_seqs, n_ents, n_vals = 0, 0, 0
         for title in log.tqdm(tqdm(self.target_titles[:self.max_articles])):
             log("Processing %s" % title)
             with TT.profile("Process page"):
-                s, e = self._process_page(title)
+                s, e, v = self._process_page(title)
                 n_seqs += s
                 n_ents += e
+                n_vals += v
 
         # Save metadata
         with open(path := os.path.join(self.out_dir, self.metadata_file), "w") as f:
@@ -94,6 +98,7 @@ class DatasetBuilder:
             json.dump({
                 "number-of-items":     n_seqs,
                 "number-of-entities":  n_ents,
+                "number-of-val-items": n_vals,
                 "max-seq-length":      self.max_seq_length,
                 "max-entities":        self.max_entities,
                 "max-entity-span":     self.max_entity_span,
@@ -175,7 +180,7 @@ class DatasetBuilder:
 
         return sentences
 
-    def _process_page(self, page_title: str) -> int:
+    def _process_page(self, page_title: str) -> tuple[int, int, int]:
         """
         Processes a Wikipedia article and save to self.data_file
         Returns number of sequences
@@ -186,7 +191,7 @@ class DatasetBuilder:
         # Construct features to be saved - word tokens, entities, and entity spans
         words = list()
         links: list[tuple[int, 3]] = list()
-        n_seqs, n_ents = 0, 0
+        n_seqs, n_ents, n_val = 0, 0, 0
         TT.profile("Get features")
         for i, (sent_words, sent_links) in enumerate(sentences):
             links += [(id_, start + len(words), end + len(words)) for id_, start, end in sent_links]
@@ -203,12 +208,16 @@ class DatasetBuilder:
                     assert self.min_sentence_length <= len(word_ids) <= self.max_num_tokens
                     entity_ids = [id_ for id_, _, _ in links]
                     entity_spans = [(start, end) for _, start, end in links]
+                    # Whether to mark doc. as part of validation set
+                    is_validation = random.random() < self.validation_prob
+                    n_val += int(is_validation)
                     features = json.dumps({
-                        "page_title":   page_title,
-                        "word_ids":     word_ids,
-                        "word_spans":   word_spans,
-                        "entity_ids":   entity_ids,
-                        "entity_spans": entity_spans,
+                        "page_title":    page_title,
+                        "word_ids":      word_ids,
+                        "word_spans":    word_spans,
+                        "entity_ids":    entity_ids,
+                        "entity_spans":  entity_spans,
+                        "is_validation": is_validation
                     })
                     with open(os.path.join(self.out_dir, self.data_file), "a") as df, TT.profile("Save features"):
                         df.write(features + "\n")
@@ -216,4 +225,4 @@ class DatasetBuilder:
                 links = list()
         TT.end_profile()
 
-        return n_seqs, n_ents
+        return n_seqs, n_ents, n_val

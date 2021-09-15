@@ -34,7 +34,7 @@ class TestData(MainTest):
         with open(path, "w") as f:
             f.write("\n".join([
                 '{ "word_ids": [32, 59, 3], "word_spans": [[0, 2], [2, 3], [5, 7]], "entity_ids": [5], "entity_spans": [[0, 3]] }',
-                '{ "word_ids": [42, 11], "word_spans": [[0, 1], [1, 2]], "entity_ids": [], "entity_spans": [] }',
+                '{ "word_ids": [42, 11], "word_spans": [[0, 1], [1, 2]], "entity_ids": [], "entity_spans": [], "is_validation": true }',
             ]))
         metadata = {
             "number_of_items": 2,
@@ -56,14 +56,23 @@ class TestData(MainTest):
             word_randword_prob = 0.1,
             ent_mask_prob      = 0.1,
         )
-        assert len(dl.examples) == 2
-        assert torch.all(dl.examples[1].entities.ids == 0)
-        loader = dl.get_dataloader(1, torch.utils.data.RandomSampler(dl.examples))
+        assert len(dl) == 2
+        assert len(dl.train_examples) == 1
+        assert len(dl.val_examples) == 1
+        assert torch.all(dl.val_examples[0].entities.ids == 0)
+        train_loader = dl.get_dataloader(1, torch.utils.data.RandomSampler(dl.train_examples))
         i = 0
-        for batch in loader:
+        for batch in train_loader:
             i += 1
             assert isinstance(batch, BatchedExamples)
-        assert i == 2
+        assert i == 1
+        val_loader = dl.get_dataloader(1, torch.utils.data.RandomSampler(dl.train_examples), validation=True)
+        i = 0
+        for batch in val_loader:
+            i += 1
+            assert isinstance(batch, BatchedExamples)
+        assert i == 1
+
 
     def test_word_spans(self):
         tokens = ["jeg", "hed", "##der", "kaj", "ii", "d", ".", "Sto", "##re"]

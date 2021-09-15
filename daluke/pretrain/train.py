@@ -19,7 +19,7 @@ from transformers import AutoConfig, AutoModelForPreTraining, AdamW, get_polynom
 from pelutils import DataStorage, thousand_seps, TT
 from pelutils.logger import log, Levels
 
-from .data import DataLoader, load_entity_vocab
+from .data import DataLoader
 from .data.build import DatasetBuilder
 from .model import PretrainTaskDaLUKE, BertAttentionPretrainTaskDaLUKE, load_base_model_weights
 from ..model import all_params
@@ -231,7 +231,7 @@ def train(
         params.word_randword_prob,
         params.ent_mask_prob,
     )
-    sampler = (DistributedSampler if is_distributed else RandomSampler)(data.examples)
+    sampler = (DistributedSampler if is_distributed else RandomSampler)(data.train_examples)
     log("Built %i examples" % len(data))
 
     loader = data.get_dataloader(params.ff_size, sampler)

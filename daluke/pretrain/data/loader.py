@@ -24,6 +24,7 @@ class DataLoader:
         word_unmask_prob:   float,
         word_randword_prob: float,
         ent_mask_prob:      float,
+        only_load_validation = False,
     ):
         """
         Loads a generated json dataset prepared by the preprocessing pipeline
@@ -41,6 +42,7 @@ class DataLoader:
         self.word_unmask_prob = word_unmask_prob
         self.word_randword_prob = word_randword_prob
         self.ent_mask_prob = ent_mask_prob
+        self.only_load_validation = only_load_validation
 
         self.tokenizer = AutoTokenizer.from_pretrained(metadata["base-model"])
         self.sep_id, self.cls_id, self.pad_id = get_special_ids(self.tokenizer)
@@ -53,15 +55,19 @@ class DataLoader:
                 (self.tokenizer.convert_tokens_to_ids(self.tokenizer.unk_token)+1, self.tokenizer.vocab_size-1)
 
         with TT.profile("Building examples"):
-            self.examples: list[Example] = self.build_examples()
+            self.train_examples, self.val_examples = self.build_examples()
 
     def __len__(self):
-        return len(self.examples)
+        return len(self.train_examples) + len(self.val_examples)
 
-    def build_examples(self) -> list[Example]:
-        examples = list()
+    def build_examples(self) -> tuple[list[Example], list[Example]]:
+        train_examples, val_examples = list(), list()
         with open(os.path.join(self.data_dir, DatasetBuilder.data_file)) as df:
             for seq_data in load_jsonl(df):
+                # Backwards compatible to time before validation
+                is_validation = seq_data.get("is_validation", False)
+                if self.only_load_validation and not is_validation:
+                    continue
                 try:
                     # Keep only entities in filtered entity vocab
                     seq_data["entity_ids"], seq_data["entity_spans"] = zip(
@@ -72,29 +78,31 @@ class DataLoader:
                     seq_data["entity_ids"] = list()
                     seq_data["entity_spans"] = list()
 
-                examples.append(
-                    Example(
-                        words = Words.build(
-                            torch.IntTensor(seq_data["word_ids"]),
-                            seq_data["word_spans"],
-                            max_len = self.max_sentence_len,
-                            sep_id  = self.sep_id,
-                            cls_id  = self.cls_id,
-                            pad_id  = self.pad_id,
-                        ),
-                        entities = Entities.build(
-                            torch.IntTensor(seq_data["entity_ids"]),
-                            list(seq_data["entity_spans"]),
-                            max_entities    = self.max_entities,
-                            max_entity_span = self.max_entity_span,
-                        ),
-                    )
+                ex =  Example(
+                    words = Words.build(
+                        torch.IntTensor(seq_data["word_ids"]),
+                        seq_data["word_spans"],
+                        max_len = self.max_sentence_len,
+                        sep_id  = self.sep_id,
+                        cls_id  = self.cls_id,
+                        pad_id  = self.pad_id,
+                    ),
+                    entities = Entities.build(
+                        torch.IntTensor(seq_data["entity_ids"]),
+                        list(seq_data["entity_spans"]),
+                        max_entities    = self.max_entities,
+                        max_entity_span = self.max_entity_span,
+                    ),
                 )
-        return examples
+                if is_validation:
+                    val_examples.append(ex)
+                else:
+                    train_examples.append(ex)
+        return train_examples, val_examples
 
-    def get_dataloader(self, batch_size: int, sampler: torch.utils.data.Sampler) -> DataLoader:
+    def get_dataloader(self, batch_size: int, sampler: torch.utils.data.Sampler, validation=False) -> DataLoader:
         return torch.utils.data.DataLoader(
-            list(enumerate(self.examples)),
+            list(enumerate(self.val_examples if validation else self.train_examples)),
             batch_size  = batch_size,
             sampler     = sampler,
             collate_fn  = self.collate,
