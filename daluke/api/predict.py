@@ -39,11 +39,9 @@ def predict_ner(text: T, daluke: AutoNERDaLUKE, batch_size: int=DEFAULT_NER_BATC
     """
     Given a text (or a list of texts), NER classes are predicted.
     """
-    log.debug("Building examples")
     single_example = isinstance(text, str)
     texts: list[str] = [text] if single_example else text
     prepared_data = ner_examples_from_str(texts, daluke, batch_size=batch_size)
-    log.debug("Forward passing")
     if single_example:
         return span_probs_to_preds(daluke.predict(prepared_data[0]), len(text.split()), SingletonNERData)
 
