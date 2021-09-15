@@ -1,10 +1,8 @@
 from __future__ import annotations
 import bz2
-import multiprocessing as mp
 import os
-import re
+import re as reee
 import shutil
-import tempfile
 from typing import Generator
 
 import click
@@ -14,9 +12,17 @@ from tqdm.contrib.concurrent import process_map
 
 from daluke.pretrain.data import load_entity_vocab, ignore_title
 
+_xml_special_characters = {
+    "\"": "quot",
+    "&": "amp",
+    "'": "apos",
+    "<": "lt",
+    ">": "gt"
+}
+_special_character_regex = reee.compile(r"&[a-zA-Z0-9#]+\s{0,1};")
+_whitespace_regex = reee.compile(r"\s+")
+_illegal_characters_regex = reee.compile(u"[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]")
 
-MIN_ENT_LEN = 3
-MAX_ENT_LEN = 30
 _file_replacements = {
     ":": "__COLON__",
     "/": "__SLASH__",
@@ -26,16 +32,38 @@ def fix_filename(fname):
         fname = fname.replace(fro, to)
     return fname
 
+def replace_special_characters_and_whitespace(fname: str):
+    """ Replaces HTML special characters and any consecutive whitespace with spaces
+    The special wikipedia markup for titles with ''' is also removed
+    Finally, XML special characters are replaced with the ambersand syntax """
+    with open(fname) as f:
+        article = f.read()
+
+    article = reee.sub(_whitespace_regex, " ", article)
+    article = reee.sub(_illegal_characters_regex, "", article)
+
+    if fname.endswith(".wiki"):
+        # Wikipedia is already in XML format, so only change markup, so title can be recognized as entity
+        article = article.replace("'''", "")
+    else:
+        article = reee.sub(_special_character_regex, " ", article)
+        for char, name in _xml_special_characters.items():
+            article = article.replace(char, f"&{name};")
+
+    article = reee.sub(_whitespace_regex, " ", article)
+    with open(fname, "w") as f:
+        f.write(article)
+
 def default(_):
     pass
 
 def repeat_entities(args):
     fname: str = args[0]
     entity_vocab: set[str] = args[1]
+    min_ent_len, max_ent_len = args[2], args[3]
 
     with open(fname) as f:
-        article = " ".join(f.read().split())
-        article = article.replace("'''", "")
+        article = f.read()
 
     space_indices = (i for i, c in enumerate(article) if c == " ")
 
@@ -43,7 +71,7 @@ def repeat_entities(args):
     s = ""
     while i < len(article):
         # Check if already annotated - this happens in the wikipedia dataset
-        if article[i:i+2] == "[[" and fname.endswith("wiki"):
+        if article[i:i+2] == "[[" and fname.endswith(".wiki"):
             try:
                 # Skip the rest of the annotation
                 end_index = article.index("]]", i+2)
@@ -55,19 +83,23 @@ def repeat_entities(args):
                 break
         else:
             # Check if any entity match. Casing is ignored
-            for j in range(MAX_ENT_LEN, MIN_ENT_LEN-1, -1):
+            for j in range(max_ent_len, min_ent_len-1, -1):
                 if article[i:i+j].lower() in entity_vocab:
                     s += f"[[{article[i:i+j]}]]"
                     i += j
-            else:
-                s += article[i:i+MAX_ENT_LEN]
+                    break
 
         # Jump to next space
+        start_i = i
         next_space_index = next(space_indices, -1)
-        while i < next_space_index:
+        while i > next_space_index and next_space_index != -1:
             next_space_index = next(space_indices, -1)
-        if i == -1:
+        i = next_space_index + 1
+        if i == 0:
+            s += article[start_i:]
             break
+        else:
+            s += article[start_i:i]
 
     with open(fname, "w") as f:
         f.write(s)
@@ -76,6 +108,10 @@ PREPROCESS_FUNCS = {
     "default": default,
     "repeat-entities": repeat_entities,
 }
+
+def func(args):
+    replace_special_characters_and_whitespace(args[1])
+    PREPROCESS_FUNCS[args[0]](args[1:])
 
 def _get_lineblocks(filepath: str) -> Generator[tuple[bool, str, str | None], None, None]:
 
@@ -110,14 +146,25 @@ def _get_dagw_files(path: str, ignore_sections: set[str]={"wiki"}) -> Generator[
     for root, __, files in os.walk(path):
         if os.path.split(root)[-1] in ignore_sections:
             continue
-        yield from (os.path.join(root, f) for f in files if re.fullmatch(r"[a-zA-Z]+_[0-9]+", f))
+        yield from (os.path.join(root, f) for f in files if reee.fullmatch(r"[a-zA-Z]+_[0-9]+", f))
 
 @click.command()
 @click.argument("dump-db-file", type=click.Path(exists=True, dir_okay=False))
-@click.option("--func", default="default")
+@click.option("--function", default="default")
 @click.option("--entity-vocab-file", type=click.Path(exists=True, dir_okay=False), default=None)
 @click.option("--dagw-sections", type=click.Path(exists=True, file_okay=False), default=None)
-def preprocess(dump_db_file: str, func: str, entity_vocab_file: str | None, dagw_sections: str | None):
+@click.option("--min-entity-length", type=int, default=5)
+@click.option("--max-entity-length", type=int, default=48)
+@click.option("--max-articles", type=int, default=None)
+def preprocess(
+    dump_db_file: str,
+    function: str,
+    entity_vocab_file: str | None,
+    dagw_sections: str | None,
+    min_entity_length: int,
+    max_entity_length: int,
+    max_articles: int | None,
+):
     if not entity_vocab_file:
         raise RuntimeError("entity-vocab-file must be given")
 
@@ -130,7 +177,7 @@ def preprocess(dump_db_file: str, func: str, entity_vocab_file: str | None, dagw
     log.section("Collecting data")
     log(
         "Wikidump path: %s" % dump_db_file,
-        "Function:      %s" % func,
+        "Function:      %s" % function,
     )
 
     log("Loading entity vocab")
@@ -145,6 +192,8 @@ def preprocess(dump_db_file: str, func: str, entity_vocab_file: str | None, dagw
     tmpdir = "local_tmpdir"
     os.makedirs(tmpdir, exist_ok=True)
     log("Saving all articles to temporary directory %s" % tmpdir)
+    # tempdir is not used, as the temporary files can take up more space than what temporary
+    # directories usually allow
     for dagw_file in tqdm(dagw_files):
         shutil.copy2(dagw_file, os.path.join(tmpdir, fix_filename(os.path.split(dagw_file)[-1])))
     log("Saving Wikipedia files to temporary directory")
@@ -155,42 +204,48 @@ def preprocess(dump_db_file: str, func: str, entity_vocab_file: str | None, dagw
             with open(os.path.join(tmpdir, fix_filename(title)[:100]+".wiki"), "w") as f:
                 f.write(text[text_start:text_end])
 
-    files = [os.path.join(tmpdir, x) for x in os.listdir(tmpdir)]
+    files = [os.path.join(tmpdir, x) for x in os.listdir(tmpdir)[:max_articles]]
     log("Saved a total of %i articles to %s" % (len(files), tmpdir))
 
     log.section("Beginning preprocessing")
-    func = PREPROCESS_FUNCS[func]
-    log("Using function '%s'" % func.__name__)
-    process_map(func, [(f, entity_vocab) for f in files], max_workers=os.cpu_count(), chunksize=1024)
+    process_map(
+        func,
+        [(function, f, entity_vocab, min_entity_length, max_entity_length) for f in files],
+        max_workers=os.cpu_count(),
+        chunksize=1024,
+    )
 
-    dump_file = os.path.splitext(dump_db_file)[0] + ".%s.bz2" % func
-    log.section("Saving preprocessed files to %s" % dump_file)
+    dump_file = os.path.splitext(dump_db_file)[0] + ".%s.bz2" % function
+    log.info("Saving preprocessed files to %s" % dump_file)
     with bz2.BZ2File(dump_file, "w") as dump:
         with bz2.BZ2File(dump_db_file) as old_dump:
             line = b""
-            while not line.strip().startswith("<page>"):
+            while not line.strip().startswith(b"<page>"):
                 dump.write(line)
                 line = old_dump.readline()
-        for i, fname in tqdm(enumerate(files)):
+        for i, fname in tqdm(enumerate(files), total=len(files)):
             with open(fname) as f:
-                text = f.read().encode()
-            dump.write("""
-                <page>
-                    <title>{title}</title>
-                    <id>{id}</id>
-                    <revision>
-                        <text bytes="{bytes}" xml:space="preserve">{text}</text>
-                    </revision>
-                </page>""".format(
-                    title = fname[:-4] if fname.endswith(".wiki") else fname,
-                    id    = i+1,
-                    bytes = len(text),
-                    text  = text,
-                )
+                text = f.read()
+            s = """
+            <page>
+                <title>{title}</title>
+                <id>{id}</id>
+                <revision>
+                    <text bytes="{bytes}" xml:space="preserve">{text}</text>
+                </revision>
+            </page>""".format(
+                title = fname[:-4] if fname.endswith(".wiki") else fname,
+                id    = i+1,
+                bytes = len(text),
+                text  = text,
             )
+            if i == 0:
+                s = s[1:]
+            dump.write(s.encode("utf-8"))
         dump.write(b"\n</mediawiki>")
 
-    # shutil.rmtree(tmpdir)
+    log.info("Removing temporary files")
+    shutil.rmtree(tmpdir)
 
 if __name__ == "__main__":
     with log.log_errors:
