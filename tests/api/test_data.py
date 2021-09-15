@@ -1,6 +1,6 @@
 import torch
 from transformers import AutoTokenizer
-from daluke import example_from_str, masked_example_from_str, ner_example_from_str, daBERT
+from daluke import example_from_str, masked_example_from_str, ner_examples_from_str, daBERT
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -48,7 +48,12 @@ def test_masked_example_from_str():
     assert torch.all(res.word_mask == torch.BoolTensor([False, False, True, False]).to(device))
     assert torch.all(res.entities.ids == torch.IntTensor([4, 2]).to(device))
 
-def test_ner_example_from_str():
-    res = ner_example_from_str("Hej med dig", DummyDaLUKE())
+def test_ner_examples_from_str():
+    res = ner_examples_from_str(["Hej med dig"], DummyDaLUKE())[0]
     assert res.entities.fullword_spans == [[(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]]
     assert torch.all(res.entities.ids == torch.IntTensor([1,1,1,1,1,1]).to(device))
+
+def test_multiple_ner_examples_from_str():
+    res = ner_examples_from_str(["Hej med dig", "Hej med dig også"], DummyDaLUKE())[0]
+    assert res.entities.fullword_spans[0] == [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
+    assert res.entities.fullword_spans[1] == [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4)]
