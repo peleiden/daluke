@@ -11,6 +11,7 @@ from daluke.pretrain.data import MaskedBatchedExamples, ENTITY_UNK_TOKEN
 from daluke.ner.data import NERBatchedExamples, NERDataset, Split, Sequences
 from daluke.api.automodels import AutoDaLUKE
 
+DEFAULT_NER_BATCHSIZE = 8
 
 def get_subword_ids(text: str, tokenizer: PreTrainedTokenizerFast) -> list[list[int]]:
     """
@@ -112,19 +113,20 @@ class SingletonNERData(NERDataset):
     labels = ("LOC", "PER", "ORG", "MISC")
     all_labels = (null_label,) + labels
 
-    def load(self, text: str, **_):
-        words = text.split()
+    def load(self, texts: list[str], **_):
+        word_texts = [text.split() for text in texts]
         self.data[Split.TEST] = Sequences(
-            texts               = [words],
-            annotations         = [[self.null_label for _ in range(len(words))]],
-            sentence_boundaries = [[len(words)]]
+            texts               = word_texts,
+            annotations         = [[self.null_label for _ in range(len(words))] for words in word_texts],
+            sentence_boundaries = [[len(words)] for words in word_texts],
         )
         self.loaded = True
 
-def ner_example_from_str(
-        text:      str,
-        daluke:    AutoDaLUKE
-    ) -> NERBatchedExamples:
+def ner_examples_from_str(
+        texts:     list[str],
+        daluke:    AutoDaLUKE,
+        batch_size: int=DEFAULT_NER_BATCHSIZE,
+    ) -> list[NERBatchedExamples]:
     data = SingletonNERData(
         base_model      = daluke.metadata["base-model"],
         max_seq_length  = daluke.metadata["max-seq-length"],
@@ -132,6 +134,6 @@ def ner_example_from_str(
         max_entity_span = daluke.metadata["max-entity-span"],
         device          = torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
     )
-    data.load(text)
-    # Extract example from singleton dataloader
-    return next(iter(data.build(Split.TEST, 8)))
+    data.load(texts)
+    # Extract examples from dataloader
+    return list(data.build(Split.TEST, batch_size))

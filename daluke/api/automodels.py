@@ -1,6 +1,6 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Tuple, Dict
 
 from transformers import AutoTokenizer
 import numpy as np
@@ -50,21 +50,28 @@ class AutoMLMDaLUKE(AutoDaLUKE):
         word_scores, __ = self.model(example)
         return F.softmax(word_scores, dim=1)
 
+T = Dict[Tuple[int, int], np.ndarray]
+
 class AutoNERDaLUKE(AutoDaLUKE):
     """ Inference for NER """
     model_weight_type: Models = Models.DaLUKE_NER
 
     @no_grad
-    def predict(self, example: NERBatchedExamples) -> dict[tuple[int, int], np.ndarray]:
+    def predict(self, example: NERBatchedExamples, multiple_documents=False) -> T | dict[int, T]:
         """
-        Returns probability distribution over NER classes of every span in example
+        Returns probability distribution over NER classes of every span in example.
+        If multiple examples is set, a dict mapping from text number to span probability dist is returned.
         """
         scores = self.model(example)
         probs = F.softmax(scores, dim=2)
         # Probability distribution for every possible span in the example
-        span_probs = dict()
+        span_probs = {t: dict() for t in example.text_nums} if multiple_documents else dict()
         for i, spans in enumerate(example.entities.fullword_spans):
-            span_probs.update({
+            out_probs = {
                 span: probs[i, j].detach().cpu().numpy() for j, span in enumerate(spans) if span
-            })
+            }
+            if multiple_documents:
+                span_probs[example.text_nums[i]].update(out_probs)
+            else:
+                span_probs.update(out_probs)
         return span_probs

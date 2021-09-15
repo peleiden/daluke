@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from typing import Union, List
+
 from pelutils import Table
 from pelutils.ds import no_grad
 import numpy as np
-import torch
 
 from daluke.ner.model import span_probs_to_preds
-from daluke.api.data import masked_example_from_str, ner_example_from_str, SingletonNERData
+from daluke.api.data import masked_example_from_str, ner_examples_from_str, SingletonNERData, DEFAULT_NER_BATCHSIZE
 from daluke.api.automodels import AutoMLMDaLUKE, AutoNERDaLUKE
 
 @no_grad
@@ -32,10 +33,25 @@ def predict_mlm(masked_text: str, entity_spans: list[tuple[int, int]], daluke: A
 
     return masked_text, t
 
+T = Union[str, List[str]]
 @no_grad
-def predict_ner(text: str, daluke: AutoNERDaLUKE) -> list[str]:
-    """ Return list of entities corresponding """
-    example = ner_example_from_str(text, daluke)
-    span_probs = daluke.predict(example)
-    preds = span_probs_to_preds(span_probs, len(text.split()), SingletonNERData)
-    return preds
+def predict_ner(text: T, daluke: AutoNERDaLUKE, batch_size: int=DEFAULT_NER_BATCHSIZE) -> list[T]:
+    """
+    Given a text (or a list of texts), NER classes are predicted.
+    """
+    log.debug("Building examples")
+    single_example = isinstance(text, str)
+    texts: list[str] = [text] if single_example else text
+    prepared_data = ner_examples_from_str(texts, daluke, batch_size=batch_size)
+    log.debug("Forward passing")
+    if single_example:
+        return span_probs_to_preds(daluke.predict(prepared_data[0]), len(text.split()), SingletonNERData)
+
+    # The other case: We have to glue multiple spans from multiple examples together in the multi-document situation
+    span_probs = list(dict() for _ in range(len(texts)))
+    for batch in prepared_data:
+        batch_probs = daluke.predict(batch, multiple_documents=True)
+        # It must be handled that a single text can be divided into multiple batches
+        for text_num, example_probs in batch_probs.items():
+            span_probs[text_num].update(example_probs)
+    return [span_probs_to_preds(p, len(t.split()), SingletonNERData) for p, t in zip(span_probs, texts)]
