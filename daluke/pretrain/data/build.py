@@ -9,7 +9,7 @@ from transformers import AutoTokenizer, RobertaTokenizer
 from wikipedia2vec.dump_db import DumpDB
 
 
-from daluke.pretrain.data import ICUSentenceTokenizer, load_entity_vocab, calculate_spans, ignore_title
+from daluke.pretrain.data import ICUSentenceTokenizer, load_entity_vocab, calculate_spans
 
 
 class DatasetBuilder:
@@ -43,10 +43,9 @@ class DatasetBuilder:
         self.entity_vocab = load_entity_vocab(entity_vocab_file)
         # Make sure IDs on non-ignored entities are contiguous
         num = 0
-        for entity, info in self.entity_vocab.items():
-            if not ignore_title(entity):
-                info["id"] = num
-                num += 1
+        for entity_info in self.entity_vocab.values():
+            entity_info["id"] = num
+            num += 1
         log("Entity vocab has size %i" % num)
 
         self.out_dir             = out_dir
@@ -55,16 +54,15 @@ class DatasetBuilder:
         self.max_entity_span     = max_entity_span
         self.min_sentence_length = min_sentence_length
         # Get maximum number of tokens in a sequence excluding [CLS] and [SEP]
-        self.max_num_tokens = max_seq_length - 2
+        self.max_num_tokens = self.max_seq_length - 2
         self.max_articles = max_articles
 
         # Filter titles so only real articles are included
-        self.target_titles = [title for title in self.dump_db.titles() if not ignore_title(title)]
+        self.target_titles = list(self.dump_db.titles())
 
     def _tokenize(self, text: str, paragraph_text: str, idx: int) -> list[str]:
-        text = re.sub(r"\s+", " ", text).rstrip().lower()
         if not text:
-            return []
+            return list()
         if isinstance(self.tokenizer, RobertaTokenizer):
             tokens = self.tokenizer.tokenize(
                 text,
