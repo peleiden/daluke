@@ -207,7 +207,7 @@ def preprocess(
     files = [os.path.join(tmpdir, x) for x in os.listdir(tmpdir)[:max_articles]]
     log("Saved a total of %i articles to %s" % (len(files), tmpdir))
 
-    log.section("Beginning preprocessing")
+    log.section("Beginning preprocessing on %i cores" % os.cpu_count())
     process_map(
         func,
         [(function, f, entity_vocab, min_entity_length, max_entity_length) for f in files],
