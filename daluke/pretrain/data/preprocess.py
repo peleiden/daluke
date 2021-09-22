@@ -146,7 +146,7 @@ def _get_dagw_files(path: str, ignore_sections: set[str]={"wiki"}) -> Generator[
     for root, __, files in os.walk(path):
         if os.path.split(root)[-1] in ignore_sections:
             continue
-        yield from (os.path.join(root, f) for f in files if reee.fullmatch(r"[a-zA-Z]+_[0-9]+", f))
+        yield from (os.path.join(root, f) for f in files if reee.fullmatch(r"%s_.+" % os.path.split(root)[-1], f))
 
 @click.command()
 @click.argument("dump-db-file", type=click.Path(exists=True, dir_okay=False))
