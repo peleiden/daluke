@@ -7,9 +7,9 @@ from dataclasses import dataclass
 import torch
 import torch.cuda.amp as amp
 import torch.distributed as dist
-import torch.nn as nn
+from torch import nn
 from torch.optim import Optimizer
-from torch.utils.data import RandomSampler
+from torch.utils.data import RandomSampler, SequentialSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 
@@ -23,7 +23,7 @@ from .data import DataLoader
 from .data.build import DatasetBuilder
 from .model import PretrainTaskDaLUKE, BertAttentionPretrainTaskDaLUKE, load_base_model_weights
 from ..model import all_params
-from ..analysis.pretrain import TrainResults, top_k_accuracy
+from ..analysis.pretrain import TrainResults, top_k_accuracy, validate_model
 
 PORT = "3090"  # Are we sure this port is in stock?
 NO_DECAY =  { "bias", "LayerNorm.weight" }
@@ -218,6 +218,7 @@ def train(
         log("Setting up loss function without entity loss weighting")
         entity_criterion = nn.CrossEntropyLoss()
     word_criterion = nn.CrossEntropyLoss()
+    loss_calculator = lambda w, e: params.word_ent_weight * w + (1 - params.word_ent_weight) * e
 
     # Load dataset and training results
     log("Building dataset")
@@ -235,6 +236,8 @@ def train(
     log("Built %i examples" % len(data))
 
     loader = data.get_dataloader(params.ff_size, sampler)
+    val_loader = data.get_dataloader(params.ff_size, SequentialSampler(data.val_examples), validation=True)
+
     # Number of parameter updates each epoch
     grad_accumulation_steps = params.batch_size // (params.ff_size * num_workers)
     num_updates_epoch = len(loader) // grad_accumulation_steps
@@ -272,6 +275,11 @@ def train(
             epoch        = 0,
             luke_exclusive_params = None,  # Set later
             q_mats_from_base      = None,  # Set later
+            val_losses            = np.zeros(0),
+            val_w_losses          = np.zeros(0),
+            val_e_losses          = np.zeros(0),
+            val_w_accuracies      = np.full((0, len(top_k)), np.nan),
+            val_e_accuracies      = np.full((0, len(top_k)), np.nan),
         )
 
     save_epochs = set(range(-1, params.epochs, save_every))
@@ -380,6 +388,11 @@ def train(
         res.param_diff_1 = np.vstack((res.param_diff_1, np.zeros(num_updates_epoch)))
         res.param_diff_2 = np.vstack((res.param_diff_2, np.zeros(num_updates_epoch)))
         res.runtime      = np.vstack((res.runtime,      np.zeros(num_updates_epoch)))
+        res.val_losses       = np.concatenate((res.val_losses, [0]))
+        res.val_w_losses     = np.concatenate((res.val_w_losses, [0]))
+        res.val_e_losses     = np.concatenate((res.val_e_losses, [0]))
+        res.val_w_accuracies = np.concatenate((res.val_w_accuracies, np.full((1, len(res.top_k)), np.nan)))
+        res.val_e_accuracies = np.concatenate((res.val_e_accuracies, np.full((1, len(res.top_k)), np.nan)))
 
         batch_iter = iter(loader)
 
@@ -403,7 +416,7 @@ def train(
                     # Compute and backpropagate loss
                     word_loss = word_criterion(word_preds, batch.word_mask_labels)
                     ent_loss = entity_criterion(ent_preds, batch.ent_mask_labels)
-                loss = params.word_ent_weight * word_loss + (1 - params.word_ent_weight) * ent_loss
+                loss = loss_calculator(word_loss, ent_loss)
                 loss /= grad_accumulation_steps
 
                 # Only sync parameters on grad updates, aka last pass of this loop
@@ -467,12 +480,20 @@ def train(
 
             res.runtime[i, j] = TT.end_profile()
 
+        with TT.profile("Model validation"):
+            res.val_w_losses[i], res.val_e_losses[i], res.val_w_accuracies[i], res.val_e_accuracies[i] =\
+                validate_model(model, val_loader, word_criterion, entity_criterion, res.top_k)
+            res.val_losses[i] = loss_calculator(res.val_w_losses[i], res.val_e_losses[i])
+            model.train()
+
         TT.end_profile()
         log(
             f"Completed epoch {i:2} / {params.epochs-1}",
-            f"Mean loss (total, word, entity, scaled): {res.losses[i].mean():10.5f}, {res.w_losses[i].mean():10.5f}, "
+            f"Mean train loss (total, word, entity, scaled): {res.losses[i].mean():10.5f}, {res.w_losses[i].mean():10.5f}, "
             f"{res.e_losses[i].mean():10.5f}, {res.scaled_loss[i].mean()}",
-            f"Mean accuracy (word, entity):     {100*res.w_accuracies[i, :, 0].mean():7.3f} %,  {100*res.e_accuracies[i, :, 0].mean():7.3f} %",
+            f"Mean train accuracy (word, entity):     {100*res.w_accuracies[i, :, 0].mean():7.3f} %,  {100*res.e_accuracies[i, :, 0].mean():7.3f} %",
+            f"Mean val. loss (total, word, entity):   {res.val_losses[i]:10.5f}, {res.val_w_losses[i]:10.5f}, {res.val_e_losses[i]:10.5f}",
+            f"Mean val.accuracy (word, entity):       {100*res.val_w_accuracies[i, 0].mean()}, {100*res.val_e_accuracies[i, 0].mean()}",
             "Runtime: %s" % thousand_seps(res.runtime[-1].sum()),
             "Time distribution so far",
             TT,

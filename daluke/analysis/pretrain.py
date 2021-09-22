@@ -1,13 +1,14 @@
 from __future__ import annotations
 from dataclasses import dataclass
-import heapq
+from typing import Callable
 
 import numpy as np
 import torch
 
-from pelutils import log, DataStorage, get_timestamp
+from pelutils import DataStorage
 from pelutils.ds import no_grad
 
+from daluke.pretrain.model import PretrainTaskDaLUKE
 
 @dataclass
 class TrainResults(DataStorage):
@@ -22,6 +23,12 @@ class TrainResults(DataStorage):
     top_k:        list[int]   # Which accuracies to save, e.g. [1, 5, 10, 50]
     w_accuracies: np.ndarray  # Masked word pred. accuracy, epochs x param updates x len(top_k)
     e_accuracies: np.ndarray  # Masked ent. pred. accuracy, epochs x param updates x len(top_k)
+
+    val_losses:       np.ndarray  # Validation: Total loss, epochs
+    val_w_losses:     np.ndarray  # Validation: Word pred. loss, epochs
+    val_e_losses:     np.ndarray  # Validation: Entity pred. loss, epochs
+    val_w_accuracies: np.ndarray  # Validation: Masked word pred. accuracy, epochs x len(top_k)
+    val_e_accuracies: np.ndarray  # Validation: Masked ent. pred. accuracy, epochs x len(top_k)
 
     orig_params:  np.ndarray  # Array of all parameters in original model
     param_diff_1: np.ndarray  # 1-norm distance to original parameters, epochs x param updates
@@ -59,4 +66,28 @@ def top_k_accuracy(
     return k_scores / len(labels)
 
 
-
+@no_grad
+def validate_model(
+    model: PretrainTaskDaLUKE,
+    data: torch.utils.data.DataLoader,
+    word_criterion: Callable,
+    entity_criterion: Callable,
+    top_k: list[int]
+) -> tuple[float, float, np.ndarray, np.ndarray]:
+    model.eval()
+    w_losses, e_losses = list(), list()
+    w_accuracies, e_accuracies = list(), list()
+    for batch in data:
+        word_preds, ent_preds = model(batch)
+        w_losses.append(float(word_criterion(word_preds, batch.word_mask_labels)))
+        e_losses.append(float(entity_criterion(ent_preds, batch.ent_mask_labels)))
+        w_accuracies.append(
+            top_k_accuracy(batch.word_mask_labels, word_preds, top_k)
+        )
+        e_accuracies.append(
+            top_k_accuracy(batch.ent_mask_labels, ent_preds, top_k)
+        )
+    # Mean over batch axis
+    w_accuracies = np.nanmean(np.vstack(w_accuracies), axis=0)
+    e_accuracies = np.nanmean(np.vstack(e_accuracies), axis=0)
+    return np.mean(w_losses), np.mean(e_losses), w_accuracies, e_accuracies
