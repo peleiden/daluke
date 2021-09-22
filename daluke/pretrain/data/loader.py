@@ -47,7 +47,10 @@ class DataLoader:
         self.word_mask_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.mask_token)
         self.ent_mask_id = entity_vocab[ENTITY_MASK_TOKEN]["id"]
         # Don't insert ids that are special tokens when performing random word insertion in the masking
-        self.random_word_id_range = (self.word_mask_id + 1, self.tokenizer.vocab_size)
+        # The allowed range is dependant on the placement of special ids
+        self.random_word_id_range = (self.word_mask_id + 1, self.tokenizer.vocab_size)\
+            if self.word_mask_id < self.tokenizer.vocab_size-1 else\
+                (self.tokenizer.convert_tokens_to_ids(self.tokenizer.unk_token)+1, self.tokenizer.vocab_size-1)
 
         with TT.profile("Building examples"):
             self.examples: list[Example] = self.build_examples()
