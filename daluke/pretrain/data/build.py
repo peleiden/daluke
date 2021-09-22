@@ -2,7 +2,6 @@ from __future__ import annotations
 import os
 import json
 import random
-import re
 
 from pelutils import log, TT
 from tqdm import tqdm
@@ -68,6 +67,10 @@ class DatasetBuilder:
 
         # Filter titles so only real articles are included
         self.target_titles = list(self.dump_db.titles())
+
+        # Remove existing data file if it exists
+        if data_file := os.path.join(self.out_dir, self.data_file):
+            os.remove(data_file)
 
     def _tokenize(self, text: str, paragraph_text: str, idx: int) -> list[str]:
         if not text:
