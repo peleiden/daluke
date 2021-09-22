@@ -1,15 +1,11 @@
 from __future__ import annotations
 import os
-import shutil
 import json
-import multiprocessing as mp
-import random
 import re
-from collections import defaultdict
 
 from pelutils import log, TT
 from tqdm import tqdm
-from transformers import AutoTokenizer, XLMRobertaTokenizer, RobertaTokenizer
+from transformers import AutoTokenizer, RobertaTokenizer
 try:
     from wikipedia2vec.dump_db import DumpDB
     wikipedia2vec_available = True
@@ -35,7 +31,6 @@ class DatasetBuilder:
         tokenizer_name:      str,  # Tokenizer to use, e.g. Maltehb/danish-bert-botxo for Danish BERT
         entity_vocab_file:   str,  # Build by build-entity-vocab
         out_dir:             str,  # Where to put finished dataset. All contents will be removed before saving dataset
-        max_seq_length:      int,  # Maximum length of any sequence
         max_entities:        int,  # Only up to this many entities are included in each sequence
         max_entity_span:     int,  # Maximum number tokens an entity can span before sequence is discarded
         min_sentence_length: int,  # Minimum number of tokens a sentence must span to be included
@@ -61,11 +56,10 @@ class DatasetBuilder:
         log("Entity vocab has size %i" % num)
 
         self.out_dir             = out_dir
-        self.max_seq_length      = max_seq_length
+        self.max_seq_length      = self.tokenizer.model_max_length
         self.max_entities        = max_entities
         self.max_entity_span     = max_entity_span
         self.min_sentence_length = min_sentence_length
-        self.tokenizer_name      = tokenizer_name
         # Get maximum number of tokens in a sequence excluding [CLS] and [SEP]
         self.max_num_tokens = max_seq_length - 2
         self.max_articles = max_articles
