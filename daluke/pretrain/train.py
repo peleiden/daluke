@@ -15,7 +15,7 @@ from torch.utils.data.distributed import DistributedSampler
 
 import numpy as np
 
-from transformers import AutoConfig, AutoModelForPreTraining, AdamW, get_polynomial_decay_schedule_with_warmup
+from transformers import AutoConfig, AutoModelForPreTraining, AdamW, get_linear_schedule_with_warmup
 from pelutils import DataStorage, thousand_seps, TT
 from pelutils.logger import log, Levels
 
@@ -344,12 +344,10 @@ def train(
         lr = params.lr,
     )
     scaler = amp.GradScaler() if params.fp16 else None
-    scheduler = get_polynomial_decay_schedule_with_warmup(
+    scheduler = get_linear_schedule_with_warmup(
         optimizer,
         int(params.warmup_prop * num_updates_all),
         num_updates_all,
-        lr_end = params.lr / 10,
-        power  = 3 ** 0.5,
     )
     if resume:
         optimizer.load_state_dict(torch.load(fpath((TrainResults.subfolder, OPTIMIZER_OUT.format(i=res.epoch))), map_location=device))
