@@ -107,19 +107,25 @@ def load_base_model_weights(daluke: PretrainTaskDaLUKE, base_model_state_dict: O
     # Mappings from bert to daLUKE naming scheme
     one2one_map = {
         "embeddings": "word_embeddings",
-        "query": "Q_w",
-        "key": "K",
-        "value": "V",
+        "query":      "Q_w",
+        "key":        "K",
+        "value":      "V",
+        "lm_head":    "mask_word_scorer",
     } if not bert_attention else {
         "embeddings": "word_embeddings",
+        "lm_head":    "mask_word_scorer",
     }
     multipart_map = {
-        "attention.self": "attention",
-        "attention.output": "self_output",
-        "layer": "",
-        "cls.predictions": "mask_word_scorer",
+        "attention.self":       "attention",
+        "attention.output":     "self_output",
+        "layer":                "",
+        "cls.predictions":      "mask_word_scorer",
+        "lm_head.layer_norm":   "mask_word_scorer.transform.LayerNorm",
+        "lm_head.dense":        "mask_word_scorer.transform.dense",
     } if not bert_attention else {
-        "cls.predictions": "mask_word_scorer",
+        "cls.predictions":      "mask_word_scorer",
+        "lm_head.layer_norm":   "mask_word_scorer.transform.LayerNorm",
+        "lm_head.dense":        "mask_word_scorer.transform.dense",
     }
     # Be safe in case some parts are subsets of others
     multipart_map = { ".%s." % key: ".%s." % value if value else "." for key, value in multipart_map.items() }
