@@ -202,30 +202,29 @@ class DatasetBuilder:
             links += [(id_, start + len(words), end + len(words)) for id_, start, end in sent_links]
             words += sent_words
             if i == len(sentences) - 1 or len(words) + len(sentences[i+1][0]) > self.max_num_tokens:
-                if links:
-                    n_seqs += 1
-                    # Save features for this sequence
-                    links = links[:self.max_entities]
-                    n_ents += len(links)
-                    word_ids = self.tokenizer.convert_tokens_to_ids(words)
-                    with TT.profile("Word spans"):
-                        word_spans = calculate_spans(words)
-                    assert self.min_sentence_length <= len(word_ids) <= self.max_num_tokens
-                    entity_ids = [id_ for id_, _, _ in links]
-                    entity_spans = [(start, end) for _, start, end in links]
-                    # Whether to mark doc. as part of validation set
-                    is_validation = random.random() < self.validation_prob
-                    n_val += int(is_validation)
-                    features = json.dumps({
-                        "page_title":    page_title,
-                        "word_ids":      word_ids,
-                        "word_spans":    word_spans,
-                        "entity_ids":    entity_ids,
-                        "entity_spans":  entity_spans,
-                        "is_validation": is_validation
-                    })
-                    with open(os.path.join(self.out_dir, self.data_file), "a") as df, TT.profile("Save features"):
-                        df.write(features + "\n")
+                n_seqs += 1
+                # Save features for this sequence
+                links = links[:self.max_entities]
+                n_ents += len(links)
+                word_ids = self.tokenizer.convert_tokens_to_ids(words)
+                with TT.profile("Word spans"):
+                    word_spans = calculate_spans(words)
+                assert self.min_sentence_length <= len(word_ids) <= self.max_num_tokens
+                entity_ids = [id_ for id_, _, _ in links]
+                entity_spans = [(start, end) for _, start, end in links]
+                # Whether to mark doc. as part of validation set
+                is_validation = random.random() < self.validation_prob
+                n_val += int(is_validation)
+                features = json.dumps({
+                    "page_title":    page_title,
+                    "word_ids":      word_ids,
+                    "word_spans":    word_spans,
+                    "entity_ids":    entity_ids,
+                    "entity_spans":  entity_spans,
+                    "is_validation": is_validation
+                })
+                with open(os.path.join(self.out_dir, self.data_file), "a") as df, TT.profile("Save features"):
+                    df.write(features + "\n")
                 words = list()
                 links = list()
         TT.end_profile()
