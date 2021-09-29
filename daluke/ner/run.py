@@ -9,12 +9,12 @@ from pelutils import log, Levels, Parser, EnvVars, get_timestamp, set_seeds
 from daluke.serialize import load_from_archive, save_to_archive, TRAIN_OUT, TRAIN_OUT_BEST
 from daluke.ner import load_dataset, load_model
 from daluke.ner.model import mutate_for_ner
-from daluke.ner.training import TrainNER, TrainResults
+from daluke.ner.training import TrainNER
 from daluke.ner.data import Split
 from daluke.ner.evaluation import type_distribution
 
 DATASET_ARGUMENTS = {
-    "dataset":    {"default": "DaNE", "help": "Which dataset to use. Currently, only DaNE supported"},
+    "dataset":    {"default": "DaNE", "help": "Which dataset to use."},
     "wikiann-path":
         {"default": "wikiann",
             "help": "Path to folder containing WikiANN-da data set. Only needed if --dataset WikiANN.\n"\

@@ -1,7 +1,7 @@
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Union
 from collections import defaultdict
+from typing import Union
+from dataclasses import dataclass
 import json
 
 import numpy as np
@@ -11,7 +11,7 @@ from tqdm import tqdm
 import torch.nn.functional as F
 from seqeval.metrics import classification_report
 
-from pelutils import DataStorage, Table, log
+from pelutils import DataStorage, Table, log, TT
 from pelutils.ds import no_grad
 
 from daluke.ner.model import span_probs_to_preds
@@ -62,6 +62,8 @@ def evaluate_ner(model: nn.Module, dataloader: torch.utils.data.DataLoader, data
     annotations, texts = dataset.data[split].annotations, dataset.data[split].texts
     span_probs: list[dict[tuple[int, int], np.ndarray]] = list(dict() for _ in range(len(texts)))
     log.debug(f"Forward passing {len(dataloader)} batches")
+
+    TT.tick()
     for batch in tqdm(dataloader):
         scores = model(batch)
         probs = F.softmax(scores, dim=2)
@@ -71,6 +73,7 @@ def evaluate_ner(model: nn.Module, dataloader: torch.utils.data.DataLoader, data
                 span: probs[i, j].detach().cpu().numpy() for j, span in enumerate(spans) if span
             })
     preds = [span_probs_to_preds(p, len(t), dataset) for p, t in zip(span_probs, texts)]
+    log(f"Forward pass completed: Wall time: {TT.tock():.4f} s.")
 
     stats = _stats_to_py_nums(
         classification_report(annotations, preds, output_dict=True, zero_division=0)
