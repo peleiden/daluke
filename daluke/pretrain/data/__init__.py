@@ -1,4 +1,5 @@
 from __future__ import annotations
+from transformers import RobertaTokenizer, XLMRobertaTokenizerFast
 
 try:
     from icu import Locale, BreakIterator
@@ -57,8 +58,11 @@ class ICUSentenceTokenizer:
             start_idx = end_idx
         return spans
 
+_ignored_wiki_categories = ("fil", "kategori", "wikipedia", "mediawiki", "portal", "skabelon", "artikeldata", "modul")
+
 def ignore_title(title: str) -> bool:
-    return any(title.lower().startswith(word + ":") for word in ("fil", "kategori", "wikipedia", "mediawiki", "portal"))
+    return any(title.lower().startswith(word + ":")
+        for word in _ignored_wiki_categories)
 
 def load_entity_vocab(vocab_file: str) -> dict[str, dict[str, int]]:
     """ Loads an entity vocab in .jsonl format created by build-entity-vocab
@@ -74,20 +78,30 @@ def load_entity_vocab(vocab_file: str) -> dict[str, dict[str, int]]:
                 }
     return entities
 
-def calculate_spans(tokens: list[str]) -> list[tuple[int, int]]:
+def calculate_spans(tokens: list[str], tokenizer) -> list[tuple[int, int]]:
     """ Calculate word spans from a list of tokens. Excludes punctuation """
     spans = list()
     i = 0
     while i < len(tokens):
-        start = i
-        if tokens[i].isalnum():
-            start = i
-            i += 1
-            while i < len(tokens) and tokens[i].startswith("##"):
+        if isinstance(tokenizer, XLMRobertaTokenizerFast):
+            if tokens[i].startswith("▁"):
+                start = i
                 i += 1
-            spans.append((start, i))
+                while i < len(tokens) and tokens[i].isalnum():
+                    i += 1
+                spans.append((start, i))
+            else:
+                i += 1
         else:
-            i += 1
+            start = i
+            if tokens[i].isalnum():
+                start = i
+                i += 1
+                while i < len(tokens) and tokens[i].startswith("##"):
+                    i += 1
+                spans.append((start, i))
+            else:
+                i += 1
 
     return spans
 

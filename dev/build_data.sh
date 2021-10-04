@@ -1,8 +1,8 @@
 # Run from daluke repo
 DATA_PATH=/work3/$USER/pdata3
 DUMP_FILE=dump.db
-TOKENIZER=xlm-roberta-base  # Must exist on hugging face
-WIKIDATE=20210901
+TOKENIZER=xlm-roberta-base  # Must exist on Huggingface
+WIKIDATE=20210901  # YYYYMMDD
 PREPROCESS=repeat-entities
 
 DALUKE=$PWD
@@ -38,16 +38,16 @@ python3 -m luke.cli build-entity-vocab\
 echo "PREPROCESSING WIKIDUMP"
 cd $DALUKE
 python3 daluke/pretrain/data/preprocess.py\
-    $DATA_PATH/dawiki-$WIKIDATE-pages-articles.xml.bz2\
-    --function $PREPROCESS\
-    --entity-vocab-file $DATA_PATH/entity-vocab.jsonl\
-    --dagw-sections $DATA_PATH/dagw/sektioner
+   $DATA_PATH/dawiki-$WIKIDATE-pages-articles.xml.bz2\
+   --function $PREPROCESS\
+   --entity-vocab-file $DATA_PATH/entity-vocab.jsonl\
+   --dagw-sections $DATA_PATH/dagw/sektioner
 
 echo "BUILD DUMP DATABASE"
 cd $LUKE
 python3 -m luke.cli build-dump-db\
-    $DATA_PATH/dawiki-20210301-pages-articles.xml.$PREPROCESS.bz2\
-    $DATA_PATH/$DUMP_FILE
+   $DATA_PATH/dawiki-$WIKIDATE-pages-articles.xml.$PREPROCESS.bz2\
+   $DATA_PATH/$DUMP_FILE
 
 echo "BUILD PRETRAINING DATASET"
 cd $DALUKE
