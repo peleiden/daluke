@@ -32,6 +32,11 @@ def fix_filename(fname):
         fname = fname.replace(fro, to)
     return fname
 
+def _insert_xml_special_characters(s: str) -> str:
+    for char, name in _xml_special_characters.items():
+        s = s.replace(char, f"&{name};")
+    return s
+
 def replace_special_characters_and_whitespace(fname: str):
     """ Replaces HTML special characters and any consecutive whitespace with spaces
     The special wikipedia markup for titles with ''' is also removed
@@ -47,8 +52,7 @@ def replace_special_characters_and_whitespace(fname: str):
         article = article.replace("'''", "")
     else:
         article = reee.sub(_special_character_regex, " ", article)
-        for char, name in _xml_special_characters.items():
-            article = article.replace(char, f"&{name};")
+        article = _insert_xml_special_characters(article)
 
     article = reee.sub(_whitespace_regex, " ", article)
     with open(fname, "w") as f:
@@ -181,19 +185,23 @@ def preprocess(
     )
 
     log("Loading entity vocab")
-    entity_vocab = { e.lower() for e in load_entity_vocab(entity_vocab_file) }
+    entity_vocab = { _insert_xml_special_characters(e.lower()) for e in load_entity_vocab(entity_vocab_file) }
 
     dagw_files = list()
     if dagw_sections:
+        n_words = 0
         log("Finding gigaword data files")
         dagw_files = list(_get_dagw_files(dagw_sections))
-        log("Found %i dagw files" % len(dagw_files))
+        for dagw_file in tqdm(dagw_files):
+            with open(dagw_file) as f:
+                n_words += len(f.read().split())
+        log("Found %i dagw files containing %i words" % (len(dagw_files), n_words))
 
-    tmpdir = "local_tmpdir"
-    os.makedirs(tmpdir, exist_ok=True)
-    log("Saving all articles to temporary directory %s" % tmpdir)
     # tempdir is not used, as the temporary files can take up more space than what temporary
     # directories usually allow
+    tmpdir = os.path.join(os.path.split(dump_db_file)[0], "tmpdir")
+    os.makedirs(tmpdir, exist_ok=True)
+    log("Saving all articles to temporary directory %s" % tmpdir)
     for dagw_file in tqdm(dagw_files):
         shutil.copy2(dagw_file, os.path.join(tmpdir, fix_filename(os.path.split(dagw_file)[-1])))
     log("Saving Wikipedia files to temporary directory")
@@ -207,7 +215,7 @@ def preprocess(
     files = [os.path.join(tmpdir, x) for x in os.listdir(tmpdir)[:max_articles]]
     log("Saved a total of %i articles to %s" % (len(files), tmpdir))
 
-    log.section("Beginning preprocessing on %i cores" % os.cpu_count())
+    log.section("Beginning preprocessing on %i threads" % os.cpu_count())
     process_map(
         func,
         [(function, f, entity_vocab, min_entity_length, max_entity_length) for f in files],
@@ -234,7 +242,7 @@ def preprocess(
                     <text bytes="{bytes}" xml:space="preserve">{text}</text>
                 </revision>
             </page>""".format(
-                title = fname[:-4] if fname.endswith(".wiki") else fname,
+                title = fname,
                 id    = i+1,
                 bytes = len(text),
                 text  = text,
@@ -246,6 +254,7 @@ def preprocess(
 
     log.info("Removing temporary files")
     shutil.rmtree(tmpdir)
+    log.info("Done preprocessing data")
 
 if __name__ == "__main__":
     with log.log_errors:

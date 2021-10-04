@@ -2,6 +2,7 @@ import os
 
 import torch
 from pelutils import MainTest
+from transformers import AutoTokenizer
 
 from daluke import daBERT
 from daluke.data import BatchedExamples
@@ -37,7 +38,9 @@ class TestData(MainTest):
                 '{ "word_ids": [42, 11], "word_spans": [[0, 1], [1, 2]], "entity_ids": [], "entity_spans": [], "is_validation": true }',
             ]))
         metadata = {
-            "number_of_items": 2,
+            "number-of-items": 2,
+            "number-of-words": 5,
+            "number-of-word-tokens": 5,
             "max-seq-length": 512,
             "max-entities": 128,
             "max-entity-span": 30,
@@ -77,4 +80,4 @@ class TestData(MainTest):
     def test_word_spans(self):
         tokens = ["jeg", "hed", "##der", "kaj", "ii", "d", ".", "Sto", "##re"]
         word_spans = [(0, 1), (1, 3), (3, 4), (4, 5), (5, 6), (7, 9)]
-        assert calculate_spans(tokens) == word_spans
+        assert calculate_spans(tokens, AutoTokenizer.from_pretrained("Maltehb/danish-bert-botxo")) == word_spans

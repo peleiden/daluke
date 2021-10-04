@@ -13,7 +13,8 @@ except ImportError:
     wikipedia2vec_available = False
 
 
-from daluke.pretrain.data import ICUSentenceTokenizer, load_entity_vocab, calculate_spans
+from daluke.pretrain.data import ICUSentenceTokenizer,\
+    load_entity_vocab, calculate_spans, ignore_title
 
 
 class DatasetBuilder:
@@ -22,19 +23,19 @@ class DatasetBuilder:
 
     # Files saved by the build method
     metadata_file     = "metadata.json"
-    data_file         = "data.jsonl"
     entity_vocab_file = "entity-vocab.json"
+    data_file         = "data.jsonl"
 
     def __init__(
         self,
-        dump_db_file:        str,  # Location of file build by build-dump-db
-        tokenizer_name:      str,  # Tokenizer to use, e.g. Maltehb/danish-bert-botxo for Danish BERT
-        entity_vocab_file:   str,  # Build by build-entity-vocab
-        out_dir:             str,  # Where to put finished dataset. All contents will be removed before saving dataset
-        validation_prob:     float, # Chance of each finished document to be marked as part of validation set
-        max_entities:        int,  # Only up to this many entities are included in each sequence
-        max_entity_span:     int,  # Maximum number tokens an entity can span before sequence is discarded
-        min_sentence_length: int,  # Minimum number of tokens a sentence must span to be included
+        dump_db_file:        str,    # Location of file build by build-dump-db
+        tokenizer_name:      str,    # Tokenizer to use, e.g. Maltehb/danish-bert-botxo for Danish BERT
+        entity_vocab_file:   str,    # Build by build-entity-vocab
+        out_dir:             str,    # Where to put finished dataset. All contents will be removed before saving dataset
+        validation_prob:     float,  # Chance of each finished document to be marked as part of validation set
+        max_entities:        int,    # Only up to this many entities are included in each sequence
+        max_entity_span:     int,    # Maximum number tokens an entity can span before sequence is discarded
+        min_sentence_length: int,    # Minimum number of tokens a sentence must span to be included
         max_articles:        int | None,
     ):
         if not wikipedia2vec_available:
@@ -61,56 +62,74 @@ class DatasetBuilder:
         self.max_entities        = max_entities
         self.max_entity_span     = max_entity_span
         self.min_sentence_length = min_sentence_length
-        # Get maximum number of tokens in a sequence excluding [CLS] and [SEP]
-        self.max_num_tokens = self.max_seq_length - 2
-        self.max_articles = max_articles
+        # Get maximum number of tokens in a sequence excluding start and end tokens
+        self.max_num_tokens      = self.max_seq_length - 2
+        self.max_articles        = max_articles
 
         # Filter titles so only real articles are included
         self.target_titles = list(self.dump_db.titles())
 
+        # Remove old datafile if it exists
+        if os.path.isfile(self.data_file):
+            log.debug("Removing old datafile '%s'" % self.data_file)
+            os.remove(self.data_file)
+        log("Saving data to '%s'" % self.data_file)
+
     def _tokenize(self, text: str, paragraph_text: str, idx: int) -> list[str]:
         if not text:
             return list()
-        if isinstance(self.tokenizer, RobertaTokenizer):
-            tokens = self.tokenizer.tokenize(
-                text,
-                add_prefix_space=idx == 0 or text.startswith(" ") or paragraph_text[idx-1] == " ",
-            )
-        else:
-            tokens = self.tokenizer.tokenize(text)
+        try:
+            if isinstance(self.tokenizer, RobertaTokenizer):
+                tokens = self.tokenizer.tokenize(
+                    text,
+                    add_prefix_space=idx == 0 or text.startswith(" ") or paragraph_text[idx-1] == " ",
+                )
+            else:
+                tokens = self.tokenizer.tokenize(text)
+        except KeyboardInterrupt:
+            # Make sure program can be keyboard interrupted despite needing to catch BaseException
+            raise
+        except BaseException as e:
+            # Catch an exception caused by rust panicking in the tokenizer
+            log.warning("Failed to tokenize text with exception '%s'\nText: '%s'" % (e, text))
+            return list()
 
         return tokens
 
     def build(self):
-        log("Saving tokenizer config and word token config to %s" % self.out_dir)
+        log("Saving tokenizer config and word token config to '%s'" % self.out_dir)
         with open(path := os.path.join(self.out_dir, self.entity_vocab_file), "w", encoding="utf-8") as ev:
-            log("Saving entity vocab to %s" % path)
+            log("Saving entity vocab to '%s'" % path)
             json.dump(self.entity_vocab, ev, indent=2)
 
         log.section("Processing pages")
-        n_seqs, n_ents, n_vals = 0, 0, 0
+        n_seqs, n_ents, n_vals, n_word_toks, n_words = 0, 0, 0, 0, 0
         for title in log.tqdm(tqdm(self.target_titles[:self.max_articles])):
             log("Processing %s" % title)
             with TT.profile("Process page"):
-                s, e, v = self._process_page(title)
+                s, e, v, nt, nw = self._process_page(title)
                 n_seqs += s
                 n_ents += e
                 n_vals += v
+                n_word_toks += nt
+                n_words += nw
 
         # Save metadata
         with open(path := os.path.join(self.out_dir, self.metadata_file), "w") as f:
             log("Saving metadata to %s" % path)
             json.dump({
-                "number-of-items":     n_seqs,
-                "number-of-entities":  n_ents,
-                "number-of-val-items": n_vals,
-                "max-seq-length":      self.max_seq_length,
-                "max-entities":        self.max_entities,
-                "max-entity-span":     self.max_entity_span,
-                "min-sentence-length": self.min_sentence_length,
-                "base-model":          self.tokenizer_name,
-                "tokenizer-class":     self.tokenizer.__class__.__name__,
-                "language":            self.dump_db.language,
+                "number-of-items":       n_seqs,
+                "number-of-word-tokens": n_word_toks,
+                "number-of-words":       n_words,
+                "number-of-entities":    n_ents,
+                "number-of-val-items":   n_vals,
+                "max-seq-length":        self.max_seq_length,
+                "max-entities":          self.max_entities,
+                "max-entity-span":       self.max_entity_span,
+                "min-sentence-length":   self.min_sentence_length,
+                "base-model":            self.tokenizer_name,
+                "tokenizer-class":       self.tokenizer.__class__.__name__,
+                "language":              self.dump_db.language,
             }, f, indent=4)
 
         log.debug("Time distribution", TT)
@@ -129,32 +148,39 @@ class DatasetBuilder:
             TT.profile("Get links")
             for link in paragraph.wiki_links:
                 link_title: str = self.dump_db.resolve_redirect(link.title)
-                # Remove category links
-                if link_title.startswith("Kategori:") and link.text.lower().startswith("kategori:"):
+                # Remove links to articles that are not included
+                if ignore_title(link_title):
                     paragraph_text = paragraph_text[:link.start]\
                         + " " * (link.end - link.start)\
                         + paragraph_text[link.end:]
                 elif link_title in self.entity_vocab:
                     paragraph_links.append((link_title, link.start, link.end))
+            paragraph_links = list(reversed(paragraph_links))
             TT.end_profile()
 
             # Process by sentence
             TT.profile("Sentences")
+            if paragraph_links:
+                link_title, link_start, link_end = paragraph_links.pop()
+            else:
+                link_title, link_start, link_end = "", -1, -1
+
             sent_spans = self.sentence_tokenizer.span_tokenize(paragraph_text.rstrip())
             for sent_start, sent_end in sent_spans:
                 current = sent_start
                 sent_words = list()  # Tokens in the given sentence
                 sent_links = list()  # Links in a given sentence in three-tuples: (id, start index, end index)
-
                 too_large_tokens = False
 
-                # Look for links that are within the tokenized sentence
-                # If a link is found, the sentences are seperated across the link and tokenized
-                for link_title, link_start, link_end in paragraph_links:
-                    # Check if link is fully contained within sentence
-                    if not (sent_start <= link_start < sent_end and link_end <= sent_end):
-                        continue
+                while link_start < sent_start:
+                    try:
+                        link_title, link_start, link_end = paragraph_links.pop()
+                    except IndexError:
+                        break
 
+                while sent_start <= link_start and link_end <= sent_end:
+                    # Look for links that are within the tokenized sentence
+                    # If a link is found, the sentences are seperated across the link and tokenized
                     TT.profile("Tokenize")
                     text = paragraph_text[current:link_start]
                     sent_words += self._tokenize(text, paragraph_text, current)
@@ -174,6 +200,11 @@ class DatasetBuilder:
                     sent_words += link_words
                     current = link_end
 
+                    try:
+                        link_title, link_start, link_end = paragraph_links.pop()
+                    except IndexError:
+                        break
+
                 text = paragraph_text[current:sent_end]
                 sent_words += self._tokenize(text, paragraph_text, current)
 
@@ -185,7 +216,7 @@ class DatasetBuilder:
 
         return sentences
 
-    def _process_page(self, page_title: str) -> tuple[int, int, int]:
+    def _process_page(self, page_title: str) -> tuple[int, int, int, int, int]:
         """
         Processes a Wikipedia article and save to self.data_file
         Returns number of sequences
@@ -196,7 +227,7 @@ class DatasetBuilder:
         # Construct features to be saved - word tokens, entities, and entity spans
         words = list()
         links: list[tuple[int, 3]] = list()
-        n_seqs, n_ents, n_val = 0, 0, 0
+        n_seqs, n_ents, n_val, n_word_toks, n_words = 0, 0, 0, 0, 0
         TT.profile("Get features")
         for i, (sent_words, sent_links) in enumerate(sentences):
             links += [(id_, start + len(words), end + len(words)) for id_, start, end in sent_links]
@@ -208,13 +239,15 @@ class DatasetBuilder:
                 n_ents += len(links)
                 word_ids = self.tokenizer.convert_tokens_to_ids(words)
                 with TT.profile("Word spans"):
-                    word_spans = calculate_spans(words)
+                    word_spans = calculate_spans(words, self.tokenizer)
                 assert self.min_sentence_length <= len(word_ids) <= self.max_num_tokens
                 entity_ids = [id_ for id_, _, _ in links]
                 entity_spans = [(start, end) for _, start, end in links]
                 # Whether to mark doc. as part of validation set
                 is_validation = random.random() < self.validation_prob
                 n_val += int(is_validation)
+                n_word_toks += len(word_ids)
+                n_words += len(word_spans)
                 features = json.dumps({
                     "page_title":    page_title,
                     "word_ids":      word_ids,
@@ -223,10 +256,10 @@ class DatasetBuilder:
                     "entity_spans":  entity_spans,
                     "is_validation": is_validation
                 })
-                with open(os.path.join(self.out_dir, self.data_file), "a") as df, TT.profile("Save features"):
+                with open(self.data_file, "a") as df, TT.profile("Save features"):
                     df.write(features + "\n")
                 words = list()
                 links = list()
         TT.end_profile()
 
-        return n_seqs, n_ents, n_val
+        return n_seqs, n_ents, n_val, n_word_toks, n_words

@@ -6,7 +6,7 @@ torch>=1.8.0
 transformers>=4.3.3
 
 # Misc
-pelutils[ds]==0.6.7
+pelutils[ds]==0.6.9
 click>=7.0.0
 tqdm
 wget
