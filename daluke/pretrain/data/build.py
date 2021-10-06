@@ -3,7 +3,9 @@ import os
 import json
 import random
 
-from pelutils import log, TT
+import numpy as np
+from pelutils import log, TT, load_jsonl
+from pelutils.ds import unique
 from tqdm import tqdm
 from transformers import AutoTokenizer, RobertaTokenizer
 try:
@@ -11,7 +13,6 @@ try:
     wikipedia2vec_available = True
 except ImportError:
     wikipedia2vec_available = False
-
 
 from daluke.pretrain.data import ICUSentenceTokenizer,\
     load_entity_vocab, calculate_spans, ignore_title
@@ -25,6 +26,7 @@ class DatasetBuilder:
     metadata_file     = "metadata.json"
     entity_vocab_file = "entity-vocab.json"
     data_file         = "data.jsonl"
+    token_map_file    = "token-map.npy"
 
     def __init__(
         self,
@@ -37,6 +39,7 @@ class DatasetBuilder:
         max_entity_span:     int,    # Maximum number tokens an entity can span before sequence is discarded
         min_sentence_length: int,    # Minimum number of tokens a sentence must span to be included
         max_articles:        int | None,
+        max_vocab_size:      int,
     ):
         if not wikipedia2vec_available:
             raise RuntimeError("Pretrain data generation requires installation of the optional requirement `wikipedia2vec`")
@@ -57,6 +60,8 @@ class DatasetBuilder:
         log("Entity vocab has size %i" % num)
 
         self.out_dir             = out_dir
+        self.data_file           = os.path.join(self.out_dir, self.data_file)
+        self.token_map_file      = os.path.join(self.out_dir, self.token_map_file)
         self.max_seq_length      = self.tokenizer.model_max_length
         self.validation_prob     = validation_prob
         self.max_entities        = max_entities
@@ -65,6 +70,7 @@ class DatasetBuilder:
         # Get maximum number of tokens in a sequence excluding start and end tokens
         self.max_num_tokens      = self.max_seq_length - 2
         self.max_articles        = max_articles
+        self.vocab_size          = self.tokenizer.vocab_size if max_vocab_size == -1 else min(max_vocab_size, max_vocab_size)
 
         # Filter titles so only real articles are included
         self.target_titles = list(self.dump_db.titles())
@@ -115,22 +121,29 @@ class DatasetBuilder:
                 n_words += nw
 
         # Save metadata
+        metadata = {
+            "number-of-items":       n_seqs,
+            "number-of-word-tokens": n_word_toks,
+            "number-of-words":       n_words,
+            "number-of-entities":    n_ents,
+            "number-of-val-items":   n_vals,
+            "max-seq-length":        self.max_seq_length,
+            "max-entities":          self.max_entities,
+            "max-entity-span":       self.max_entity_span,
+            "min-sentence-length":   self.min_sentence_length,
+            "base-model":            self.tokenizer_name,
+            "tokenizer-class":       self.tokenizer.__class__.__name__,
+            "language":              self.dump_db.language,
+            "vocab-size":            self.vocab_size,
+        }
+
+        if self.vocab_size < self.tokenizer.vocab_size:
+            with TT.profile("Reduce token vocab"):
+                metadata["vocab-size"] = self._reduce_tokens(metadata)
+
         with open(path := os.path.join(self.out_dir, self.metadata_file), "w") as f:
             log("Saving metadata to %s" % path)
-            json.dump({
-                "number-of-items":       n_seqs,
-                "number-of-word-tokens": n_word_toks,
-                "number-of-words":       n_words,
-                "number-of-entities":    n_ents,
-                "number-of-val-items":   n_vals,
-                "max-seq-length":        self.max_seq_length,
-                "max-entities":          self.max_entities,
-                "max-entity-span":       self.max_entity_span,
-                "min-sentence-length":   self.min_sentence_length,
-                "base-model":            self.tokenizer_name,
-                "tokenizer-class":       self.tokenizer.__class__.__name__,
-                "language":              self.dump_db.language,
-            }, f, indent=4)
+            json.dump(metadata, f, indent=4)
 
         log.debug("Time distribution", TT)
 
@@ -254,7 +267,7 @@ class DatasetBuilder:
                     "word_spans":    word_spans,
                     "entity_ids":    entity_ids,
                     "entity_spans":  entity_spans,
-                    "is_validation": is_validation
+                    "is_validation": is_validation,
                 })
                 with open(self.data_file, "a") as df, TT.profile("Save features"):
                     df.write(features + "\n")
@@ -263,3 +276,37 @@ class DatasetBuilder:
         TT.end_profile()
 
         return n_seqs, n_ents, n_val, n_word_toks, n_words
+
+    def _reduce_tokens(self, metadata: dict) -> int:
+        log.section("Reducing word token vocabulary size")
+        token_counts = np.zeros(self.tokenizer.vocab_size, dtype=np.int32)
+
+        log("Counting tokens in dataset")
+        with open(self.data_file) as df:
+            for seq in tqdm(load_jsonl(df), total=metadata["number-of-items"]):
+                word_ids = np.array(seq["word_ids"])
+                word_ids, counts = unique(word_ids, return_counts=True)
+                token_counts[word_ids] += counts
+
+        log("%i of %i tokens in the vocab are used" % ((token_counts>0).sum(), self.tokenizer.vocab_size))
+        sort_idx = np.argsort(token_counts)[::-1]
+        keep_idx = sort_idx[:self.vocab_size]
+        keep = np.zeros_like(token_counts, dtype=bool)
+        keep[keep_idx] = True
+        keep[:4] = True  # Always keep special tokens
+        unk_token = self.tokenizer.special_tokens_map["unk_token"]
+        unk_id = self.tokenizer.convert_tokens_to_ids([unk_token])[0]
+        token_map = np.arange(self.tokenizer.vocab_size)
+        token_map[~keep] = unk_id
+        for i, j in enumerate(np.where(keep)[0]):
+            token_map[j] = i
+        log(
+            "Reduced token vocabulary to %i tokens" % keep.sum(),
+            "%.6f %% of word tokens in the dataset are now %s" % (
+                100 * (token_counts[unk_id] + token_counts[~keep].sum()) / token_counts.sum(), unk_token
+            ),
+        )
+        np.save(self.token_map_file, token_map)
+        log("Saved token map to '%s'" % self.token_map_file)
+
+        return keep.sum()
