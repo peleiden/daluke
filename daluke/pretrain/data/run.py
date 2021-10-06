@@ -17,6 +17,7 @@ def run_build_dataset():
     parser.add_argument("--max-entity-span", type=int, default=30)
     parser.add_argument("--min-sentence-length", type=int, default=5)
     parser.add_argument("--max-articles", type=int, default=None)
+    parser.add_argument("--max-vocab-size", type=int, default=-1)
     args = parser.parse_args()
 
     log.configure(os.path.join(args.out_dir, "build-dataset.log"), "Build dataset", log_commit=True, print_level=Levels.DEBUG)
