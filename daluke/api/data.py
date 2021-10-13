@@ -60,7 +60,7 @@ def example_from_str(
         daluke:           AutoDaLUKE
     ) -> BatchedExamples:
     subword_ids = get_subword_ids(text, daluke.tokenizer)
-    sep, cls_, pad = get_special_ids(daluke.tokenizer)
+    sep, cls_, pad, _, _ = get_special_ids(daluke.tokenizer)
 
     w = Words.build(
         ids     = get_word_id_tensor(subword_ids),
@@ -75,7 +75,8 @@ def example_from_str(
         max_entities    = daluke.metadata["max-entities"],
         max_entity_span = daluke.metadata["max-entity-span"],
     )
-    return BatchedExamples.build([
+    return BatchedExamples.build(
+        [
             Example(
                 words    = w,
                 entities = e,

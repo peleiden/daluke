@@ -33,7 +33,8 @@ class DaLUKE(nn.Module):
     Language Understanding with Knowledge-based Embeddings in Danish.
     Returns entity and word representations.
     """
-    def __init__(self,
+    def __init__(
+        self,
         bert_config: BertConfig,
         ent_vocab_size: int,
         ent_embed_size: int,
@@ -52,9 +53,7 @@ class DaLUKE(nn.Module):
         )
 
     def forward(self, ex: BatchedExamples) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Given a data class of word and entity ids and other tokens, return embeddings of both
-        """
+        """ Given a data class of word and entity ids and other tokens, return embeddings of both """
         word_hidden    = self.word_embeddings(ex.words.ids)
         entity_hidden  = self.entity_embeddings(ex.entities.ids, ex.entities.pos)
 
@@ -117,7 +116,7 @@ class EntityAwareLayer(nn.Module):
         self.intermediate = BertIntermediate(bert_config)
         self.output       = BertOutput(bert_config)
 
-    def forward(self, word_hidden: torch.Tensor, entity_hidden: torch.Tensor, attention_mask: torch.Tensor) -> (torch.Tensor, torch.Tensor):
+    def forward(self, word_hidden: torch.Tensor, entity_hidden: torch.Tensor, attention_mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         word_size = word_hidden.size(1)
         total_hidden = torch.cat((word_hidden, entity_hidden), dim=1)
         self_attention = self.attention(word_hidden, entity_hidden, attention_mask)

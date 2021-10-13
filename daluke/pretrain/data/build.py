@@ -1,13 +1,16 @@
 from __future__ import annotations
+from typing import TextIO
+import io
 import os
-import json
 import random
 
+import ujson
 import numpy as np
 from pelutils import log, TT, load_jsonl
 from pelutils.ds import unique
 from tqdm import tqdm
 from transformers import AutoTokenizer, RobertaTokenizer
+from daluke.data import get_special_ids
 try:
     from wikipedia2vec.dump_db import DumpDB
     wikipedia2vec_available = True
@@ -106,7 +109,7 @@ class DatasetBuilder:
         log("Saving tokenizer config and word token config to '%s'" % self.out_dir)
         with open(path := os.path.join(self.out_dir, self.entity_vocab_file), "w", encoding="utf-8") as ev:
             log("Saving entity vocab to '%s'" % path)
-            json.dump(self.entity_vocab, ev, indent=2)
+            ujson.dump(self.entity_vocab, ev, indent=2)
 
         log.section("Processing pages")
         n_seqs, n_ents, n_vals, n_word_toks, n_words = 0, 0, 0, 0, 0
@@ -134,16 +137,20 @@ class DatasetBuilder:
             "base-model":            self.tokenizer_name,
             "tokenizer-class":       self.tokenizer.__class__.__name__,
             "language":              self.dump_db.language,
+            "reduced-vocab":         self.vocab_size < self.tokenizer.vocab_size,
             "vocab-size":            self.vocab_size,
         }
 
         if self.vocab_size < self.tokenizer.vocab_size:
+            log.section("Reducing token number")
             with TT.profile("Reduce token vocab"):
-                metadata["vocab-size"] = self._reduce_tokens(metadata)
+                token_map, metadata["vocab-size"] = self._reduce_tokens(metadata)
+            with TT.profile("Rewrite dataset with new tokens"):
+                self._update_tokens(metadata, token_map)
 
         with open(path := os.path.join(self.out_dir, self.metadata_file), "w") as f:
-            log("Saving metadata to %s" % path)
-            json.dump(metadata, f, indent=4)
+            log.section("Saving metadata to %s" % path)
+            ujson.dump(metadata, f, indent=4)
 
         log.debug("Time distribution", TT)
 
@@ -261,7 +268,7 @@ class DatasetBuilder:
                 n_val += int(is_validation)
                 n_word_toks += len(word_ids)
                 n_words += len(word_spans)
-                features = json.dumps({
+                features = ujson.dumps({
                     "page_title":    page_title,
                     "word_ids":      word_ids,
                     "word_spans":    word_spans,
@@ -277,8 +284,7 @@ class DatasetBuilder:
 
         return n_seqs, n_ents, n_val, n_word_toks, n_words
 
-    def _reduce_tokens(self, metadata: dict) -> int:
-        log.section("Reducing word token vocabulary size")
+    def _reduce_tokens(self, metadata: dict) -> tuple[np.ndarray, int]:
         token_counts = np.zeros(self.tokenizer.vocab_size, dtype=np.int32)
 
         log("Counting tokens in dataset")
@@ -293,9 +299,8 @@ class DatasetBuilder:
         keep_idx = sort_idx[:self.vocab_size]
         keep = np.zeros_like(token_counts, dtype=bool)
         keep[keep_idx] = True
-        keep[:4] = True  # Always keep special tokens
-        unk_token = self.tokenizer.special_tokens_map["unk_token"]
-        unk_id = self.tokenizer.convert_tokens_to_ids([unk_token])[0]
+        *ids, unk_id = get_special_ids(self.tokenizer)
+        keep[[*ids, unk_id]] = True  # Always keep special tokens
         token_map = np.arange(self.tokenizer.vocab_size)
         token_map[~keep] = unk_id
         for i, j in enumerate(np.where(keep)[0]):
@@ -303,10 +308,24 @@ class DatasetBuilder:
         log(
             "Reduced token vocabulary to %i tokens" % keep.sum(),
             "%.6f %% of word tokens in the dataset are now %s" % (
-                100 * (token_counts[unk_id] + token_counts[~keep].sum()) / token_counts.sum(), unk_token
+                100 * (token_counts[unk_id] + token_counts[~keep].sum()) / token_counts.sum(),
+                self.tokenizer.unk_token,
             ),
         )
         np.save(self.token_map_file, token_map)
         log("Saved token map to '%s'" % self.token_map_file)
 
-        return keep.sum()
+        return token_map, int(keep.sum())
+
+    def _update_tokens(self, metadata: dict, token_map: np.ndarray):
+        log("Updating dataset with kept tokens")
+        tmp_file = os.path.join(os.path.split(self.data_file)[0], "tmpdata.json")
+        with open(self.data_file, "r+") as df,\
+             open(tmp_file, "w") as tf,\
+             TT.profile("Update example", hits=metadata["number-of-items"]):
+            for line in tqdm(df, total=metadata["number-of-items"]):
+                example = ujson.loads(line)
+                example["word_ids"] = token_map[example["word_ids"]].tolist()
+                tf.write(ujson.dumps(example) + "\n")
+        os.remove(self.data_file)
+        os.rename(tmp_file, self.data_file)
