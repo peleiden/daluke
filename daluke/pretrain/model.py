@@ -1,13 +1,10 @@
 from __future__ import annotations
 from collections import OrderedDict
-from pprint import pformat
-from typing import Callable
 
+import numpy as np
 import torch
 from torch import nn
 
-from pelutils import log
-from transformers import AutoTokenizer, AutoModelForPreTraining
 from transformers.activations import get_activation
 from transformers.models.bert.modeling_bert import (
     BertConfig,
@@ -98,11 +95,13 @@ class BertAttentionPretrainTaskDaLUKE(PretrainTaskDaLUKE):
 
         return word_scores, ent_scores
 
-def load_base_model_weights(daluke: PretrainTaskDaLUKE, base_model_state_dict: OrderedDict, bert_attention: bool) -> set:
-    """
-    Load a base model into this model. Assumes BERT for now
-    Returns the set of keys that were not tansfered from base model
-    """
+def load_base_model_weights(
+    daluke: PretrainTaskDaLUKE,
+    base_model_state_dict: OrderedDict,
+    bert_attention: bool,
+) -> set:
+    """ Load a base model into this model
+    Returns the set of keys that were not tansfered from base model """
 
     # Mappings from bert to daLUKE naming scheme
     one2one_map = {
@@ -182,3 +181,22 @@ def load_base_model_weights(daluke: PretrainTaskDaLUKE, base_model_state_dict: O
         raise RuntimeError("Errors in loading state_dict for %s:\n" % daluke.__class__.__name__ + "\n\t".join(error_msgs))
 
     return set(missing_keys)
+
+def copy_with_reduced_state_dict(
+    token_reduction: np.ndarray,
+    full_model: PretrainTaskDaLUKE,
+    reduced_model: PretrainTaskDaLUKE,
+):
+    """ Loads the state_dict from full_model to reduced_model while excluding token embeddings not in the vocab """
+    keys_to_reduce = {
+        "word_embeddings.word_embeddings.weight", "mask_word_scorer.bias",
+        "mask_word_scorer.decoder.weight", "mask_word_scorer.decoder.bias",
+    }
+    full_sd = full_model.state_dict()
+    reduced_sd = reduced_model.state_dict()
+    for key in reduced_sd:
+        if key in keys_to_reduce:
+            reduced_sd[key] = full_sd[key][token_reduction].detach().clone()
+        else:
+            reduced_sd[key] = full_sd[token_reduction].detach().clone()
+    reduced_model.load_state_dict(reduced_sd)

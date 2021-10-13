@@ -1,6 +1,7 @@
 from __future__ import annotations
 import os
 
+import numpy as np
 import torch
 from tqdm import tqdm
 from transformers import AutoTokenizer
@@ -12,6 +13,7 @@ from daluke.data import Example, Words, Entities, get_special_ids, Words, Entiti
 from daluke.pretrain.data.build import DatasetBuilder
 from .masking import MaskedBatchedExamples
 from . import ENTITY_MASK_TOKEN
+
 
 class DataLoader:
 
@@ -26,10 +28,10 @@ class DataLoader:
         word_randword_prob: float,
         ent_mask_prob:      float,
         only_load_validation = False,
+        vocab_size:         int | None = None,
+        token_map:          np.ndarray | None = None,
     ):
-        """
-        Loads a generated json dataset prepared by the preprocessing pipeline
-        """
+        """ Loads a generated json dataset prepared by the preprocessing pipeline """
         self.data_dir = data_dir
         self.metadata = metadata
         self.ent_ids = { info["id"] for info in entity_vocab.values() }
@@ -46,14 +48,18 @@ class DataLoader:
         self.only_load_validation = only_load_validation
 
         self.tokenizer = AutoTokenizer.from_pretrained(metadata["base-model"])
-        self.sep_id, self.cls_id, self.pad_id = get_special_ids(self.tokenizer)
-        self.word_mask_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.mask_token)
+        self.sep_id, self.cls_id, self.pad_id, self.word_mask_id, __ = get_special_ids(self.tokenizer)
+        if token_map is not None:
+            self.sep_id, self.cls_id, self.pad_id, self.word_mask_id = token_map[
+                [self.sep_id, self.cls_id, self.pad_id, self.word_mask_id]
+            ]
         self.ent_mask_id = entity_vocab[ENTITY_MASK_TOKEN]["id"]
         # Don't insert ids that are special tokens when performing random word insertion in the masking
         # The allowed range is dependant on the placement of special ids
-        self.random_word_id_range = (self.word_mask_id + 1, self.tokenizer.vocab_size)\
-            if self.word_mask_id < self.tokenizer.vocab_size-1 else\
-                (self.tokenizer.convert_tokens_to_ids(self.tokenizer.unk_token)+1, self.tokenizer.vocab_size-1)
+        vocab_size = vocab_size or self.tokenizer.vocab_size
+        self.random_word_id_range = (self.word_mask_id + 1, vocab_size)\
+            if self.word_mask_id < vocab_size-1 else\
+                (self.tokenizer.convert_tokens_to_ids(self.tokenizer.unk_token)+1, vocab_size-1)
 
         with TT.profile("Building examples"):
             self.train_examples, self.val_examples = self.build_examples()
@@ -79,7 +85,7 @@ class DataLoader:
                     seq_data["entity_ids"] = list()
                     seq_data["entity_spans"] = list()
 
-                ex =  Example(
+                ex = Example(
                     words = Words.build(
                         torch.IntTensor(seq_data["word_ids"]),
                         seq_data["word_spans"],
@@ -101,7 +107,7 @@ class DataLoader:
                     train_examples.append(ex)
         return train_examples, val_examples
 
-    def get_dataloader(self, batch_size: int, sampler: torch.utils.data.Sampler, validation=False) -> DataLoader:
+    def get_dataloader(self, batch_size: int, sampler: torch.utils.data.Sampler, validation=False):
         return torch.utils.data.DataLoader(
             list(enumerate(self.val_examples if validation else self.train_examples)),
             batch_size  = batch_size,

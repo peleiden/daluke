@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from transformers import AutoTokenizer
+import numpy as np
 import torch
 
 
@@ -110,7 +111,7 @@ class BatchedExamples(Example):
     """
 
     @staticmethod
-    def collate(ex: list[Example], device: torch.device, cut: bool) -> (Words, Entities):
+    def collate(ex: list[Example], device: torch.device, cut: bool) -> tuple[Words, Entities]:
         # Stack the tensors in specific field for each example and send to device
         tensor_collate = lambda field, subfield, limit: torch.stack(tuple(getattr(getattr(e, field), subfield)[:limit] for e in ex)).to(device)
 
@@ -137,6 +138,12 @@ class BatchedExamples(Example):
     def build(cls, ex: list[Example], device: torch.device, cut_extra_padding: bool=True):
         return cls(*cls.collate(ex, device=device, cut=cut_extra_padding))
 
-def get_special_ids(tokenizer: AutoTokenizer) -> (int, int, int):
-    """ Returns seperator id, close id and pad id """
-    return tuple(tokenizer.convert_tokens_to_ids(t) for t in (tokenizer.sep_token, tokenizer.cls_token, tokenizer.pad_token))
+def get_special_ids(tokenizer: AutoTokenizer) -> tuple[int, ...]:
+    """ Returns seperator id, close id, pad id, mask_id, and unk id """
+    return tuple(tokenizer.convert_tokens_to_ids(t) for t in
+        (tokenizer.sep_token, tokenizer.cls_token, tokenizer.pad_token, tokenizer.mask_token, tokenizer.unk_token))
+
+def token_map_to_token_reduction(token_map: np.ndarray, unk_id: int) -> np.ndarray:
+    keep = token_map != unk_id
+    keep[unk_id] = True
+    return np.where(keep)[0]

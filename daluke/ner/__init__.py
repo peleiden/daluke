@@ -45,6 +45,7 @@ def load_model(
         words_only = metadata.get("NER-words-only", False),
         entities_only = metadata.get("NER-entities-only", False),
     )
+    # TODO Needs token map
     model.load_state_dict(state_dict, strict=False)
     if bert_attention:
         load_base_model_weights(model, state_dict, bert_attention=False)

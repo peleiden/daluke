@@ -15,13 +15,14 @@ from torch.utils.data.distributed import DistributedSampler
 
 import numpy as np
 
-from transformers import AutoConfig, AutoModelForPreTraining, AdamW, get_linear_schedule_with_warmup
+from transformers import AutoConfig, AutoModelForPreTraining, AutoTokenizer, AdamW, get_linear_schedule_with_warmup
 from pelutils import DataStorage, thousand_seps, TT
 from pelutils.logger import log, Levels
+from daluke.data import get_special_ids, token_map_to_token_reduction
 
 from .data import DataLoader
 from .data.build import DatasetBuilder
-from .model import PretrainTaskDaLUKE, BertAttentionPretrainTaskDaLUKE, load_base_model_weights
+from .model import PretrainTaskDaLUKE, BertAttentionPretrainTaskDaLUKE, load_base_model_weights, copy_with_reduced_state_dict
 from ..model import all_params
 from ..analysis.pretrain import TrainResults, top_k_accuracy, validate_model
 
@@ -221,6 +222,17 @@ def train(
     loss_calculator = lambda w, e: params.word_ent_weight * w + (1 - params.word_ent_weight) * e
 
     # Load dataset and training results
+    bert_config = AutoConfig.from_pretrained(metadata["base-model"])
+    if metadata["reduced-vocab"]:
+        token_map_file = fpath(DatasetBuilder.token_map_file)
+        log("Loading token map from '%s'" % token_map_file)
+        token_map = np.load(token_map_file)
+        tokenizer = AutoTokenizer.from_pretrained(metadata["base-model"])
+        *__, unk_id = get_special_ids(tokenizer)
+        token_reduction = token_map_to_token_reduction(token_map, unk_id)
+    else:
+        token_map = None
+
     log("Building dataset")
     data = DataLoader(
         location,
@@ -231,6 +243,8 @@ def train(
         params.word_unmask_prob,
         params.word_randword_prob,
         params.ent_mask_prob,
+        vocab_size=metadata["vocab-size"],
+        token_map=token_map,
     )
     sampler = (DistributedSampler if is_distributed else RandomSampler)(data.train_examples)
     log("Built %i examples" % len(data))
@@ -285,9 +299,7 @@ def train(
     save_epochs = set(range(-1, params.epochs, save_every))
 
     # Build model, possibly by loading previous weights
-    log.section("Setting up model ...")
-    bert_config = AutoConfig.from_pretrained(metadata["base-model"])
-    log("Bert config", bert_config.to_json_string())
+    log.section("Setting up model")
 
     log("Initializing model")
     model_cls = BertAttentionPretrainTaskDaLUKE if params.bert_attention else PretrainTaskDaLUKE
@@ -296,6 +308,9 @@ def train(
         ent_vocab_size = len(entity_vocab),
         ent_embed_size = params.ent_embed_size,
     ).to(device)
+    bert_config.vocab_size = metadata["vocab-size"]
+    log("Bert config", bert_config.to_json_string())
+
     if params.lukeinit:
         model.apply(lambda module: model.init_weights(module, bert_config.initializer_range))
     # Load parameters from base model
@@ -303,7 +318,21 @@ def train(
         log("Loading base model parameters")
         with TT.profile("Loading base model parameters"):
             base_model = AutoModelForPreTraining.from_pretrained(metadata["base-model"])
-            new_weights = load_base_model_weights(model, base_model.state_dict(), params.bert_attention)
+            new_weights = load_base_model_weights(
+                model,
+                base_model.state_dict(),
+                params.bert_attention,
+            )
+            if metadata["reduced-vocab"]:
+                log("Removing unneeded token weights")
+                reduced_model = model_cls(
+                    bert_config,
+                    ent_vocab_size = len(entity_vocab),
+                    ent_embed_size = params.ent_embed_size,
+                ).to(device)
+                copy_with_reduced_state_dict(token_reduction, model, reduced_model)
+                del model
+                model = reduced_model
     else:
         new_weights = set(model.state_dict())
     # Initialize self-attention query matrices to BERT word query matrices
@@ -337,7 +366,6 @@ def train(
     if is_distributed:
         model = DDP(model, device_ids=[rank])
 
-    # TODO: Consider whether this AdamW is sufficient or we should tune it in some way to LUKE
     optimizer = AdamW(
         [{"params": get_optimizer_params(model_params, do_decay=True),  "weight_decay": params.weight_decay},
          {"params": get_optimizer_params(model_params, do_decay=False), "weight_decay": 0}],
@@ -376,17 +404,17 @@ def train(
             sampler.set_epoch(i)
 
         # Allocate room for results for this epoch
-        res.losses       = np.vstack((res.losses,       np.zeros(num_updates_epoch)))
-        res.w_losses     = np.vstack((res.w_losses,     np.zeros(num_updates_epoch)))
-        res.e_losses     = np.vstack((res.e_losses,     np.zeros(num_updates_epoch)))
-        res.scaled_loss  = np.vstack((res.scaled_loss,  np.zeros(num_updates_epoch)))
-        res.lr           = np.vstack((res.lr,           np.zeros(num_updates_epoch)))
-        res.w_accuracies = np.concatenate((res.w_accuracies, np.full((1, num_updates_epoch, len(res.top_k)), np.nan)))
-        res.e_accuracies = np.concatenate((res.e_accuracies, np.full((1, num_updates_epoch, len(res.top_k)), np.nan)))
-        res.param_diff_1 = np.vstack((res.param_diff_1, np.zeros(num_updates_epoch)))
-        res.param_diff_2 = np.vstack((res.param_diff_2, np.zeros(num_updates_epoch)))
-        res.runtime      = np.vstack((res.runtime,      np.zeros(num_updates_epoch)))
-        res.val_losses       = np.concatenate((res.val_losses, [0]))
+        res.losses           = np.vstack((res.losses,       np.zeros(num_updates_epoch)))
+        res.w_losses         = np.vstack((res.w_losses,     np.zeros(num_updates_epoch)))
+        res.e_losses         = np.vstack((res.e_losses,     np.zeros(num_updates_epoch)))
+        res.scaled_loss      = np.vstack((res.scaled_loss,  np.zeros(num_updates_epoch)))
+        res.lr               = np.vstack((res.lr,           np.zeros(num_updates_epoch)))
+        res.w_accuracies     = np.concatenate((res.w_accuracies, np.full((1, num_updates_epoch, len(res.top_k)), np.nan)))
+        res.e_accuracies     = np.concatenate((res.e_accuracies, np.full((1, num_updates_epoch, len(res.top_k)), np.nan)))
+        res.param_diff_1     = np.vstack((res.param_diff_1, np.zeros(num_updates_epoch)))
+        res.param_diff_2     = np.vstack((res.param_diff_2, np.zeros(num_updates_epoch)))
+        res.runtime          = np.vstack((res.runtime,      np.zeros(num_updates_epoch)))
+        res.val_losses       = np.concatenate((res.val_losses,   [0]))
         res.val_w_losses     = np.concatenate((res.val_w_losses, [0]))
         res.val_e_losses     = np.concatenate((res.val_e_losses, [0]))
         res.val_w_accuracies = np.concatenate((res.val_w_accuracies, np.full((1, len(res.top_k)), np.nan)))

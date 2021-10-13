@@ -1,7 +1,7 @@
 # Run from daluke repo
 DATA_PATH=/work3/$USER/pdata3
 DUMP_FILE=dump.db
-TOKENIZER=xlm-roberta-base  # Must exist on Huggingface
+TOKENIZER=xlm-roberta-large  # Must exist on Huggingface
 WIKIDATE=20210901  # YYYYMMDD
 PREPROCESS=repeat-entities
 
@@ -56,4 +56,4 @@ python3 daluke/pretrain/data/run.py\
     $DATA_PATH/entity-vocab.jsonl\
     $TOKENIZER\
     $DATA_PATH\
-    --max-vocab-size 50000
+    --max-vocab-size 60000

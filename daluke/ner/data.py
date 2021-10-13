@@ -110,7 +110,7 @@ class NERDataset(ABC):
         self.label_to_idx = {label: i for i, label in enumerate(self.all_labels)}
 
         self.tokenizer = AutoTokenizer.from_pretrained(base_model)
-        self.sep_id, self.cls_id, self.pad_id = get_special_ids(self.tokenizer)
+        self.sep_id, self.cls_id, self.pad_id, __, self.unk_id = get_special_ids(self.tokenizer)
 
         # To be set by load method
         self.data: dict[Split, Sequences] = dict()
