@@ -16,12 +16,21 @@ def test_daluke():
     features = features_from_str("Jeg hedder Jens Nielsen og er fra Danmark".split(), [(2,4), (7, 8)], {"[UNK]": 1, "Danmark": 42}, AutoTokenizer.from_pretrained(daBERT))
     model(BatchedExamples.build([features], torch.device("cpu"), True))
 
+def test_low_dim_daluke():
+    model = DaLUKE(_create_cfg(), 100, 30, ent_hidden_size=48)
+    features = features_from_str("Jeg hedder jo Jens Nielsen og er fra Danmark".split(), [(2,4), (7, 8)], {"[UNK]": 1, "Danmark": 42}, AutoTokenizer.from_pretrained(daBERT))
+    model(BatchedExamples.build([features], torch.device("cpu"), True))
+
+def test_pca():
+    model = DaLUKE(_create_cfg(), 100, 30, ent_hidden_size=48)
+    model.init_special_attention(True)
+
 def test_ent_embeds():
     # From original LUKE repository
     # https://github.com/studio-ousia/luke/blob/6feefe657d97d2f847ace87f61f23b705f75d2aa/tests/test_model.py#L29
     cfg = _create_cfg()
     cfg.hidden_dropout_prob = 0
-    ent_embeds = EntityEmbeddings(cfg, 5, cfg.hidden_size)
+    ent_embeds = EntityEmbeddings(cfg, 5, cfg.hidden_size, cfg.hidden_size)
 
     entity_ids = torch.LongTensor([2, 3, 0])
     position_ids = torch.LongTensor(

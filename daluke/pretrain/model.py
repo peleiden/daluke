@@ -25,8 +25,10 @@ class PretrainTaskDaLUKE(DaLUKE):
         bert_config: BertConfig,
         ent_vocab_size: int,
         ent_embed_size: int,
+        ent_hidden_size:        int=None,
+        ent_intermediate_size:  int=None,
     ):
-        super().__init__(bert_config, ent_vocab_size, ent_embed_size)
+        super().__init__(bert_config, ent_vocab_size, ent_embed_size, ent_hidden_size, ent_intermediate_size)
 
         self.mask_word_scorer = BertLMPredictionHead(bert_config)
         self.mask_entity_scorer = EntityPreTrainingHeads(bert_config, ent_vocab_size, self.ent_embed_size)
