@@ -42,6 +42,8 @@ class Hyperparams(DataStorage):
     lr:                 float = 1e-4
     ff_size:            int   = 16
     ent_embed_size:     int   = 256
+    ent_hidden_size:         int | None = None
+    ent_intermediate_size:   int | None = None
     weight_decay:       float = 0.01
     warmup_prop:        float = 0.06
     word_ent_weight:    float = 0.5
@@ -56,6 +58,7 @@ class Hyperparams(DataStorage):
     ent_mask_prob:      float = 0.15
     lukeinit:           bool  = False
     no_base_model:      bool  = False
+    pca_init:           bool  = False
 
     subfolder = None  # Set at runtime
     json_name = "params.json"
@@ -66,6 +69,12 @@ class Hyperparams(DataStorage):
         assert self.epochs > 0
         assert self.lr > 0, "Learning rate must be larger than 0"
         assert isinstance(self.ent_embed_size, int) and self.ent_embed_size > 0
+        assert self.ent_hidden_size is None or isinstance(self.ent_hidden_size, int) and self.ent_hidden_size > 0
+        if isinstance(self.ent_hidden_size, int):
+            assert not self.bert_attention, "When using BERT attention, entity hidden size cannot be specified"
+        assert self.ent_intermediate_size is None or isinstance(self.ent_intermediate_size, int) and self.ent_intermediate_size > 0
+        if isinstance(self.ent_intermediate_size, int):
+            assert isinstance(self.ent_hidden_size, int), "Set entity hidden size explicitly before controlling entity intermediate size"
         assert isinstance(self.batch_size, int) and self.batch_size > 0
         assert isinstance(self.ff_size, int) and 0 < self.ff_size <= self.batch_size
         assert 0 <= self.weight_decay < 1
@@ -300,13 +309,29 @@ def train(
 
     # Build model, possibly by loading previous weights
     log.section("Setting up model")
+    bert_config = AutoConfig.from_pretrained(metadata["base-model"])
+    if params.ent_hidden_size is None:
+        params.ent_hidden_size = bert_config.hidden_size
+    else:
+        assert params.ent_hidden_size <= bert_config.hidden_size,\
+            "Entity hidden size (%i) cannot be larger than hidden size in '%s' (%i)" % (
+                params.hidden_size,
+                metadata["base-model"],
+                bert_config.hidden_size,
+            )
+    assert bert_config.max_position_embeddings == metadata["max-seq-length"],\
+        f"Model should respect sequence length; embeddings are of length {bert_config.max_position_embeddings}, "\
+        f"but max. seq. len. is set to {metadata['max-seq-length']}"
+    log("Bert config", bert_config.to_json_string())
 
     log("Initializing model")
     model_cls = BertAttentionPretrainTaskDaLUKE if params.bert_attention else PretrainTaskDaLUKE
     model = model_cls(
         bert_config,
-        ent_vocab_size = len(entity_vocab),
-        ent_embed_size = params.ent_embed_size,
+        ent_vocab_size        = len(entity_vocab),
+        ent_embed_size        = params.ent_embed_size,
+        ent_hidden_size       = params.ent_hidden_size,
+        ent_intermediate_size = params.ent_intermediate_size,
     ).to(device)
     bert_config.vocab_size = metadata["vocab-size"]
     log("Bert config", bert_config.to_json_string())
@@ -336,12 +361,12 @@ def train(
     else:
         new_weights = set(model.state_dict())
     # Initialize self-attention query matrices to BERT word query matrices
-    q_mat_keys = set()
+    att_mat_keys = set()
     if not params.bert_attention and not params.no_base_model:
-        q_mat_keys = model.init_queries()
+        att_mat_keys = model.init_special_attention(params.pca_init)
     if not resume:
         res.luke_exclusive_params = new_weights
-        res.q_mats_from_base = q_mat_keys
+        res.att_mats_from_base = att_mat_keys
         if is_master:
             res.orig_params = all_params(model).cpu().numpy()
     log("Pretraining model initialized with %s parameters" % thousand_seps(len(model)))
