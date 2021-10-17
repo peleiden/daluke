@@ -200,5 +200,5 @@ def copy_with_reduced_state_dict(
         if key in keys_to_reduce:
             reduced_sd[key] = full_sd[key][token_reduction].detach().clone()
         else:
-            reduced_sd[key] = full_sd[token_reduction].detach().clone()
+            reduced_sd[key] = full_sd[key].detach().clone()
     reduced_model.load_state_dict(reduced_sd)

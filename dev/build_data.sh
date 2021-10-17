@@ -20,8 +20,8 @@ if [ ! -d dagw ];
 then
     echo "DOWNLOADING GIGAWORD"
     wget https://bit.ly/danishgigaword10
-    unzip dagw_v1.0-release.zip
-    rm dagw_v1.0-release.zip
+    unzip danishgigaword10
+    rm danishgigaword10
 fi
 
 echo "BUILD TEMPORARY DUMP DATABASE"

@@ -18,8 +18,9 @@ import numpy as np
 from transformers import AutoConfig, AutoModelForPreTraining, AutoTokenizer, AdamW, get_linear_schedule_with_warmup
 from pelutils import DataStorage, thousand_seps, TT
 from pelutils.logger import log, Levels
-from daluke.data import get_special_ids, token_map_to_token_reduction
+from pelutils.ds import unique
 
+from daluke.data import get_special_ids, token_map_to_token_reduction
 from .data import DataLoader
 from .data.build import DatasetBuilder
 from .model import PretrainTaskDaLUKE, BertAttentionPretrainTaskDaLUKE, load_base_model_weights, copy_with_reduced_state_dict
@@ -59,6 +60,7 @@ class Hyperparams(DataStorage):
     lukeinit:           bool  = False
     no_base_model:      bool  = False
     pca_init:           bool  = False
+    vals_per_epoch:     int   = 10
 
     subfolder = None  # Set at runtime
     json_name = "params.json"
@@ -281,28 +283,38 @@ def train(
         )
 
     if not resume:
-        top_k = [1, 3, 5, 10, 25, 50]
+        top_k = [1, 5, 10, 25]
+        if params.vals_per_epoch:
+            val_updates = unique(np.linspace(0, num_updates_epoch, params.vals_per_epoch+1, dtype=int))[:-1]
+        else:
+            val_updates = np.array([], dtype=int)
         res = TrainResults(
+            runtime      = np.zeros((0, num_updates_epoch)),
+            lr           = np.zeros((0, num_updates_epoch)),
+            epoch        = 0,
+
             losses       = np.zeros((0, num_updates_epoch)),
+            scaled_loss  = np.zeros((0, num_updates_epoch)),
+
+            top_k        = top_k,
             w_losses     = np.zeros((0, num_updates_epoch)),
             e_losses     = np.zeros((0, num_updates_epoch)),
-            scaled_loss  = np.zeros((0, num_updates_epoch)),
-            lr           = np.zeros((0, num_updates_epoch)),
-            top_k        = top_k,
             w_accuracies = np.full((0, num_updates_epoch, len(top_k)), np.nan),
             e_accuracies = np.full((0, num_updates_epoch, len(top_k)), np.nan),
+
+            val_param_updates = val_updates,
+            val_losses        = np.zeros((0, len(val_updates))),
+            val_w_losses      = np.zeros((0, len(val_updates))),
+            val_e_losses      = np.zeros((0, len(val_updates))),
+            val_w_accuracies  = np.full((0, len(val_updates), len(top_k)), np.nan),
+            val_e_accuracies  = np.full((0, len(val_updates), len(top_k)), np.nan),
+
             orig_params  = None,  # Set later
             param_diff_1 = np.zeros((0, num_updates_epoch)),
             param_diff_2 = np.zeros((0, num_updates_epoch)),
-            runtime      = np.zeros((0, num_updates_epoch)),
-            epoch        = 0,
+
             luke_exclusive_params = None,  # Set later
             q_mats_from_base      = None,  # Set later
-            val_losses            = np.zeros(0),
-            val_w_losses          = np.zeros(0),
-            val_e_losses          = np.zeros(0),
-            val_w_accuracies      = np.full((0, len(top_k)), np.nan),
-            val_e_accuracies      = np.full((0, len(top_k)), np.nan),
         )
 
     save_epochs = set(range(-1, params.epochs, save_every))
@@ -409,7 +421,7 @@ def train(
             scaler.load_state_dict(torch.load(fpath((TrainResults.subfolder, SCALER_OUT.format(i=res.epoch))), map_location=device))
         res.epoch += 1  # We saved the data at epoch i, but should now commence epoch i+1
 
-    log.section(f"Training of daLUKE for {params.epochs} epochs")
+    log.section(f"Training DaLUKE for {params.epochs} epochs")
     model.zero_grad()  # To avoid tracking of model parameter manipulation
     model.train()
 
@@ -429,21 +441,21 @@ def train(
             sampler.set_epoch(i)
 
         # Allocate room for results for this epoch
+        res.lr               = np.vstack((res.lr,           np.zeros(num_updates_epoch)))
+        res.runtime          = np.vstack((res.runtime,      np.zeros(num_updates_epoch)))
         res.losses           = np.vstack((res.losses,       np.zeros(num_updates_epoch)))
+        res.scaled_loss      = np.vstack((res.scaled_loss,  np.zeros(num_updates_epoch)))
         res.w_losses         = np.vstack((res.w_losses,     np.zeros(num_updates_epoch)))
         res.e_losses         = np.vstack((res.e_losses,     np.zeros(num_updates_epoch)))
-        res.scaled_loss      = np.vstack((res.scaled_loss,  np.zeros(num_updates_epoch)))
-        res.lr               = np.vstack((res.lr,           np.zeros(num_updates_epoch)))
-        res.w_accuracies     = np.concatenate((res.w_accuracies, np.full((1, num_updates_epoch, len(res.top_k)), np.nan)))
-        res.e_accuracies     = np.concatenate((res.e_accuracies, np.full((1, num_updates_epoch, len(res.top_k)), np.nan)))
+        res.w_accuracies     = np.concatenate((res.w_accuracies,     np.full((1, num_updates_epoch, len(res.top_k)), np.nan)))
+        res.e_accuracies     = np.concatenate((res.e_accuracies,     np.full((1, num_updates_epoch, len(res.top_k)), np.nan)))
+        res.val_losses       = np.vstack((res.val_losses,   np.zeros(len(res.val_param_updates))))
+        res.val_w_losses     = np.vstack((res.val_w_losses, np.zeros(len(res.val_param_updates))))
+        res.val_e_losses     = np.vstack((res.val_e_losses, np.zeros(len(res.val_param_updates))))
+        res.val_w_accuracies = np.concatenate((res.val_w_accuracies, np.full((1, len(res.val_param_updates), len(res.top_k)), np.nan)))
+        res.val_e_accuracies = np.concatenate((res.val_e_accuracies, np.full((1, len(res.val_param_updates), len(res.top_k)), np.nan)))
         res.param_diff_1     = np.vstack((res.param_diff_1, np.zeros(num_updates_epoch)))
         res.param_diff_2     = np.vstack((res.param_diff_2, np.zeros(num_updates_epoch)))
-        res.runtime          = np.vstack((res.runtime,      np.zeros(num_updates_epoch)))
-        res.val_losses       = np.concatenate((res.val_losses,   [0]))
-        res.val_w_losses     = np.concatenate((res.val_w_losses, [0]))
-        res.val_e_losses     = np.concatenate((res.val_e_losses, [0]))
-        res.val_w_accuracies = np.concatenate((res.val_w_accuracies, np.full((1, len(res.top_k)), np.nan)))
-        res.val_e_accuracies = np.concatenate((res.val_e_accuracies, np.full((1, len(res.top_k)), np.nan)))
 
         batch_iter = iter(loader)
 
@@ -489,7 +501,7 @@ def train(
                 TT.end_profile()
 
                 # Save accuracy for statistics
-                with TT.profile("Accuracy"):
+                with TT.profile("Training accuracy"):
                     # Only calculate more than top 10 every 20th subbatch
                     top_k = res.top_k if k % 20 == 0 else [x for x in res.top_k if x <= 10]
                     w_accuracies[k, :len(top_k)] = top_k_accuracy(batch.word_mask_labels, word_preds, top_k)
@@ -528,14 +540,16 @@ def train(
                 f"Loss (total, word, entity, scaled): {t_loss:10.5f}, {w_loss:10.5f}, {e_loss:10.5f}, {s_loss:10.5f}",
                 f"Accuracy (word, entity):     {100*res.w_accuracies[i, j, 0]:7.3f} %,  {100*res.e_accuracies[i, j, 0]:7.3f} %",
             )
-
             res.runtime[i, j] = TT.end_profile()
 
-        with TT.profile("Model validation"):
-            res.val_w_losses[i], res.val_e_losses[i], res.val_w_accuracies[i], res.val_e_accuracies[i] =\
-                validate_model(model, val_loader, word_criterion, entity_criterion, res.top_k)
-            res.val_losses[i] = loss_calculator(res.val_w_losses[i], res.val_e_losses[i])
-            model.train()
+            if j in enumerate(res.val_param_updates):
+                TT.profile("Model validation")
+                vi = res.val_param_updates.tolist().index(j)
+                res.val_w_losses[i, vi], res.val_e_losses[i, vi], res.val_w_accuracies[i, vi], res.val_e_accuracies[i, vi] =\
+                    validate_model(model, val_loader, word_criterion, entity_criterion, res.top_k)
+                res.val_losses[i, vi] = loss_calculator(res.val_w_losses[i, vi], res.val_e_losses[i, vi])
+                model.train()
+                TT.end_profile()
 
         TT.end_profile()
         log(
@@ -543,9 +557,9 @@ def train(
             f"Mean train loss (total, word, entity, scaled): {res.losses[i].mean():10.5f}, {res.w_losses[i].mean():10.5f}, "
             f"{res.e_losses[i].mean():10.5f}, {res.scaled_loss[i].mean()}",
             f"Mean train accuracy (word, entity):     {100*res.w_accuracies[i, :, 0].mean():7.3f} %,  {100*res.e_accuracies[i, :, 0].mean():7.3f} %",
-            f"Mean val. loss (total, word, entity):   {res.val_losses[i]:10.5f}, {res.val_w_losses[i]:10.5f}, {res.val_e_losses[i]:10.5f}",
-            f"Mean val.accuracy (word, entity):       {100*res.val_w_accuracies[i, 0].mean()}, {100*res.val_e_accuracies[i, 0].mean()}",
-            "Runtime: %s" % thousand_seps(res.runtime[-1].sum()),
+            f"Mean val. loss (total, word, entity):   {res.val_losses[i].mean():10.5f}, {res.val_w_losses[i].mean():10.5f}, {res.val_e_losses[i].mean():10.5f}",
+            f"Mean val.accuracy (word, entity):       {100*res.val_w_accuracies[i, :, 0].mean()}, {100*res.val_e_accuracies[i, :, 0].mean()}",
+            "Runtime: %s s" % thousand_seps(res.runtime[-1].sum()),
             "Time distribution so far",
             TT,
         )
