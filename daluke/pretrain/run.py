@@ -33,6 +33,7 @@ ARGUMENTS = {
     "word-unmask-prob":   { "default": Hyperparams.word_unmask_prob,   "type": float, "help": "Chance of masked word to be forward passed as unmasked" },
     "word-randword-prob": { "default": Hyperparams.word_randword_prob, "type": float, "help": "Chance of masked word to be forward passed as another random word" },
     "ent-mask-prob":      { "default": Hyperparams.ent_mask_prob,      "type": float, "help": "Prop of entities to mask in MEM" },
+    "vals-per-epoch":     { "default": Hyperparams.vals_per_epoch,     "type": int,   "help": "How many time loss and accuracy is calculated on the validation set per epoch" },
     "fp16":               { "action": "store_true", "help": "Use automatic mixed precision" },
     "entity-loss-weight": { "action": "store_true", "help": "Weigh MLM entity loss by entity count" },
     "bert-attention":     { "action": "store_true", "help": "Use the original BERT attention mechanism instead of the entity aware LUKE variant" },
