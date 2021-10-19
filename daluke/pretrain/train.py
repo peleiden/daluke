@@ -331,9 +331,6 @@ def train(
                 metadata["base-model"],
                 bert_config.hidden_size,
             )
-    assert bert_config.max_position_embeddings == metadata["max-seq-length"],\
-        f"Model should respect sequence length; embeddings are of length {bert_config.max_position_embeddings}, "\
-        f"but max. seq. len. is set to {metadata['max-seq-length']}"
     log("Bert config", bert_config.to_json_string())
 
     log("Initializing model")
