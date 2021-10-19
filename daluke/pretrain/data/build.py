@@ -45,7 +45,7 @@ class DatasetBuilder:
         max_vocab_size:      int,
     ):
         if not wikipedia2vec_available:
-            raise RuntimeError("Pretrain data generation requires installation of the optional requirement `wikipedia2vec`")
+            raise ModuleNotFoundError("Pretrain data generation requires installation of the optional requirement `wikipedia2vec`")
         log("Reading dump database at %s" % dump_db_file)
         self.dump_db = DumpDB(dump_db_file)
         log("Building tokeninizer: %s" % tokenizer_name)
