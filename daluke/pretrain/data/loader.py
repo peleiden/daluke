@@ -3,7 +3,6 @@ import os
 
 import numpy as np
 import torch
-from tqdm import tqdm
 from transformers import AutoTokenizer
 
 from pelutils import TT
@@ -70,7 +69,7 @@ class DataLoader:
     def build_examples(self) -> tuple[list[Example], list[Example]]:
         train_examples, val_examples = list(), list()
         with open(os.path.join(self.data_dir, DatasetBuilder.data_file)) as df:
-            for seq_data in tqdm(load_jsonl(df), total=self.metadata["number-of-items"]):
+            for seq_data in load_jsonl(df):
                 # Backwards compatible to time before validation
                 is_validation = seq_data.get("is_validation", False)
                 if self.only_load_validation and not is_validation:
