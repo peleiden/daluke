@@ -59,7 +59,7 @@ class Hyperparams(DataStorage):
     ent_mask_prob:      float = 0.15
     lukeinit:           bool  = False
     no_base_model:      bool  = False
-    pca_init:           bool  = False
+    pcainit:           bool  = False
     vals_per_epoch:     int   = 10
 
     subfolder = None  # Set at runtime
@@ -375,7 +375,7 @@ def train(
     # Initialize self-attention query matrices to BERT word query matrices
     att_mat_keys = set()
     if not params.bert_attention and not params.no_base_model:
-        att_mat_keys = model.init_special_attention(params.pca_init)
+        att_mat_keys = model.init_special_attention(params.pcainit)
     if not resume:
         res.luke_exclusive_params = new_weights
         res.att_mats_from_base = att_mat_keys
