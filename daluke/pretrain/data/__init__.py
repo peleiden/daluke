@@ -18,7 +18,7 @@ class ICUSentenceTokenizer:
 
     def __init__(self, locale: str):
         if not icu_available:
-            raise RuntimeError("Pretrain data generation requires installation of the optional requirement `PyIcU`")
+            raise ModuleNotFoundError("Pretrain data generation requires installation of the optional requirement `PyIcU`")
 
         # ICU includes lists of common abbreviations that can be used to filter, to ignore,
         # these false sentence boundaries for some languages.

@@ -279,7 +279,7 @@ class DaNE(NERDataset):
     def load(self, **_): # Toss out kwargs
         # Get all three splits from DaNE and divide them in source texts and annotations
         if not danlp_available:
-            raise RuntimeError("DaNE dataset requires installation of the optional requirement `danlp`")
+            raise ModuleNotFoundError("DaNE dataset requires installation of the optional requirement `danlp`")
         datasets = DDT().load_as_simple_ner(predefined_splits=True)
         for (texts, annotations), split in zip(datasets, Split):
             self.data[split] = Sequences(

@@ -91,7 +91,7 @@ class DaLUKE(nn.Module):
         """
         """
         if not sklearn_available:
-            raise RuntimeError("Using PCA for weight initialization requires isntallation of the optional requirement `scikit-learn`")
+            raise ModuleNotFoundError("Using PCA for weight initialization requires isntallation of the optional requirement `scikit-learn`")
 
         W_w2e = scipy_PCA(n_components=l).fit_transform(W.numpy())
         W_e2w = W_w2e.T
