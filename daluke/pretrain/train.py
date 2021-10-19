@@ -418,13 +418,16 @@ def train(
             scaler.load_state_dict(torch.load(fpath((TrainResults.subfolder, SCALER_OUT.format(i=res.epoch))), map_location=device))
         res.epoch += 1  # We saved the data at epoch i, but should now commence epoch i+1
 
+    log("Time distribution before starting training", TT)
+
     log.section(f"Training DaLUKE for {params.epochs} epochs")
     model.zero_grad()  # To avoid tracking of model parameter manipulation
     model.train()
 
     # Save initial parameters
     if is_master and not resume:
-        paths = save_training(location, params, model.module if is_distributed else model, res, optimizer, scheduler, scaler, -1)
+        paths = save_training(location, params, model.module if is_distributed else model,
+            res, optimizer, scheduler, scaler, -1)
         log.debug("Saved initial state to", *paths)
 
     for i in range(res.epoch, params.epochs):
@@ -444,8 +447,8 @@ def train(
         res.scaled_loss      = np.vstack((res.scaled_loss,  np.zeros(num_updates_epoch)))
         res.w_losses         = np.vstack((res.w_losses,     np.zeros(num_updates_epoch)))
         res.e_losses         = np.vstack((res.e_losses,     np.zeros(num_updates_epoch)))
-        res.w_accuracies     = np.concatenate((res.w_accuracies,     np.full((1, num_updates_epoch, len(res.top_k)), np.nan)))
-        res.e_accuracies     = np.concatenate((res.e_accuracies,     np.full((1, num_updates_epoch, len(res.top_k)), np.nan)))
+        res.w_accuracies     = np.concatenate((res.w_accuracies, np.full((1, num_updates_epoch, len(res.top_k)), np.nan)))
+        res.e_accuracies     = np.concatenate((res.e_accuracies, np.full((1, num_updates_epoch, len(res.top_k)), np.nan)))
         res.val_losses       = np.vstack((res.val_losses,   np.zeros(len(res.val_param_updates))))
         res.val_w_losses     = np.vstack((res.val_w_losses, np.zeros(len(res.val_param_updates))))
         res.val_e_losses     = np.vstack((res.val_e_losses, np.zeros(len(res.val_param_updates))))
@@ -516,8 +519,12 @@ def train(
                 scheduler.step()
                 model.zero_grad()
 
+            # TODO Maybe clear up some memory here
+            # Some of the stuff may still be allocated for the rest of the rest of the loop
+            # This causes the gradient change tracking and validation to cause memory spikes
+
             # Calculate how much gradient has changed
-            with TT.profile("Parameter changes"), torch.no_grad():
+            with torch.no_grad(), TT.profile("Parameter changes"):
                 if is_master:
                     orig_pars = torch.from_numpy(res.orig_params).to(device)
                     current_pars = all_params(model.module if is_distributed else model)
@@ -534,28 +541,38 @@ def train(
             res.e_accuracies[i, j] = np.nanmean(e_accuracies, axis=0)
             log.debug(
                 "Performed parameter update %i / %i (ep. %i)" % (j, num_updates_epoch-1, i),
-                f"Loss (total, word, entity, scaled): {t_loss:10.5f}, {w_loss:10.5f}, {e_loss:10.5f}, {s_loss:10.5f}",
-                f"Accuracy (word, entity):     {100*res.w_accuracies[i, j, 0]:7.3f} %,  {100*res.e_accuracies[i, j, 0]:7.3f} %",
+                f"  Loss (total, word, entity, scaled): {t_loss:10.5f}, {w_loss:10.5f}, {e_loss:10.5f}, {s_loss:10.5f}",
+                f"  Accuracy (word, entity):     {100*res.w_accuracies[i, j, 0]:7.3f} %,  {100*res.e_accuracies[i, j, 0]:7.3f} %",
             )
             res.runtime[i, j] = TT.end_profile()
 
-            if j in enumerate(res.val_param_updates):
+            if j in res.val_param_updates:
                 TT.profile("Model validation")
+                log("Validating model")
                 vi = res.val_param_updates.tolist().index(j)
                 res.val_w_losses[i, vi], res.val_e_losses[i, vi], res.val_w_accuracies[i, vi], res.val_e_accuracies[i, vi] =\
                     validate_model(model, val_loader, word_criterion, entity_criterion, res.top_k)
                 res.val_losses[i, vi] = loss_calculator(res.val_w_losses[i, vi], res.val_e_losses[i, vi])
+                log(
+                    "Validation loss:",
+                    "  Total:  %10.5f" % res.val_losses[i, vi],
+                    "  Word:   %10.5f" % res.val_w_losses[i, vi],
+                    "  Entity: %10.5f" % res.val_e_losses[i, vi],
+                    "Validation accuracy:",
+                    "  Word:   %7.3f" % (100 * res.val_w_accuracies[i, vi]),
+                    "  Entity: %7.3f" % (100 * res.val_e_accuracies[i, vi]),
+                )
                 model.train()
                 TT.end_profile()
-
         TT.end_profile()
+
         log(
             f"Completed epoch {i:2} / {params.epochs-1}",
             f"Mean train loss (total, word, entity, scaled): {res.losses[i].mean():10.5f}, {res.w_losses[i].mean():10.5f}, "
             f"{res.e_losses[i].mean():10.5f}, {res.scaled_loss[i].mean()}",
             f"Mean train accuracy (word, entity):     {100*res.w_accuracies[i, :, 0].mean():7.3f} %,  {100*res.e_accuracies[i, :, 0].mean():7.3f} %",
             f"Mean val. loss (total, word, entity):   {res.val_losses[i].mean():10.5f}, {res.val_w_losses[i].mean():10.5f}, {res.val_e_losses[i].mean():10.5f}",
-            f"Mean val.accuracy (word, entity):       {100*res.val_w_accuracies[i, :, 0].mean()}, {100*res.val_e_accuracies[i, :, 0].mean()}",
+            f"Mean val. accuracy (word, entity):      {100*res.val_w_accuracies[i, :, 0].mean()}, {100*res.val_e_accuracies[i, :, 0].mean()}",
             "Runtime: %s s" % thousand_seps(res.runtime[-1].sum()),
             "Time distribution so far",
             TT,
