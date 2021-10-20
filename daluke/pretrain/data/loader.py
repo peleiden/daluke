@@ -74,15 +74,6 @@ class DataLoader:
                 is_validation = seq_data.get("is_validation", False)
                 if self.only_load_validation and not is_validation:
                     continue
-                try:
-                    # Keep only entities in filtered entity vocab
-                    seq_data["entity_ids"], seq_data["entity_spans"] = zip(
-                        *((id_, span) for id_, span in zip(seq_data["entity_ids"], seq_data["entity_spans"]) if id_ in self.ent_ids)
-                    )
-                except ValueError:
-                    # Happens if no entities in vocab
-                    seq_data["entity_ids"] = list()
-                    seq_data["entity_spans"] = list()
 
                 ex = Example(
                     words = Words.build(
@@ -95,7 +86,7 @@ class DataLoader:
                     ),
                     entities = Entities.build(
                         torch.IntTensor(seq_data["entity_ids"]),
-                        list(seq_data["entity_spans"]),
+                        seq_data["entity_spans"],
                         max_entities    = self.max_entities,
                         max_entity_span = self.max_entity_span,
                     ),

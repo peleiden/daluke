@@ -47,12 +47,12 @@ echo "BUILD DUMP DATABASE"
 cd $LUKE
 python3 -m luke.cli build-dump-db\
    $DATA_PATH/dawiki-$WIKIDATE-pages-articles.xml.$PREPROCESS.bz2\
-   $DATA_PATH/$DUMP_FILE
+   $DATA_PATH/$PREPROCESS\_\_$DUMP_FILE
 
 echo "BUILD PRETRAINING DATASET"
 cd $DALUKE
 python3 daluke/pretrain/data/run.py\
-    $DATA_PATH/$DUMP_FILE\
+    $DATA_PATH/\_\_$DUMP_FILE\
     $DATA_PATH/entity-vocab.jsonl\
     $TOKENIZER\
     $DATA_PATH\

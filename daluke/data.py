@@ -25,22 +25,20 @@ class Words:
     def build(
         cls,
         ids: torch.IntTensor,
-        spans: list[list[int]]=None,
-        max_len: int=512,
-        sep_id:  int=3,
-        cls_id:  int=2,
-        pad_id:  int=0,
+        spans: list[list[int]] = None,
+        max_len: int = 512,
+        sep_id:  int = 3,
+        cls_id:  int = 2,
+        pad_id:  int = 0,
     ):
-        """
-        For creating a single example: Pads and add special tokens.
-        """
+        """ For creating a single example: Pads and add special tokens """
         N = ids.shape[0]
         word_ids = torch.full((max_len,), pad_id, dtype=torch.int)
         word_ids[:N+2] = torch.cat((torch.IntTensor([cls_id]), ids, torch.IntTensor([sep_id])))
 
         # Don't pad the spans as they are not given to model, but used for masking
         if spans is not None:
-            spans = torch.IntTensor(spans) + 1 # For [CLS]
+            spans = torch.IntTensor(spans) + 1  # For [CLS]
 
         return cls(
             ids            = word_ids,

@@ -82,7 +82,6 @@ class DatasetBuilder:
         if os.path.isfile(self.data_file):
             log.debug("Removing old datafile '%s'" % self.data_file)
             os.remove(self.data_file)
-        log("Saving data to '%s'" % self.data_file)
 
     def _tokenize(self, text: str, paragraph_text: str, idx: int) -> list[str]:
         if not text:
@@ -111,7 +110,8 @@ class DatasetBuilder:
             log("Saving entity vocab to '%s'" % path)
             ujson.dump(self.entity_vocab, ev, indent=2)
 
-        log.section("Processing pages")
+        log.section("Processing %i pages" % len(self.target_titles[:self.max_articles]))
+        log("Saving data to '%s'" % self.data_file)
         n_seqs, n_ents, n_vals, n_word_toks, n_words = 0, 0, 0, 0, 0
         for title in log.tqdm(tqdm(self.target_titles[:self.max_articles])):
             log("Processing %s" % title)
