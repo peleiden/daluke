@@ -146,7 +146,7 @@ def _get_lineblocks(filepath: str) -> Generator[tuple[bool, str, str | None], No
                 current_lines = list()
         yield False, "".join(current_lines), None
 
-def _get_dagw_files(path: str, ignore_sections: set[str]={"wiki"}) -> Generator[str, None, None]:
+def _get_dagw_files(path: str, ignore_sections: set[str]={"wiki", "cc"}) -> Generator[str, None, None]:
     for root, __, files in os.walk(path):
         if os.path.split(root)[-1] in ignore_sections:
             continue

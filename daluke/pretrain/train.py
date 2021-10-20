@@ -283,7 +283,7 @@ def train(
         )
 
     if not resume:
-        top_k = [1, 5, 10, 25]
+        top_k = [1, 5, 10, 20]
         if params.vals_per_epoch:
             val_updates = unique(np.linspace(0, num_updates_epoch, params.vals_per_epoch+1, dtype=int))[:-1]
         else:
@@ -318,6 +318,8 @@ def train(
         )
 
     save_epochs = set(range(-1, params.epochs, save_every))
+    log("Saving model at epochs: %s" % save_epochs,
+        "Validating at parameter updates: %s" % res.val_param_updates.tolist())
 
     # Build model, possibly by loading previous weights
     log.section("Setting up model")
@@ -541,7 +543,7 @@ def train(
             res.e_accuracies[i, j] = np.nanmean(e_accuracies, axis=0)
             log.debug(
                 "Performed parameter update %i / %i (ep. %i)" % (j, num_updates_epoch-1, i),
-                f"  Loss (total, word, entity, scaled): {t_loss:10.5f}, {w_loss:10.5f}, {e_loss:10.5f}, {s_loss:10.5f}",
+                f"  Loss: T={t_loss:9.4f}, W={w_loss:9.4f}, E={e_loss:9.4f}, S={s_loss:9.4f}",
                 f"  Accuracy (word, entity):     {100*res.w_accuracies[i, j, 0]:7.3f} %,  {100*res.e_accuracies[i, j, 0]:7.3f} %",
             )
             res.runtime[i, j] = TT.end_profile()
@@ -555,12 +557,12 @@ def train(
                 res.val_losses[i, vi] = loss_calculator(res.val_w_losses[i, vi], res.val_e_losses[i, vi])
                 log(
                     "Validation loss:",
-                    "  Total:  %10.5f" % res.val_losses[i, vi],
-                    "  Word:   %10.5f" % res.val_w_losses[i, vi],
-                    "  Entity: %10.5f" % res.val_e_losses[i, vi],
+                    "  Total:  %9.4f" % res.val_losses[i, vi],
+                    "  Word:   %9.4f" % res.val_w_losses[i, vi],
+                    "  Entity: %9.4f" % res.val_e_losses[i, vi],
                     "Validation accuracy:",
-                    "  Word:   %7.3f" % (100 * res.val_w_accuracies[i, vi]),
-                    "  Entity: %7.3f" % (100 * res.val_e_accuracies[i, vi]),
+                    "  Word:   %7.3f" % (100 * res.val_w_accuracies[i, vi, 0]),
+                    "  Entity: %7.3f" % (100 * res.val_e_accuracies[i, vi, 0]),
                 )
                 model.train()
                 TT.end_profile()
