@@ -1,8 +1,9 @@
 from __future__ import annotations
-import os
+from dataclasses import dataclass
 import contextlib
 import json
-from dataclasses import dataclass
+import os
+import time
 
 import torch
 import torch.cuda.amp as amp
@@ -14,7 +15,6 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 
 import numpy as np
-
 from transformers import AutoConfig, AutoModelForPreTraining, AutoTokenizer, AdamW, get_linear_schedule_with_warmup
 from pelutils import DataStorage, thousand_seps, TT
 from pelutils.logger import log, Levels
@@ -91,7 +91,6 @@ class Hyperparams(DataStorage):
         if self.fp16:
             assert torch.cuda.is_available(), "Half-precision cannot be used without CUDA access"
         assert isinstance(self.ent_min_mention, int) and self.ent_min_mention >= 0
-        assert isinstance(self.validate_every, int) and self.validate_every >= 0
 
     def __str__(self):
         return json.dumps(self.__dict__, indent=4)
@@ -156,6 +155,34 @@ def save_training(
         torch.save(scaler.state_dict(), paths[-1])
     return paths
 
+def parse_post_command(resume_command: str) -> tuple[int, str] | tuple[None, None]:
+    """ Returns the epoch time at which it should stop and the system command for resuming """
+    if resume_command:
+        t, cmd = resume_command.split(":::")
+        h, m = [int(x) for x in t.split("h")]
+        return time.time() + h * 3600 + m * 60, cmd
+    return None, None
+
+def save_progress(
+    location: str,
+    pu: int,
+    tmp_saved_pu: int | None,
+    save_pus: set[int],
+    params: Hyperparams,
+    module: nn.Module,
+    res: TrainResults,
+    optimizer: Optimizer,
+    scheduler,
+    scaler=None,
+):
+    paths = save_training(location, params, module, res, optimizer, scheduler, scaler)
+    log.debug("Saved progress to", *paths)
+    if pu > 0 and tmp_saved_pu not in save_pus and tmp_saved_pu is not None:
+        # Clean temporarily saved files
+        cleaned = clean_saved_pu(location, tmp_saved_pu)
+        if cleaned:
+            log.debug("Cleaned temporary files at", *cleaned)
+
 def train(
     rank:           int,
     world_size:     int,
@@ -166,6 +193,7 @@ def train(
     quiet:          bool,
     save_every:     int,
     validate_every: int,
+    post_command: str,
     explicit_args:  set[str],
     params:         Hyperparams,
 ):
@@ -191,15 +219,24 @@ def train(
         print_level = (Levels.INFO if quiet else Levels.DEBUG) if is_master else None,
         append      = resume,  # Append to existing log file if we are resuming training
     )
+
+    post_time, post_command = parse_post_command(post_command)
+    execute_post_command = False
+    if post_time:
+        log("Quitting in %.2f h and running command '%s'" % ((post_time-time.time())/3600, post_command))
+
     if resume:
         log("Resuming from %s" % name)
         # Load results and hyperparameters from earlier training
         res = TrainResults.load(location)
+        tmp_saved_pu = res.parameter_update
         loaded_params = Hyperparams.load(location)
         # Overwrite ff-size if given explicitly
         if "ff_size" in explicit_args:
             loaded_params.ff_size = params.ff_size
         params = loaded_params
+    else:
+        tmp_saved_pu = None
     log.section("Starting pretraining with the following hyperparameters", params)
     log("Training using %i workers" % num_workers)
 
@@ -544,14 +581,22 @@ def train(
         # Save results and model
         if is_master and i in save_pus:
             with TT.profile("Saving progress"):
-                paths = save_training(location, params, model.module if is_distributed else model, res, optimizer, scheduler, scaler)
-                log.debug("Saved progress to", *paths)
-                if i > 0 and i - 1 not in save_pus:
-                    # Clean temporarily saved files
-                    cleaned = clean_saved_pu(location, i-1)
-                    log.debug("Cleaned temporary files at", *cleaned)
+                save_progress(location, i, tmp_saved_pu, save_pus, params,
+                    model.module if is_distributed else model, res, optimizer, scheduler, scaler)
+
+        # If timed out, save, quit, and run resume command
+        if post_time and time.time() > post_time:
+            log.section("Time limit reached. Quitting and running command '%s'" % post_command)
+            with TT.profile("Saving progress"):
+                save_progress(location, i, tmp_saved_pu, save_pus, params,
+                    model.module if is_distributed else model, res, optimizer, scheduler, scaler)
+            execute_post_command = True
+            break
 
     log.debug("Time distribution", TT)
 
     # Clean up multi-gpu if used
     cleanup(rank)
+
+    if is_master and execute_post_command:
+        os.system(post_command)

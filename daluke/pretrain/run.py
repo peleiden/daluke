@@ -41,8 +41,9 @@ ARGUMENTS = {
     "no-base-model":         { "action":  "store_true", "help": "Do not use base model for initialization" },
     "save-every":            { "default": 500, "type": int, "help": "Save progress after this many parameter updates" },
     "validate-every":        { "default": 100, "type": int, "help": "How many parameter updates are performed between each validation. 0 for no validation" },
+    "post-command":          { "default": str(), "help": "Format: <x>h<y>:::<command> for exiting and running command after x hours and y minutes" },
     "quiet":                 { "action":  "store_true", "help": "Don't show debug logging" },
-    "max-workers":           { "default": torch.cuda.device_count(), "type": int, "help": "Maximum number of cuda devices to use" }
+    "max-workers":           { "default": torch.cuda.device_count(), "type": int, "help": "Maximum number of cuda devices to use" },
 }
 
 def _run_training(rank: int, world_size: int, explicit_args: list[set[str]], args: dict[str, Any]):
@@ -58,6 +59,7 @@ def _run_training(rank: int, world_size: int, explicit_args: list[set[str]], arg
             quiet          = args.pop("quiet"),
             save_every     = args.pop("save_every"),
             validate_every = args.pop("validate_every"),
+            post_command   = args.pop("post_command"),
             explicit_args  = explicit_args[0],
             params         = Hyperparams(**args),
         )
