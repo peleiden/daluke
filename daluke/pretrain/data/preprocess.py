@@ -190,7 +190,7 @@ def preprocess(
     dagw_files = list()
     if dagw_sections:
         n_words = 0
-        log("Finding gigaword data files")
+        log("Finding gigaword data files and counting words")
         dagw_files = list(_get_dagw_files(dagw_sections))
         for dagw_file in tqdm(dagw_files):
             with open(dagw_file) as f:

@@ -20,7 +20,7 @@ class DataLoader:
         self,
         data_dir:           str,
         metadata:           dict,
-        entity_vocab:       dict,
+        entity_vocab:       dict | None,  # Only given if a subset of the full vocab
         device:             torch.device,
         word_mask_prob:     float,
         word_unmask_prob:   float,
@@ -33,7 +33,7 @@ class DataLoader:
         """ Loads a generated json dataset prepared by the preprocessing pipeline """
         self.data_dir = data_dir
         self.metadata = metadata
-        self.ent_ids = { info["id"] for info in entity_vocab.values() }
+        self.ent_ids = { info["id"] for info in entity_vocab.values() } if entity_vocab else None
         self.device = device
 
         self.max_sentence_len = metadata["max-seq-length"]
@@ -74,15 +74,11 @@ class DataLoader:
                 is_validation = seq_data.get("is_validation", False)
                 if self.only_load_validation and not is_validation:
                     continue
-                try:
+                if self.ent_ids is not None:
                     # Keep only entities in filtered entity vocab
-                    seq_data["entity_ids"], seq_data["entity_spans"] = zip(
-                        *((id_, span) for id_, span in zip(seq_data["entity_ids"], seq_data["entity_spans"]) if id_ in self.ent_ids)
-                    )
-                except ValueError:
-                    # Happens if no entities in vocab
-                    seq_data["entity_ids"] = list()
-                    seq_data["entity_spans"] = list()
+                    seq_data["entity_spans"] = [span for id_, span in
+                        zip(seq_data["entity_ids"], seq_data["entity_spans"]) if id_ in self.ent_ids]
+                    seq_data["entity_ids"] = [id_ for id_ in seq_data["entity_ids"] if id_ in self.ent_ids]
 
                 ex = Example(
                     words = Words.build(
@@ -95,7 +91,7 @@ class DataLoader:
                     ),
                     entities = Entities.build(
                         torch.IntTensor(seq_data["entity_ids"]),
-                        list(seq_data["entity_spans"]),
+                        seq_data["entity_spans"],
                         max_entities    = self.max_entities,
                         max_entity_span = self.max_entity_span,
                     ),

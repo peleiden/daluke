@@ -248,7 +248,7 @@ def train(
     data = DataLoader(
         location,
         metadata,
-        entity_vocab,
+        entity_vocab if params.ent_min_mention else None,
         device,
         params.word_mask_prob,
         params.word_unmask_prob,
