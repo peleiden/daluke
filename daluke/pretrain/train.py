@@ -30,37 +30,36 @@ from ..analysis.pretrain import TrainResults, top_k_accuracy, validate_model
 PORT = "3090"  # Are we sure this port is in stock?
 NO_DECAY =  { "bias", "LayerNorm.weight" }
 
-MODEL_OUT = "daluke_epoch{i}.pt"
-OPTIMIZER_OUT = "optim_epoch{i}.pt"
-SCHEDULER_OUT = "scheduler_epoch{i}.pt"
-SCALER_OUT = "scaler_epoch{i}.pt"
+MODEL_OUT = "daluke_pu_{i}.pt"
+OPTIMIZER_OUT = "optim_pu_{i}.pt"
+SCHEDULER_OUT = "scheduler_pu_{i}.pt"
+SCALER_OUT = "scaler_pu_{i}.pt"
 
 
 @dataclass
 class Hyperparams(DataStorage):
-    epochs:             int   = 20
-    batch_size:         int   = 2048
-    lr:                 float = 1e-4
-    ff_size:            int   = 16
-    ent_embed_size:     int   = 256
-    ent_hidden_size:         int | None = None
-    ent_intermediate_size:   int | None = None
-    weight_decay:       float = 0.01
-    warmup_prop:        float = 0.06
-    word_ent_weight:    float = 0.5
-    bert_fix_prop:      float = 0.5
-    fp16:               bool  = False
-    ent_min_mention:    int   = 0
-    entity_loss_weight: bool  = False
-    bert_attention:     bool  = False
-    word_mask_prob:     float = 0.15
-    word_unmask_prob:   float = 0.1
-    word_randword_prob: float = 0.1
-    ent_mask_prob:      float = 0.15
-    lukeinit:           bool  = False
-    no_base_model:      bool  = False
-    pcainit:           bool  = False
-    vals_per_epoch:     int   = 10
+    parameter_updates:     int        = 20_000  # Shortened to pu in much of the code
+    batch_size:            int        = 4080
+    lr:                    float      = 1e-4
+    ff_size:               int        = 16
+    ent_embed_size:        int        = 256
+    ent_hidden_size:       int | None = None
+    ent_intermediate_size: int | None = None
+    weight_decay:          float      = 0.01
+    warmup_prop:           float      = 0.06
+    word_ent_weight:       float      = 0.5
+    bert_fix_prop:         float      = 0.5
+    fp16:                  bool       = False
+    ent_min_mention:       int        = 0
+    entity_loss_weight:    bool       = False
+    bert_attention:        bool       = False
+    word_mask_prob:        float      = 0.15
+    word_unmask_prob:      float      = 0.1
+    word_randword_prob:    float      = 0.1
+    ent_mask_prob:         float      = 0.15
+    lukeinit:              bool       = False
+    no_base_model:         bool       = False
+    pcainit:               bool       = False
 
     subfolder = None  # Set at runtime
     json_name = "params.json"
@@ -68,7 +67,7 @@ class Hyperparams(DataStorage):
 
     def __post_init__(self):
         # Test parameter validity
-        assert self.epochs > 0
+        assert self.parameter_updates > 0
         assert self.lr > 0, "Learning rate must be larger than 0"
         assert isinstance(self.ent_embed_size, int) and self.ent_embed_size > 0
         assert self.ent_hidden_size is None or isinstance(self.ent_hidden_size, int) and self.ent_hidden_size > 0
@@ -92,6 +91,7 @@ class Hyperparams(DataStorage):
         if self.fp16:
             assert torch.cuda.is_available(), "Half-precision cannot be used without CUDA access"
         assert isinstance(self.ent_min_mention, int) and self.ent_min_mention >= 0
+        assert isinstance(self.validate_every, int) and self.validate_every >= 0
 
     def __str__(self):
         return json.dumps(self.__dict__, indent=4)
@@ -112,12 +112,12 @@ def get_optimizer_params(params: list, do_decay: bool) -> list:
     include = lambda n: do_decay != any(nd in n for nd in NO_DECAY)
     return [p for n, p in params if p.requires_grad and include(n)]
 
-def clean_saved_epoch(loc: str, epoch: int) -> list[str]:
+def clean_saved_pu(loc: str, pu: int) -> list[str]:
     paths = {
-        os.path.join(loc, TrainResults.subfolder, MODEL_OUT.format(i=epoch)),
-        os.path.join(loc, TrainResults.subfolder, OPTIMIZER_OUT.format(i=epoch)),
-        os.path.join(loc, TrainResults.subfolder, SCHEDULER_OUT.format(i=epoch)),
-        os.path.join(loc, TrainResults.subfolder, SCALER_OUT.format(i=epoch)),
+        os.path.join(loc, TrainResults.subfolder, MODEL_OUT.format(i=pu)),
+        os.path.join(loc, TrainResults.subfolder, OPTIMIZER_OUT.format(i=pu)),
+        os.path.join(loc, TrainResults.subfolder, SCHEDULER_OUT.format(i=pu)),
+        os.path.join(loc, TrainResults.subfolder, SCALER_OUT.format(i=pu)),
     }
     removed_paths = paths.copy()
     for path in paths:
@@ -135,24 +135,24 @@ def save_training(
     optimizer: Optimizer,
     scheduler,
     scaler   = None,
-    epoch    = None,
+    pu       = None,
 ) -> list[str]:
-    epoch = epoch if epoch is not None else res.epoch
+    pu = pu if pu is not None else res.parameter_update
     paths = list()
     # Save tracked statistics
     paths += res.save(loc)
     paths += params.save(loc)
     # Save model
-    paths.append(os.path.join(loc, TrainResults.subfolder, MODEL_OUT.format(i=epoch)))
+    paths.append(os.path.join(loc, TrainResults.subfolder, MODEL_OUT.format(i=pu)))
     torch.save(model.state_dict(), paths[-1])
     # Save optimizer and scheduler states (these are dymanic over time)
-    paths.append(os.path.join(loc, TrainResults.subfolder, OPTIMIZER_OUT.format(i=epoch)))
+    paths.append(os.path.join(loc, TrainResults.subfolder, OPTIMIZER_OUT.format(i=pu)))
     torch.save(optimizer.state_dict(), paths[-1])
-    paths.append(os.path.join(loc, TrainResults.subfolder, SCHEDULER_OUT.format(i=epoch)))
+    paths.append(os.path.join(loc, TrainResults.subfolder, SCHEDULER_OUT.format(i=pu)))
     torch.save(scheduler.state_dict(), paths[-1])
     # Save scaler if using fp16
     if scaler:
-        paths.append(os.path.join(loc, TrainResults.subfolder, SCALER_OUT.format(i=epoch)))
+        paths.append(os.path.join(loc, TrainResults.subfolder, SCALER_OUT.format(i=pu)))
         torch.save(scaler.state_dict(), paths[-1])
     return paths
 
@@ -165,13 +165,14 @@ def train(
     name:           str,
     quiet:          bool,
     save_every:     int,
+    validate_every: int,
     explicit_args:  set[str],
     params:         Hyperparams,
 ):
     # Get filepath within path context
     fpath = lambda path: os.path.join(location, path) if isinstance(path, str) else os.path.join(location, *path)
 
-    # Setup multi-gpu if used and get device
+    # Setup multi-gpu if used
     setup(rank, world_size)
 
     is_master = rank < 1  # Are we on the main node?
@@ -248,7 +249,7 @@ def train(
     data = DataLoader(
         location,
         metadata,
-        entity_vocab if params.ent_min_mention else None,
+        entity_vocab,
         device,
         params.word_mask_prob,
         params.word_unmask_prob,
@@ -256,6 +257,7 @@ def train(
         params.ent_mask_prob,
         vocab_size=metadata["vocab-size"],
         token_map=token_map,
+        ent_min_mention=params.ent_min_mention,
     )
     sampler = (DistributedSampler if is_distributed else RandomSampler)(data.train_examples)
     log("Built %i examples" % len(data))
@@ -263,62 +265,56 @@ def train(
     loader = data.get_dataloader(params.ff_size, sampler)
     val_loader = data.get_dataloader(params.ff_size, SequentialSampler(data.val_examples), validation=True)
 
-    # Number of parameter updates each epoch
+    # Number of subbatches in each parameter update (batch)
     grad_accumulation_steps = params.batch_size // (params.ff_size * num_workers)
-    num_updates_epoch = len(loader) // grad_accumulation_steps
-    assert num_updates_epoch > 0, "Batch size cannot be larger than number of sequences in dataset"
-    # Total number of parameter updates
-    num_updates_all = num_updates_epoch * params.epochs
+    # How many full batches can be made from the dataset
+    batches_in_data = len(data) // params.batch_size
     log(
-        "Batches generated:               %i" % len(loader),
+        "Parameter updates:               %i" % params.parameter_updates,
         "Subbatches per parameter update: %i" % grad_accumulation_steps,
-        "Parameter updates per epoch:     %i" % num_updates_epoch,
-        "Parameter updates in total:      %i" % num_updates_all,
+        "Subbatches generated:            %i" % len(loader),
+        "Batches needed to cover dataset: %i" % batches_in_data,
     )
-    if resume and num_updates_epoch != res.losses.shape[1]:
-        raise ValueError(
-            f"The number of parameter updates per epoch ({num_updates_epoch}) does not match previously calculated ({res.losses.shape[1]}).\n"
-            "This can be caused by changes to sub-batch size and number of GPU's.\n"
-            "Please adjust your settings and try again."
-        )
 
     if not resume:
         top_k = [1, 5, 10, 20]
-        if params.vals_per_epoch:
-            val_updates = unique(np.linspace(0, num_updates_epoch, params.vals_per_epoch+1, dtype=int))[:-1]
+        if validate_every:
+            val_updates = unique(np.array(
+                np.arange(-1, params.parameter_updates, validate_every).tolist() + [params.parameter_updates-1]
+            ))
         else:
             val_updates = np.array([], dtype=int)
         res = TrainResults(
-            runtime      = np.zeros((0, num_updates_epoch)),
-            lr           = np.zeros((0, num_updates_epoch)),
-            epoch        = 0,
+            runtime           = np.zeros(params.parameter_updates),
+            lr                = np.zeros(params.parameter_updates),
+            parameter_update  = 0,
 
-            losses       = np.zeros((0, num_updates_epoch)),
-            scaled_loss  = np.zeros((0, num_updates_epoch)),
+            losses            = np.zeros(params.parameter_updates),
+            scaled_loss       = np.zeros(params.parameter_updates),
 
-            top_k        = top_k,
-            w_losses     = np.zeros((0, num_updates_epoch)),
-            e_losses     = np.zeros((0, num_updates_epoch)),
-            w_accuracies = np.full((0, num_updates_epoch, len(top_k)), np.nan),
-            e_accuracies = np.full((0, num_updates_epoch, len(top_k)), np.nan),
+            top_k             = top_k,
+            w_losses          = np.zeros((params.parameter_updates, len(top_k))),
+            e_losses          = np.zeros((params.parameter_updates, len(top_k))),
+            w_accuracies      = np.full((params.parameter_updates, len(top_k)), np.nan),
+            e_accuracies      = np.full((params.parameter_updates, len(top_k)), np.nan),
 
             val_param_updates = val_updates,
-            val_losses        = np.zeros((0, len(val_updates))),
-            val_w_losses      = np.zeros((0, len(val_updates))),
-            val_e_losses      = np.zeros((0, len(val_updates))),
-            val_w_accuracies  = np.full((0, len(val_updates), len(top_k)), np.nan),
-            val_e_accuracies  = np.full((0, len(val_updates), len(top_k)), np.nan),
+            val_losses        = np.zeros(len(val_updates)),
+            val_w_losses      = np.zeros(len(val_updates)),
+            val_e_losses      = np.zeros(len(val_updates)),
+            val_w_accuracies  = np.full((len(val_updates), len(top_k)), np.nan),
+            val_e_accuracies  = np.full((len(val_updates), len(top_k)), np.nan),
 
             orig_params  = None,  # Set later
-            param_diff_1 = np.zeros((0, num_updates_epoch)),
-            param_diff_2 = np.zeros((0, num_updates_epoch)),
+            param_diff_1 = np.zeros(params.parameter_updates),
+            param_diff_2 = np.zeros(params.parameter_updates),
 
             luke_exclusive_params = None,  # Set later
             q_mats_from_base      = None,  # Set later
         )
 
-    save_epochs = set(range(-1, params.epochs, save_every))
-    log("Saving model at epochs: %s" % save_epochs,
+    save_pus = set(range(-1, params.parameter_updates, save_every))
+    log("Saving model at parameter_updates: %s" % save_pus,
         "Validating at parameter updates: %s" % res.val_param_updates.tolist())
 
     # Build model, possibly by loading previous weights
@@ -383,7 +379,6 @@ def train(
     log("Pretraining model initialized with %s parameters" % thousand_seps(len(model)))
 
     model_params = list(model.named_parameters())
-    # Fix BERT weights during training
     def fix_base_model_params(fix: bool):
         """ Fixes or unfixes base model parameters """
         for n, p in model_params:
@@ -391,14 +386,14 @@ def train(
                 p.requires_grad = not fix
     fix_base_model_params(True)
 
-    # Unfixes params at this epoch
-    unfix_base_model_params_epoch = round(params.bert_fix_prop * params.epochs)
-    log("Unfixing base model params after %i epochs" % unfix_base_model_params_epoch)
+    # Unfixes params at this parameter update
+    unfix_base_model_params_pu = round(params.bert_fix_prop * params.parameter_updates)
+    log("Unfixing base model params after %i parameter_updates" % unfix_base_model_params_pu)
 
     if resume:
-        mpath = fpath((TrainResults.subfolder, MODEL_OUT.format(i=res.epoch)))
+        mpath = fpath((TrainResults.subfolder, MODEL_OUT.format(i=res.parameter_update)))
         model.load_state_dict(torch.load(mpath, map_location=device))
-        log(f"Resuming training saved at epoch {res.epoch} and loaded model from {mpath}")
+        log(f"Resuming training saved at parameter update {res.parameter_update} and loaded model from {mpath}")
     if is_distributed:
         model = DDP(model, device_ids=[rank])
 
@@ -410,182 +405,151 @@ def train(
     scaler = amp.GradScaler() if params.fp16 else None
     scheduler = get_linear_schedule_with_warmup(
         optimizer,
-        int(params.warmup_prop * num_updates_all),
-        num_updates_all,
+        int(params.warmup_prop * params.parameter_updates),
+        params.parameter_updates,
     )
     if resume:
-        optimizer.load_state_dict(torch.load(fpath((TrainResults.subfolder, OPTIMIZER_OUT.format(i=res.epoch))), map_location=device))
-        scheduler.load_state_dict(torch.load(fpath((TrainResults.subfolder, SCHEDULER_OUT.format(i=res.epoch))), map_location=device))
+        optimizer.load_state_dict(torch.load(fpath((TrainResults.subfolder, OPTIMIZER_OUT.format(i=res.parameter_update))), map_location=device))
+        scheduler.load_state_dict(torch.load(fpath((TrainResults.subfolder, SCHEDULER_OUT.format(i=res.parameter_update))), map_location=device))
         if params.fp16:
-            scaler.load_state_dict(torch.load(fpath((TrainResults.subfolder, SCALER_OUT.format(i=res.epoch))), map_location=device))
-        res.epoch += 1  # We saved the data at epoch i, but should now commence epoch i+1
+            scaler.load_state_dict(torch.load(fpath((TrainResults.subfolder, SCALER_OUT.format(i=res.parameter_update))), map_location=device))
+        res.parameter_update += 1  # We saved the data at pu i, but should now commence pu i+1
 
     log("Time distribution before starting training", TT)
 
-    log.section(f"Training DaLUKE for {params.epochs} epochs")
+    log.section(f"Training DaLUKE for {params.parameter_updates} parameter updates")
     model.zero_grad()  # To avoid tracking of model parameter manipulation
     model.train()
 
     # Save initial parameters
     if is_master and not resume:
-        paths = save_training(location, params, model.module if is_distributed else model,
-            res, optimizer, scheduler, scaler, -1)
-        log.debug("Saved initial state to", *paths)
+        with TT.profile("Saving progress"):
+            paths = save_training(location, params, model.module if is_distributed else model,
+                res, optimizer, scheduler, scaler, -1)
+            log.debug("Saved initial state to", *paths)
 
-    for i in range(res.epoch, params.epochs):
-        TT.profile("Epoch")
-        log("Starting epoch %i" % i)
-        res.epoch = i
-        if i >= unfix_base_model_params_epoch:
+    batch_iter = iter(loader)
+    for i in range(res.parameter_update, params.parameter_updates):
+        TT.profile("Parameter update")
+        res.parameter_update = i
+        if i >= unfix_base_model_params_pu:
             log("Unfixing base model params")
             fix_base_model_params(False)
-        if is_distributed:
-            sampler.set_epoch(i)
+        if is_distributed and i % batches_in_data == 0:
+            sampler.set_epoch(i // batches_in_data)
 
-        # Allocate room for results for this epoch
-        res.lr               = np.vstack((res.lr,           np.zeros(num_updates_epoch)))
-        res.runtime          = np.vstack((res.runtime,      np.zeros(num_updates_epoch)))
-        res.losses           = np.vstack((res.losses,       np.zeros(num_updates_epoch)))
-        res.scaled_loss      = np.vstack((res.scaled_loss,  np.zeros(num_updates_epoch)))
-        res.w_losses         = np.vstack((res.w_losses,     np.zeros(num_updates_epoch)))
-        res.e_losses         = np.vstack((res.e_losses,     np.zeros(num_updates_epoch)))
-        res.w_accuracies     = np.concatenate((res.w_accuracies, np.full((1, num_updates_epoch, len(res.top_k)), np.nan)))
-        res.e_accuracies     = np.concatenate((res.e_accuracies, np.full((1, num_updates_epoch, len(res.top_k)), np.nan)))
-        res.val_losses       = np.vstack((res.val_losses,   np.zeros(len(res.val_param_updates))))
-        res.val_w_losses     = np.vstack((res.val_w_losses, np.zeros(len(res.val_param_updates))))
-        res.val_e_losses     = np.vstack((res.val_e_losses, np.zeros(len(res.val_param_updates))))
-        res.val_w_accuracies = np.concatenate((res.val_w_accuracies, np.full((1, len(res.val_param_updates), len(res.top_k)), np.nan)))
-        res.val_e_accuracies = np.concatenate((res.val_e_accuracies, np.full((1, len(res.val_param_updates), len(res.top_k)), np.nan)))
-        res.param_diff_1     = np.vstack((res.param_diff_1, np.zeros(num_updates_epoch)))
-        res.param_diff_2     = np.vstack((res.param_diff_2, np.zeros(num_updates_epoch)))
+        # Losses and accuracies for this parameter update
+        t_loss, w_loss, e_loss, s_loss = 0, 0, 0, 0
+        w_accuracies = np.full((grad_accumulation_steps, len(res.top_k)), np.nan)
+        e_accuracies = np.full((grad_accumulation_steps, len(res.top_k)), np.nan)
 
-        batch_iter = iter(loader)
+        # Loop over enough batches to make a parameter update
+        for j in range(grad_accumulation_steps):
+            TT.profile("Sub-batch")
+            batch = next(batch_iter)
 
-        # Parameter updates, each consisting of gradients from multiple batches
-        for j in range(num_updates_epoch):
-            TT.profile("Parameter update")
+            TT.profile("FP and gradients")
+            with amp.autocast() if params.fp16 else contextlib.ExitStack():
+                word_preds, ent_preds = model(batch)
+                # Compute and backpropagate loss
+                word_loss = word_criterion(word_preds, batch.word_mask_labels)
+                ent_loss = entity_criterion(ent_preds, batch.ent_mask_labels)
+            loss = loss_calculator(word_loss, ent_loss)
+            loss /= grad_accumulation_steps
 
-            # Losses and accuracies for this parameter update
-            t_loss, w_loss, e_loss, s_loss = 0, 0, 0, 0
-            w_accuracies = np.full((grad_accumulation_steps, len(res.top_k)), np.nan)
-            e_accuracies = np.full((grad_accumulation_steps, len(res.top_k)), np.nan)
-
-            # Loop over enough batches to make a parameter update
-            for k in range(grad_accumulation_steps):
-                TT.profile("Sub-batch")
-                batch = next(batch_iter)
-
-                TT.profile("FP and gradients")
-                with amp.autocast() if params.fp16 else contextlib.ExitStack():
-                    word_preds, ent_preds = model(batch)
-                    # Compute and backpropagate loss
-                    word_loss = word_criterion(word_preds, batch.word_mask_labels)
-                    ent_loss = entity_criterion(ent_preds, batch.ent_mask_labels)
-                loss = loss_calculator(word_loss, ent_loss)
-                loss /= grad_accumulation_steps
-
-                # Only sync parameters on grad updates, aka last pass of this loop
-                with model.no_sync() if is_distributed and k < grad_accumulation_steps - 1 else contextlib.ExitStack():
-                    if params.fp16:
-                        scaled_loss = scaler.scale(loss)
-                        scaled_loss.backward()
-                        s_loss += scaled_loss.item()
-                    else:
-                        loss.backward()
-
-                t_loss += loss.item()
-                w_loss += word_loss.item() / grad_accumulation_steps
-                e_loss += ent_loss.item() / grad_accumulation_steps
-
-                if torch.cuda.is_available() and is_distributed:
-                    torch.cuda.synchronize(rank if is_distributed else None)
-
-                TT.end_profile()
-
-                # Save accuracy for statistics
-                with TT.profile("Training accuracy"):
-                    # Only calculate more than top 10 every 20th subbatch
-                    top_k = res.top_k if k % 20 == 0 else [x for x in res.top_k if x <= 10]
-                    w_accuracies[k, :len(top_k)] = top_k_accuracy(batch.word_mask_labels, word_preds, top_k)
-                    e_accuracies[k, :len(top_k)] = top_k_accuracy(batch.ent_mask_labels, ent_preds, top_k)
-
-                TT.end_profile()
-
-            # Update model parameters
-            with TT.profile("Parameter updates"):
+            # Only sync parameters on grad updates, aka last pass of this loop
+            with model.no_sync() if is_distributed and j < grad_accumulation_steps - 1 else contextlib.ExitStack():
                 if params.fp16:
-                    scaler.step(optimizer)
-                    scaler.update()
+                    scaled_loss = scaler.scale(loss)
+                    scaled_loss.backward()
+                    s_loss += scaled_loss.item()
                 else:
-                    optimizer.step()
-                scheduler.step()
-                model.zero_grad()
+                    loss.backward()
 
-            # TODO Maybe clear up some memory here
-            # Some of the stuff may still be allocated for the rest of the rest of the loop
-            # This causes the gradient change tracking and validation to cause memory spikes
+            t_loss += loss.item()
+            w_loss += word_loss.item() / grad_accumulation_steps
+            e_loss += ent_loss.item() / grad_accumulation_steps
 
-            # Calculate how much gradient has changed
-            with torch.no_grad(), TT.profile("Parameter changes"):
-                if is_master:
-                    orig_pars = torch.from_numpy(res.orig_params).to(device)
-                    current_pars = all_params(model.module if is_distributed else model)
-                    res.param_diff_1[i, j] = torch.abs(current_pars-orig_pars).sum().item()
-                    res.param_diff_2[i, j] = torch.sqrt(((current_pars-orig_pars)**2).sum()).item()
-                    del orig_pars
+            if torch.cuda.is_available() and is_distributed:
+                torch.cuda.synchronize(rank if is_distributed else None)
 
-            res.losses[i, j] = t_loss
-            res.w_losses[i, j] = w_loss
-            res.e_losses[i, j] = e_loss
-            res.scaled_loss[i, j] = s_loss
-            res.lr[i, j] = scheduler.get_last_lr()[0]
-            res.w_accuracies[i, j] = np.nanmean(w_accuracies, axis=0)
-            res.e_accuracies[i, j] = np.nanmean(e_accuracies, axis=0)
-            log.debug(
-                "Performed parameter update %i / %i (ep. %i)" % (j, num_updates_epoch-1, i),
-                f"  Loss: T={t_loss:9.4f}, W={w_loss:9.4f}, E={e_loss:9.4f}, S={s_loss:9.4f}",
-                f"  Accuracy (word, entity):     {100*res.w_accuracies[i, j, 0]:7.3f} %,  {100*res.e_accuracies[i, j, 0]:7.3f} %",
-            )
-            res.runtime[i, j] = TT.end_profile()
+            TT.end_profile()
 
-            if j in res.val_param_updates:
-                TT.profile("Model validation")
-                log("Validating model")
-                vi = res.val_param_updates.tolist().index(j)
-                res.val_w_losses[i, vi], res.val_e_losses[i, vi], res.val_w_accuracies[i, vi], res.val_e_accuracies[i, vi] =\
-                    validate_model(model, val_loader, word_criterion, entity_criterion, res.top_k)
-                res.val_losses[i, vi] = loss_calculator(res.val_w_losses[i, vi], res.val_e_losses[i, vi])
-                log(
-                    "Validation loss:",
-                    "  Total:  %9.4f" % res.val_losses[i, vi],
-                    "  Word:   %9.4f" % res.val_w_losses[i, vi],
-                    "  Entity: %9.4f" % res.val_e_losses[i, vi],
-                    "Validation accuracy:",
-                    "  Word:   %7.3f" % (100 * res.val_w_accuracies[i, vi, 0]),
-                    "  Entity: %7.3f" % (100 * res.val_e_accuracies[i, vi, 0]),
-                )
-                model.train()
-                TT.end_profile()
-        TT.end_profile()
+            # Save accuracy for statistics
+            with TT.profile("Training accuracy"):
+                # Only calculate more than top 10 every 20th subbatch
+                top_k = res.top_k if j % 20 == 0 else [x for x in res.top_k if x <= 10]
+                w_accuracies[j, :len(top_k)] = top_k_accuracy(batch.word_mask_labels, word_preds, top_k)
+                e_accuracies[j, :len(top_k)] = top_k_accuracy(batch.ent_mask_labels, ent_preds, top_k)
 
-        log(
-            f"Completed epoch {i:2} / {params.epochs-1}",
-            f"Mean train loss (total, word, entity, scaled): {res.losses[i].mean():10.5f}, {res.w_losses[i].mean():10.5f}, "
-            f"{res.e_losses[i].mean():10.5f}, {res.scaled_loss[i].mean()}",
-            f"Mean train accuracy (word, entity):     {100*res.w_accuracies[i, :, 0].mean():7.3f} %,  {100*res.e_accuracies[i, :, 0].mean():7.3f} %",
-            f"Mean val. loss (total, word, entity):   {res.val_losses[i].mean():10.5f}, {res.val_w_losses[i].mean():10.5f}, {res.val_e_losses[i].mean():10.5f}",
-            f"Mean val. accuracy (word, entity):      {100*res.val_w_accuracies[i, :, 0].mean()}, {100*res.val_e_accuracies[i, :, 0].mean()}",
-            "Runtime: %s s" % thousand_seps(res.runtime[-1].sum()),
-            "Time distribution so far",
-            TT,
+            TT.end_profile()
+
+        # Update model parameters
+        with TT.profile("Parameter step"):
+            if params.fp16:
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                optimizer.step()
+            scheduler.step()
+            model.zero_grad()
+
+        # TODO Maybe clear up some memory here
+        # Some of the stuff may still be allocated for the rest of the rest of the loop
+        # This causes the gradient change tracking and validation to cause memory spikes
+
+        # Calculate how much gradient has changed
+        with torch.no_grad(), TT.profile("Parameter changes"):
+            if is_master:
+                orig_pars = torch.from_numpy(res.orig_params).to(device)
+                current_pars = all_params(model.module if is_distributed else model)
+                res.param_diff_1[i] = torch.abs(current_pars-orig_pars).sum().item()
+                res.param_diff_2[i] = torch.sqrt(((current_pars-orig_pars)**2).sum()).item()
+                del orig_pars
+
+        res.losses[i]       = t_loss
+        res.w_losses[i]     = w_loss
+        res.e_losses[i]     = e_loss
+        res.scaled_loss[i]  = s_loss
+        res.lr[i]           = scheduler.get_last_lr()[0]
+        res.w_accuracies[i] = np.nanmean(w_accuracies, axis=0)
+        res.e_accuracies[i] = np.nanmean(e_accuracies, axis=0)
+        res.runtime[i] = TT.end_profile()
+        log.debug(
+            "Performed parameter update %i / %i in %.2f s" % (i, params.parameter_updates-1, res.runtime[i]),
+            f"  Loss (total, word, entity, scaled): {t_loss:9.4f}, {w_loss:9.4f}, {e_loss:9.4f}, {s_loss:.4f}",
+            f"  Accuracy (word, entity): {100*res.w_accuracies[i, 0]:7.2f} %, {100*res.e_accuracies[i, 0]:7.2f} %",
         )
+
+        if i in res.val_param_updates:
+            TT.profile("Model validation")
+            log("Validating model")
+            vi = res.val_param_updates.tolist().index(i)
+            res.val_w_losses[vi], res.val_e_losses[vi], res.val_w_accuracies[vi], res.val_e_accuracies[vi] =\
+                validate_model(model, val_loader, word_criterion, entity_criterion, res.top_k)
+            res.val_losses[vi] = loss_calculator(res.val_w_losses[vi], res.val_e_losses[vi])
+            log(
+                "Validation loss:",
+                "  Total:  %9.4f" % res.val_losses[vi],
+                "  Word:   %9.4f" % res.val_w_losses[vi],
+                "  Entity: %9.4f" % res.val_e_losses[vi],
+                "Validation accuracy:",
+                "  Word:   %7.2f %%" % (100 * res.val_w_accuracies[vi, 0]),
+                "  Entity: %7.2f %%" % (100 * res.val_e_accuracies[vi, 0]),
+            )
+            model.train()
+            TT.end_profile()
+            log("Time distribution so far", TT)
+
         # Save results and model
-        if is_master:
-            paths = save_training(location, params, model.module if is_distributed else model, res, optimizer, scheduler, scaler)
-            log.debug("Saved progress to", *paths)
-            if i > 0 and i - 1 not in save_epochs:
-                cleaned = clean_saved_epoch(location, i-1)
-                log.debug("Cleaned temporary files at", *cleaned)
+        if is_master and i in save_pus:
+            with TT.profile("Saving progress"):
+                paths = save_training(location, params, model.module if is_distributed else model, res, optimizer, scheduler, scaler)
+                log.debug("Saved progress to", *paths)
+                if i > 0 and i - 1 not in save_pus:
+                    # Clean temporarily saved files
+                    cleaned = clean_saved_pu(location, i-1)
+                    log.debug("Cleaned temporary files at", *cleaned)
 
     log.debug("Time distribution", TT)
 
