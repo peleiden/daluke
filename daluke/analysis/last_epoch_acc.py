@@ -10,10 +10,10 @@ from daluke.analysis.pretrain import TrainResults
 @click.command()
 @click.argument("location")
 @click.option("--out", default=None, type=str)
-def log_last_epoch_acc(location: str, out: str):
-    log.configure(os.path.join(out if out is not None else location, "last-epoch-acc.log"), "Last epoch scores of pretraining model")
+def log_last_pu_acc(location: str, out: str):
+    log.configure(os.path.join(out if out is not None else location, "last-pu-acc.log"), "Last parameter update scores of pretraining model")
     res = TrainResults.load(location)
-    e = res.epoch
+    e = res.parameter_update
     for i, k in enumerate(res.top_k):
         log(f"K={k}")
         w_acc, e_acc = res.w_accuracies[e, :, i], res.e_accuracies[e, :, i]
@@ -22,4 +22,4 @@ def log_last_epoch_acc(location: str, out: str):
 
 if __name__ == "__main__":
     with log.log_errors:
-        log_last_epoch_acc()
+        log_last_pu_acc()

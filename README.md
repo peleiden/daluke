@@ -72,7 +72,7 @@ pip install -r luke/requirements.txt
 dev/build_data.sh
 
 # Start pretraining using default hyperparameters
-python daluke/pretrain/run.py <INSERT DATA_PATH HERE> -c configs/pretrain-main.ini --name $NAME --save-every 5 --epochs 150 --name daluke --fp16
+python daluke/pretrain/run.py <INSERT DATA_PATH HERE> -c configs/pretrain-main.ini --name $NAME --save-every 5 --parameter-updates 10000 --name daluke --fp16
 # Optional: Make plots of pretraining
 python daluke/plot/plot_pretraining.py <DATA_PATH>/daluke
 

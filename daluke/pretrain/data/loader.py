@@ -20,7 +20,7 @@ class DataLoader:
         self,
         data_dir:           str,
         metadata:           dict,
-        entity_vocab:       dict | None,  # Only given if a subset of the full vocab
+        entity_vocab:       dict,  # Only given if a subset of the full vocab
         device:             torch.device,
         word_mask_prob:     float,
         word_unmask_prob:   float,
@@ -29,21 +29,23 @@ class DataLoader:
         only_load_validation = False,
         vocab_size:         int | None = None,
         token_map:          np.ndarray | None = None,
+        ent_min_mention:    int = None,
     ):
         """ Loads a generated json dataset prepared by the preprocessing pipeline """
-        self.data_dir = data_dir
-        self.metadata = metadata
-        self.ent_ids = { info["id"] for info in entity_vocab.values() } if entity_vocab else None
-        self.device = device
+        self.data_dir        = data_dir
+        self.metadata        = metadata
+        self.ent_ids         = { info["id"] for info in entity_vocab.values() }
+        self.ent_min_mention = ent_min_mention
+        self.device          = device
 
         self.max_sentence_len = metadata["max-seq-length"]
-        self.max_entities = metadata["max-entities"]
-        self.max_entity_span = metadata["max-entity-span"]
+        self.max_entities     = metadata["max-entities"]
+        self.max_entity_span  = metadata["max-entity-span"]
 
-        self.word_mask_prob = word_mask_prob
-        self.word_unmask_prob = word_unmask_prob
-        self.word_randword_prob = word_randword_prob
-        self.ent_mask_prob = ent_mask_prob
+        self.word_mask_prob       = word_mask_prob
+        self.word_unmask_prob     = word_unmask_prob
+        self.word_randword_prob   = word_randword_prob
+        self.ent_mask_prob        = ent_mask_prob
         self.only_load_validation = only_load_validation
 
         self.tokenizer = AutoTokenizer.from_pretrained(metadata["base-model"])
@@ -74,7 +76,7 @@ class DataLoader:
                 is_validation = seq_data.get("is_validation", False)
                 if self.only_load_validation and not is_validation:
                     continue
-                if self.ent_ids is not None:
+                if self.ent_min_mention:
                     # Keep only entities in filtered entity vocab
                     seq_data["entity_spans"] = [span for id_, span in
                         zip(seq_data["entity_ids"], seq_data["entity_spans"]) if id_ in self.ent_ids]

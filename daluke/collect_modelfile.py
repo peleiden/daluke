@@ -23,10 +23,7 @@ def _natural_sort(L: list) -> list:
     ])
 
 def _get_newest_model(path: str) -> str:
-    """
-    In folder with daluke_epoch0.pt, daluke_epoch10.pt, daluke_epoch2.pt,
-    daluke_epoch10.pt is returned.
-    """
+    """ In folder with daluke_pu_0.pt, daluke_pu_10.pt, daluke_pu_2.pt, daluke_pu_10.pt is returned """
     pattern = re.compile(MODEL_FILE.format(i=r"\d+"))
     models = list()
     for f in os.listdir(path):
