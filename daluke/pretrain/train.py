@@ -155,11 +155,11 @@ def save_training(
         torch.save(scaler.state_dict(), paths[-1])
     return paths
 
-def parse_post_command(resume_command: str) -> tuple[int, str] | tuple[None, None]:
+def parse_post_command(post_command: str) -> tuple[int, str] | tuple[None, None]:
     """ Returns the epoch time at which it should stop and the system command for resuming """
-    if resume_command:
-        t, cmd = resume_command.split(":::")
-        h, m = [int(x) for x in t.split("h")]
+    if post_command:
+        t, cmd = post_command.split(":::")
+        h, m = (int(x) for x in t.split("h"))
         return time.time() + h * 3600 + m * 60, cmd
     return None, None
 
@@ -314,7 +314,7 @@ def train(
     )
 
     if not resume:
-        top_k = [1, 5, 10, 20]
+        top_k = [1, 5, 10]
         if validate_every:
             val_updates = unique(np.array(
                 np.arange(-1, params.parameter_updates, validate_every).tolist() + [params.parameter_updates-1]
@@ -332,15 +332,15 @@ def train(
             top_k             = top_k,
             w_losses          = np.zeros((params.parameter_updates, len(top_k))),
             e_losses          = np.zeros((params.parameter_updates, len(top_k))),
-            w_accuracies      = np.full((params.parameter_updates, len(top_k)), np.nan),
-            e_accuracies      = np.full((params.parameter_updates, len(top_k)), np.nan),
+            w_accuracies      = np.zeros((params.parameter_updates, len(top_k))),
+            e_accuracies      = np.zeros((params.parameter_updates, len(top_k))),
 
             val_param_updates = val_updates,
             val_losses        = np.zeros(len(val_updates)),
             val_w_losses      = np.zeros(len(val_updates)),
             val_e_losses      = np.zeros(len(val_updates)),
-            val_w_accuracies  = np.full((len(val_updates), len(top_k)), np.nan),
-            val_e_accuracies  = np.full((len(val_updates), len(top_k)), np.nan),
+            val_w_accuracies  = np.zeros((len(val_updates), len(top_k))),
+            val_e_accuracies  = np.zeros((len(val_updates), len(top_k))),
 
             orig_params  = None,  # Set later
             param_diff_1 = np.zeros(params.parameter_updates),
@@ -477,8 +477,8 @@ def train(
 
         # Losses and accuracies for this parameter update
         t_loss, w_loss, e_loss, s_loss = 0, 0, 0, 0
-        w_accuracies = np.full((grad_accumulation_steps, len(res.top_k)), np.nan)
-        e_accuracies = np.full((grad_accumulation_steps, len(res.top_k)), np.nan)
+        w_accuracies = np.zeros((grad_accumulation_steps, len(res.top_k)))
+        e_accuracies = np.zeros((grad_accumulation_steps, len(res.top_k)))
 
         # Loop over enough batches to make a parameter update
         for j in range(grad_accumulation_steps):
@@ -507,17 +507,16 @@ def train(
             w_loss += word_loss.item() / grad_accumulation_steps
             e_loss += ent_loss.item() / grad_accumulation_steps
 
-            if torch.cuda.is_available() and is_distributed:
+            if torch.cuda.is_available():
                 torch.cuda.synchronize(rank if is_distributed else None)
 
             TT.end_profile()
 
             # Save accuracy for statistics
-            with TT.profile("Training accuracy"):
-                # Only calculate more than top 10 every 20th subbatch
-                top_k = res.top_k if j % 20 == 0 else [x for x in res.top_k if x <= 10]
-                w_accuracies[j, :len(top_k)] = top_k_accuracy(batch.word_mask_labels, word_preds, top_k)
-                e_accuracies[j, :len(top_k)] = top_k_accuracy(batch.ent_mask_labels, ent_preds, top_k)
+            if is_master:
+                with TT.profile("Training accuracy"):
+                    w_accuracies[j] = top_k_accuracy(batch.word_mask_labels, word_preds, res.top_k)
+                    e_accuracies[j] = top_k_accuracy(batch.ent_mask_labels, ent_preds, res.top_k)
 
             TT.end_profile()
 
@@ -530,10 +529,6 @@ def train(
                 optimizer.step()
             scheduler.step()
             model.zero_grad()
-
-        # TODO Maybe clear up some memory here
-        # Some of the stuff may still be allocated for the rest of the rest of the loop
-        # This causes the gradient change tracking and validation to cause memory spikes
 
         # Calculate how much gradient has changed
         with torch.no_grad(), TT.profile("Parameter changes"):
@@ -549,8 +544,8 @@ def train(
         res.e_losses[i]     = e_loss
         res.scaled_loss[i]  = s_loss
         res.lr[i]           = scheduler.get_last_lr()[0]
-        res.w_accuracies[i] = np.nanmean(w_accuracies, axis=0)
-        res.e_accuracies[i] = np.nanmean(e_accuracies, axis=0)
+        res.w_accuracies[i] = np.mean(w_accuracies, axis=0)
+        res.e_accuracies[i] = np.mean(e_accuracies, axis=0)
         res.runtime[i] = TT.end_profile()
         log.debug(
             "Performed parameter update %i / %i in %.2f s" % (i, params.parameter_updates-1, res.runtime[i]),
@@ -558,7 +553,7 @@ def train(
             f"  Accuracy (word, entity): {100*res.w_accuracies[i, 0]:7.2f} %, {100*res.e_accuracies[i, 0]:7.2f} %",
         )
 
-        if i in res.val_param_updates:
+        if i in res.val_param_updates and is_master:
             TT.profile("Model validation")
             log("Validating model")
             vi = res.val_param_updates.tolist().index(i)
