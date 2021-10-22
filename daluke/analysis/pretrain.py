@@ -90,6 +90,6 @@ def validate_model(
             top_k_accuracy(batch.ent_mask_labels, ent_preds, top_k)
         )
     # Mean over batch axis
-    w_accuracies = np.nanmean(np.vstack(w_accuracies), axis=0)
-    e_accuracies = np.nanmean(np.vstack(e_accuracies), axis=0)
+    w_accuracies = np.mean(np.vstack(w_accuracies), axis=0)
+    e_accuracies = np.mean(np.vstack(e_accuracies), axis=0)
     return np.mean(w_losses), np.mean(e_losses), w_accuracies, e_accuracies
