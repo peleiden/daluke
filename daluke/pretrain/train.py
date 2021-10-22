@@ -314,11 +314,11 @@ def train(
     )
 
     if not resume:
-        top_k = [1, 5, 10]
+        top_k = [1, 3, 10]
         if validate_every:
             val_updates = unique(np.array(
                 np.arange(-1, params.parameter_updates, validate_every).tolist() + [params.parameter_updates-1]
-            ))
+            ))[1:]
         else:
             val_updates = np.array([], dtype=int)
         res = TrainResults(
@@ -330,8 +330,8 @@ def train(
             scaled_loss       = np.zeros(params.parameter_updates),
 
             top_k             = top_k,
-            w_losses          = np.zeros((params.parameter_updates, len(top_k))),
-            e_losses          = np.zeros((params.parameter_updates, len(top_k))),
+            w_losses          = np.zeros(params.parameter_updates),
+            e_losses          = np.zeros(params.parameter_updates),
             w_accuracies      = np.zeros((params.parameter_updates, len(top_k))),
             e_accuracies      = np.zeros((params.parameter_updates, len(top_k))),
 
@@ -342,12 +342,12 @@ def train(
             val_w_accuracies  = np.zeros((len(val_updates), len(top_k))),
             val_e_accuracies  = np.zeros((len(val_updates), len(top_k))),
 
-            orig_params  = None,  # Set later
-            param_diff_1 = np.zeros(params.parameter_updates),
-            param_diff_2 = np.zeros(params.parameter_updates),
+            orig_params       = None,  # Set later
+            param_diff_1      = np.zeros(params.parameter_updates),
+            param_diff_2      = np.zeros(params.parameter_updates),
 
             luke_exclusive_params = None,  # Set later
-            q_mats_from_base      = None,  # Set later
+            att_mats_from_base    = None,  # Set later
         )
 
     save_pus = set(range(-1, params.parameter_updates, save_every))
@@ -425,7 +425,7 @@ def train(
 
     # Unfixes params at this parameter update
     unfix_base_model_params_pu = round(params.bert_fix_prop * params.parameter_updates)
-    log("Unfixing base model params after %i parameter_updates" % unfix_base_model_params_pu)
+    log("Unfixing base model params after %i parameter updates" % unfix_base_model_params_pu)
 
     if resume:
         mpath = fpath((TrainResults.subfolder, MODEL_OUT.format(i=res.parameter_update)))
