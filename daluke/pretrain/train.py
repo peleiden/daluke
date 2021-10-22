@@ -351,7 +351,7 @@ def train(
         )
 
     save_pus = set(range(-1, params.parameter_updates, save_every))
-    log("Saving model at parameter_updates: %s" % save_pus,
+    log("Saving model at parameter updates: %s" % sorted(save_pus),
         "Validating at parameter updates: %s" % res.val_param_updates.tolist())
 
     # Build model, possibly by loading previous weights
@@ -381,6 +381,7 @@ def train(
     log("Bert config", bert_config.to_json_string())
 
     if params.lukeinit:
+        log("Initializing weights in accordance with LUKE")
         model.apply(lambda module: model.init_weights(module, bert_config.initializer_range))
     # Load parameters from base model
     if not params.no_base_model:
@@ -407,6 +408,7 @@ def train(
     # Initialize self-attention query matrices to BERT word query matrices
     att_mat_keys = set()
     if not params.bert_attention and not params.no_base_model:
+        log("Initializing new attention matrices with%s PCA" % ("" if params.pcainit else "out"))
         att_mat_keys = model.init_special_attention(params.pcainit)
     if not resume:
         res.luke_exclusive_params = new_weights
@@ -422,6 +424,7 @@ def train(
             if n not in new_weights:
                 p.requires_grad = not fix
     fix_base_model_params(True)
+    fixed_params = True
 
     # Unfixes params at this parameter update
     unfix_base_model_params_pu = round(params.bert_fix_prop * params.parameter_updates)
@@ -429,11 +432,13 @@ def train(
 
     if resume:
         mpath = fpath((TrainResults.subfolder, MODEL_OUT.format(i=res.parameter_update)))
+        log("Loading model from '%s'" % mpath)
         model.load_state_dict(torch.load(mpath, map_location=device))
-        log(f"Resuming training saved at parameter update {res.parameter_update} and loaded model from {mpath}")
+        log(f"Resuming training saved at parameter update {res.parameter_update}")
     if is_distributed:
         model = DDP(model, device_ids=[rank])
 
+    log("Setting up optimizer, scaler, and learning rate scheduler")
     optimizer = AdamW(
         [{"params": get_optimizer_params(model_params, do_decay=True),  "weight_decay": params.weight_decay},
          {"params": get_optimizer_params(model_params, do_decay=False), "weight_decay": 0}],
@@ -469,9 +474,10 @@ def train(
     for i in range(res.parameter_update, params.parameter_updates):
         TT.profile("Parameter update")
         res.parameter_update = i
-        if i >= unfix_base_model_params_pu:
+        if i >= unfix_base_model_params_pu and fixed_params:
             log("Unfixing base model params")
             fix_base_model_params(False)
+            fixed_params = False
         if is_distributed and i % batches_in_data == 0:
             sampler.set_epoch(i // batches_in_data)
 
