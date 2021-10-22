@@ -38,8 +38,8 @@ class TrainResults(DataStorage):
 
     # Weights that do not exist in base model. Keys in state_dict
     luke_exclusive_params: set[str]
-    # Query matrices that do not exist in base model but have been set from it. Subset of luke_exclusive_params
-    q_mats_from_base:      set[str]
+    # Some attention matrices do not exist in base model but have been set from it. Subset of luke_exclusive_params
+    att_mats_from_base:    set[str]
 
     subfolder = None  # Set at runtime
     json_name = "pretrain_results.json"
