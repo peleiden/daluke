@@ -90,12 +90,13 @@ def span_probs_to_preds(span_probs: dict[tuple[int, int], np.ndarray], seq_len: 
             preds[span[0]] = f"B-{label}"
     return preds
 
-def mutate_for_ner(state_dict: dict, mask_id: int) -> (dict, int):
+def mutate_for_ner(state_dict: dict, mask_id: int, pad_id: int=0) -> (dict, int):
     """
     For NER, we don't need the entire entity vocabulary layer: Only entity and not entity are considered
     """
     ent_embed = get_ent_embed(state_dict)
     mask_embed = ent_embed[mask_id].unsqueeze(0)
-    state_dict[ENTITY_EMBEDDING_KEY] = torch.cat((ent_embed[:1], mask_embed))
+    pad_embed = ent_embed[pad_id].unsqueeze(0)
+    state_dict[ENTITY_EMBEDDING_KEY] = torch.cat((pad_embed, mask_embed))
 
     return state_dict, ent_embed.shape[1]
