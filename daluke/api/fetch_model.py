@@ -2,9 +2,11 @@ from __future__ import annotations
 import enum
 import os
 import pathlib
+from typing import Optional
 import wget
 
 import torch
+import numpy as np
 from transformers import AutoConfig
 
 from daluke.serialize import load_from_archive
@@ -36,7 +38,7 @@ def should_download(model: Models) -> bool:
     return False
 
 
-def fetch_model(model: Models, force_download=False) -> tuple[DaLUKE, dict, dict]:
+def fetch_model(model: Models, force_download=False) -> tuple[DaLUKE, dict, dict, Optional[np.ndarray]]:
     # Make sure .tar.gz model file exists
     os.makedirs(_download_dir, exist_ok=True)
     if should_download(model) or force_download:
@@ -51,11 +53,12 @@ def fetch_model(model: Models, force_download=False) -> tuple[DaLUKE, dict, dict
     # This is done in a seperate working directory
     cwd = os.getcwd()
     os.chdir(_download_dir)
-    entity_vocab, metadata, state_dict = load_from_archive(_model_files[model])
+    entity_vocab, metadata, state_dict, token_map = load_from_archive(_model_files[model])
     os.chdir(cwd)
 
     # Load model
     bert_config = AutoConfig.from_pretrained(metadata["base-model"])
+    bert_config.vocab_size = metadata["vocab-size"]
     if model == Models.DaLUKE:
         net = PretrainTaskDaLUKE(bert_config, len(entity_vocab), get_ent_embed_size(state_dict))
     elif model == Models.DaLUKE_NER:
@@ -72,4 +75,4 @@ def fetch_model(model: Models, force_download=False) -> tuple[DaLUKE, dict, dict
     net.load_state_dict(state_dict)
     net.eval()
 
-    return net.to(_device), metadata, entity_vocab
+    return net.to(_device), metadata, entity_vocab, token_map

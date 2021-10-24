@@ -24,6 +24,7 @@ class DummyDaLUKE:
     "USA": { "id": 4, "count": 25768 },
     }
     tokenizer = AutoTokenizer.from_pretrained(daBERT)
+    token_map = None
 
 def test_examples_from_str():
     res = example_from_str("Hej med dig, kommer du fra Danmark eller Norge?", [(6, 7)], DummyDaLUKE())

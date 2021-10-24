@@ -9,7 +9,7 @@ from transformers import PreTrainedTokenizerFast
 from daluke.data import Words, Entities, Example, BatchedExamples, get_special_ids
 from daluke.pretrain.data import MaskedBatchedExamples, ENTITY_UNK_TOKEN
 from daluke.ner.data import NERBatchedExamples, NERDataset, Split, Sequences
-from daluke.api.automodels import AutoDaLUKE
+from daluke.api.automodels import AutoNERDaLUKE
 
 DEFAULT_NER_BATCHSIZE = 8
 
@@ -18,9 +18,6 @@ def get_subword_ids(text: str, tokenizer: PreTrainedTokenizerFast) -> list[list[
     Helper function, passing each crude word (space separated) through tokenizer, returning nested ids
     """
     return tokenizer(text.split(), add_special_tokens=False)["input_ids"]
-
-def get_word_id_tensor(subword_ids: list[list[int]]) -> torch.IntTensor:
-    return torch.IntTensor(list(chain(*subword_ids)))
 
 def get_entity_id_tensor(
     text: str,
@@ -47,7 +44,7 @@ def get_entity_id_tensor(
             warnings.warn("Unknown entity '%s'. Was your span correct?" % entity)
     return torch.IntTensor(ids)
 
-def get_entity_subword_spans(subword_ids: list[list[int]], entity_spans:list[tuple[int, int]]) -> list[tuple[int, int]]:
+def get_entity_subword_spans(subword_ids: list[list[int]], entity_spans: list[tuple[int, int]]) -> list[tuple[int, int]]:
     """
     Convert entity ranges in fullwords to entity span position in subword (tokenized) units
     """
@@ -57,13 +54,17 @@ def get_entity_subword_spans(subword_ids: list[list[int]], entity_spans:list[tup
 def example_from_str(
         text:             str,
         entity_spans:     list[tuple[int, int]],
-        daluke:           AutoDaLUKE
+        daluke:           AutoDaLUKE,
     ) -> BatchedExamples:
     subword_ids = get_subword_ids(text, daluke.tokenizer)
     sep, cls_, pad, _, _ = get_special_ids(daluke.tokenizer)
+    flat_subword_ids = list(chain(*subword_ids))
+    # Reduce the word ids to lower vocab if we use monoliguification of multilingual model
+    if daluke.token_map is not None:
+        flat_subword_ids = daluke.token_map[flat_subword_ids]
 
     w = Words.build(
-        ids     = get_word_id_tensor(subword_ids),
+        ids     = torch.IntTensor(flat_subword_ids),
         max_len = daluke.metadata["max-seq-length"],
         sep_id  = sep,
         cls_id  = cls_,
@@ -125,7 +126,7 @@ class SingletonNERData(NERDataset):
 
 def ner_examples_from_str(
         texts:     list[str],
-        daluke:    AutoDaLUKE,
+        daluke:    AutoNERDaLUKE,
         batch_size: int=DEFAULT_NER_BATCHSIZE,
     ) -> list[NERBatchedExamples]:
     data = SingletonNERData(
@@ -134,6 +135,7 @@ def ner_examples_from_str(
         max_entities    = daluke.metadata["max-entities"],
         max_entity_span = daluke.metadata["max-entity-span"],
         device          = torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
+        token_map       = daluke.token_map,
     )
     data.load(texts)
     # Extract examples from dataloader

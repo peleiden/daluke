@@ -21,7 +21,7 @@ class AutoDaLUKE(ABC):
     model_weight_type: Models
 
     def __init__(self):
-        self.model, self.metadata, self.entity_vocab = fetch_model(self.model_weight_type)
+        self.model, self.metadata, self.entity_vocab, self.token_map = fetch_model(self.model_weight_type)
         self.tokenizer = AutoTokenizer.from_pretrained(self.metadata["base-model"])
 
 
