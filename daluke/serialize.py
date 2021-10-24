@@ -67,7 +67,7 @@ def load_from_archive(model: str) -> tuple[list[dict], dict[str, int | str], dic
                     token_map = np.load(tfile)
     return entity_vocab, metadata, state_dict, token_map
 
-def save_to_archive(outfile: str, entity_vocab: list[dict], metadata: dict, model: nn.Module, token_map: Optional[np.ndarray]):
+def save_to_archive(outfile: str, entity_vocab: list[dict], metadata: dict, model: nn.Module, token_map: Optional[np.ndarray]=None):
     outdir = os.path.split(outfile)[0]
     outs = [VOCAB_FILE, METADATA_FILE, MODEL_OUT]
     assert metadata.get("reduced-vocab", False) == (token_map is not None), "'reduced-vocab' must be set iff using token map"

@@ -101,16 +101,22 @@ class NERDataset(ABC):
             max_entities: int,
             max_entity_span: int,
             device: torch.device,
+            token_map: Optional[np.ndarray],
         ):
         self.device = device
         self.max_seq_length = max_seq_length
         self.max_entities = max_entities
         self.max_entity_span = max_entity_span
+        self.token_map = token_map
 
         self.label_to_idx = {label: i for i, label in enumerate(self.all_labels)}
 
         self.tokenizer = AutoTokenizer.from_pretrained(base_model)
         self.sep_id, self.cls_id, self.pad_id, __, self.unk_id = get_special_ids(self.tokenizer)
+        if self.token_map is not None:
+            self.sep_id, self.cls_id, self.pad_id, self.unk_id = self.token_map[
+                [self.sep_id, self.cls_id, self.pad_id, self.unk_id]
+            ]
 
         # To be set by load method
         self.data: dict[Split, Sequences] = dict()
@@ -144,6 +150,9 @@ class NERDataset(ABC):
                 start = bounds[j-1] if j else 0
                 # Flatten structure of [[subwords], [subwords], ... ]
                 word_ids = list(chain(*text_token_ids[start: end]))
+                # Reduce the word ids to lower vocab if we use monoliguification of multilingual model
+                if self.token_map is not None:
+                    word_ids = self.token_map[word_ids]
                 true_entity_fullword_spans = self._segment_entities(annotation[start: end])
                 # The cumulative length of each word in units of subwords
                 cumlength = np.cumsum([len(t) for t in text_token_ids[start: end]])

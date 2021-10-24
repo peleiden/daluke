@@ -36,10 +36,10 @@ ARGUMENTS = {
 
 def run_experiment(args: dict[str, Any]):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    _, metadata, state_dict = load_from_archive(args["model"])
+    _, metadata, state_dict, token_map  = load_from_archive(args["model"])
 
     log("Loading dataset ...")
-    dataset = load_dataset(args, metadata, device)
+    dataset = load_dataset(args, metadata, device, token_map)
     dataloader = dataset.build(Split.TEST, FP_SIZE)
 
     log("Loading model ...")

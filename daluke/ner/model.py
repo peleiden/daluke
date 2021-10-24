@@ -90,7 +90,7 @@ def span_probs_to_preds(span_probs: dict[tuple[int, int], np.ndarray], seq_len: 
             preds[span[0]] = f"B-{label}"
     return preds
 
-def mutate_for_ner(state_dict: dict, mask_id: int, pad_id: int=0) -> (dict, int):
+def mutate_for_ner(state_dict: dict, mask_id: int, pad_id: int) -> (dict, int):
     """
     For NER, we don't need the entire entity vocabulary layer: Only entity and not entity are considered
     """

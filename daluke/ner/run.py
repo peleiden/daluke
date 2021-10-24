@@ -67,15 +67,15 @@ def run_experiment(args: dict[str, Any]):
     set_seeds(seed=args["seed"])
     assert not (args["words_only"] and args["entities_only"]), "--words-only and --entities-only cannot be used together"
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    entity_vocab, metadata, state_dict = load_from_archive(args["model"])
-    state_dict, ent_embed_size = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"])
+    entity_vocab, metadata, state_dict, token_map = load_from_archive(args["model"])
+    state_dict, ent_embed_size = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"], pad_id=entity_vocab["[PAD]"]["id"])
 
     # Add new NER specific fields to metadata
     metadata["NER-words-only"]    = args["words_only"]
     metadata["NER-entities-only"] = args["entities_only"]
 
     log(f"Loading dataset {args['dataset']} ...")
-    dataset = load_dataset(args, metadata, device)
+    dataset = load_dataset(args, metadata, device, token_map)
     dataloader = dataset.build(Split.TRAIN, args["batch_size"])
     dev_dataloader = dataset.build(Split.DEV, args["batch_size"]) if args["eval"] else None
 
@@ -116,7 +116,7 @@ def run_experiment(args: dict[str, Any]):
     results = training.run()
 
     log("Saving results and model to %s" % args["location"])
-    save_to_archive(os.path.join(args["location"], TRAIN_OUT), entity_vocab, metadata, model)
+    save_to_archive(os.path.join(args["location"], TRAIN_OUT), entity_vocab, metadata, model, token_map)
 
     if args["eval"]:
         log("True dev. set distributions")
@@ -124,7 +124,7 @@ def run_experiment(args: dict[str, Any]):
         log("True dev. set distributions")
         results.train_true_type_distribution = type_distribution(dataset.data[Split.TRAIN].annotations)
         log("Saving best model")
-        save_to_archive(os.path.join(args["location"], TRAIN_OUT_BEST), entity_vocab, metadata, training.best_model)
+        save_to_archive(os.path.join(args["location"], TRAIN_OUT_BEST), entity_vocab, metadata, training.best_model, token_map)
 
     results.save(args["location"])
 

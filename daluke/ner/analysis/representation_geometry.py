@@ -33,14 +33,14 @@ class GeometryResults(DataStorage):
     subfolder = "geometry"
 
 def collect_representations(modelpath: str, device: torch.device, target_device: torch.device, only_positives: bool, fine_tuned: bool) -> tuple[np.ndarray, np.ndarray, list[dict[str, int | list[tuple[int, int]]]]]:
-    entity_vocab, metadata, state_dict = load_from_archive(modelpath)
+    entity_vocab, metadata, state_dict, token_map = load_from_archive(args["model"])
     log("Loading dataset")
     # Note: We dont fill out dict as we dont allow changing max-entities and max-entity-span here. If this results in an error for any dataset, we must change this.
-    dataset = load_dataset(dict(dataset="DaNE"), metadata, device)
+    dataset = load_dataset(dict(dataset="DaNE"), metadata, device, token_map)
     dataloader = dataset.build(Split.TRAIN, FP_SIZE, shuffle=False)
     log("Loading model")
     if not fine_tuned:
-        state_dict, ent_embed_size = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"])
+        state_dict, ent_embed_size = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"], pad_id=entity_vocab["[PAD]"]["id"])
     model = load_model(state_dict, dataset, metadata, device, entity_embedding_size=ent_embed_size if not fine_tuned else None)
     model.eval()
 
