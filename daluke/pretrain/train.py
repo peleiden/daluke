@@ -20,6 +20,7 @@ from pelutils import DataStorage, thousand_seps, TT
 from pelutils.logger import log, Levels
 from pelutils.ds import unique
 
+from . import close_tt
 from daluke.data import get_special_ids, token_map_to_token_reduction
 from .data import DataLoader
 from .data.build import DatasetBuilder
@@ -193,7 +194,7 @@ def train(
     quiet:          bool,
     save_every:     int,
     validate_every: int,
-    post_command: str,
+    post_command:   str,
     explicit_args:  set[str],
     params:         Hyperparams,
 ):
@@ -229,6 +230,10 @@ def train(
         log("Resuming from %s" % name)
         # Load results and hyperparameters from earlier training
         res = TrainResults.load(location)
+        # Close unended profiles
+        close_tt(res.tt)
+        TT.fuse(res.tt)
+        res.tt = TT
         tmp_saved_pu = res.parameter_update
         loaded_params = Hyperparams.load(location)
         # Overwrite ff-size if given explicitly
@@ -348,6 +353,8 @@ def train(
 
             luke_exclusive_params = None,  # Set later
             att_mats_from_base    = None,  # Set later
+
+            tt = TT,
         )
 
     save_pus = set(range(-1, params.parameter_updates, save_every))
@@ -366,7 +373,6 @@ def train(
                 metadata["base-model"],
                 bert_config.hidden_size,
             )
-    log("Bert config", bert_config.to_json_string())
 
     log("Initializing model")
     model_cls = BertAttentionPretrainTaskDaLUKE if params.bert_attention else PretrainTaskDaLUKE
@@ -552,7 +558,7 @@ def train(
         res.lr[i]           = scheduler.get_last_lr()[0]
         res.w_accuracies[i] = np.mean(w_accuracies, axis=0)
         res.e_accuracies[i] = np.mean(e_accuracies, axis=0)
-        res.runtime[i] = TT.end_profile()
+        res.runtime[i]      = TT.end_profile()
         log.debug(
             "Performed parameter update %i / %i in %.2f s" % (i, params.parameter_updates-1, res.runtime[i]),
             f"  Loss (total, word, entity, scaled): {t_loss:9.4f}, {w_loss:9.4f}, {e_loss:9.4f}, {s_loss:.4f}",

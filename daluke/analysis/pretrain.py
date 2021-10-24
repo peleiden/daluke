@@ -5,10 +5,11 @@ from typing import Callable
 import numpy as np
 import torch
 
-from pelutils import DataStorage
+from pelutils import DataStorage, TickTock
 from pelutils.ds import no_grad
 
 from daluke.pretrain.model import PretrainTaskDaLUKE
+
 
 @dataclass
 class TrainResults(DataStorage):
@@ -41,13 +42,14 @@ class TrainResults(DataStorage):
     # Some attention matrices do not exist in base model but have been set from it. Subset of luke_exclusive_params
     att_mats_from_base:    set[str]
 
+    tt: TickTock = TickTock()
+
     subfolder = None  # Set at runtime
     json_name = "pretrain_results.json"
     ignore_missing = True
 
     def __post_init__(self):
         assert self.top_k == sorted(self.top_k), "Top k accuracy list must be monotonically increasing"
-
 
 @no_grad
 def top_k_accuracy(
@@ -66,7 +68,6 @@ def top_k_accuracy(
         scores[idcs, argmax] = -float("inf")
 
     return k_scores / len(labels)
-
 
 @no_grad
 def validate_model(
