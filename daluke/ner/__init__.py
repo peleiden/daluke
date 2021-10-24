@@ -1,8 +1,8 @@
 from __future__ import annotations
-from typing import Any, Type
+from typing import Any, Type, Optional
 
 import torch
-import torch.nn as nn
+import numpy as np
 from transformers import AutoConfig
 
 import daluke.ner.data as datasets
@@ -11,7 +11,12 @@ from daluke.ner.data import NERDataset
 from daluke.ner.model import NERDaLUKE
 from daluke.pretrain.model import load_base_model_weights
 
-def load_dataset(args: dict[str, Any], metadata: dict[str, Any], device: torch.device) -> NERDataset:
+def load_dataset(
+    args: dict[str, Any],
+    metadata: dict[str, Any],
+    device: torch.device,
+    token_map: Optional[np.ndarray]=None,
+) -> NERDataset:
     dataset_cls: Type[NERDataset] = getattr(datasets, args["dataset"])
     dataset = dataset_cls(
         base_model      = metadata["base-model"],
@@ -19,6 +24,7 @@ def load_dataset(args: dict[str, Any], metadata: dict[str, Any], device: torch.d
         max_entities    = metadata["max-entities"] if args.get("max_entities") is None else args["max_entities"],
         max_entity_span = metadata["max-entity-span"] if args.get("max_entity_span") is None else args["max_entity_span"],
         device          = device,
+        token_map       = token_map,
     )
     dataset.load(
         plank_path   = args.get("plank_path"),
@@ -36,6 +42,7 @@ def load_model(
     dropout: float=None,
 ) -> NERDaLUKE:
     bert_config = AutoConfig.from_pretrained(metadata["base-model"])
+    bert_config.vocab_size = metadata["vocab-size"]
     model = NERDaLUKE(
         metadata.get("output-size", len(dataset.all_labels)),
         bert_config,
@@ -45,7 +52,6 @@ def load_model(
         words_only = metadata.get("NER-words-only", False),
         entities_only = metadata.get("NER-entities-only", False),
     )
-    # TODO Needs token map
     model.load_state_dict(state_dict, strict=False)
     if bert_attention:
         load_base_model_weights(model, state_dict, bert_attention=False)

@@ -102,11 +102,11 @@ def run_experiment(args: dict[str, Any]):
     NER_Results.subfolder = ""
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    entity_vocab, metadata, state_dict = load_from_archive(args["model"])
-    state_dict, ent_embed_size = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"])
+    entity_vocab, metadata, state_dict, token_map = load_from_archive(args["model"])
+    state_dict, ent_embed_size = mutate_for_ner(state_dict, mask_id=entity_vocab["[MASK]"]["id"], pad_id=entity_vocab["[PAD]"]["id"])
 
     log(f"Loading dataset {args['dataset']} ...")
-    dataset = load_dataset(args, metadata, device)
+    dataset = load_dataset(args, metadata, device, token_map)
 
     log("Loading model ...")
     model = load_model(
