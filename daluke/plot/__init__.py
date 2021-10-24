@@ -46,6 +46,7 @@ def double_running_avg(
     x = np.pad(x, pad_width=inner_neighbors)
     y = np.array([*[y[0]]*inner_neighbors, *y, *[y[-1]]*inner_neighbors])
     x, y = running_avg(x, y, neighbors=inner_neighbors)
+
     # Sampled point along x axis
     extra_sample = outer_neighbors / samples
     # Sample points along x axis
@@ -62,7 +63,7 @@ def double_running_avg(
     # Perform interpolation
     x_index = 0
     for k, interp_x in enumerate(xx[outer_neighbors:outer_neighbors+samples], start=outer_neighbors):
-        if interp_x >= x[x_index+1]:
+        while interp_x >= x[x_index+1]:
             x_index += 1
         a = (y[x_index+1] - y[x_index]) / (x[x_index+1] - x[x_index])
         b = y[x_index] - a * x[x_index]

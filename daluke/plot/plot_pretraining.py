@@ -113,7 +113,7 @@ class PretrainingPlots:
             colours = iter(tab_colours)
             for j, k in enumerate(self.res.top_k):
                 c = next(colours)
-                plt.plot(self.x, 100*data_train[:self.lim, j], alpha=0.3, color="gray")
+                plt.plot(self.x, 100*data_train[:self.lim, j], alpha=0.4, color="gray")
                 n = 2 if label == "Word" else 3
                 x, y = double_running_avg(self.x, 100*data_train[:self.lim, j], inner_neighbors=n, samples=400)
                 plt.plot(x, y, color=c, label="$k=%i$" % k)
