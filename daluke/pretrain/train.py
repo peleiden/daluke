@@ -403,8 +403,10 @@ def train(
                 log("Removing unneeded token weights")
                 reduced_model = model_cls(
                     bert_config,
-                    ent_vocab_size = len(entity_vocab),
-                    ent_embed_size = params.ent_embed_size,
+                    ent_vocab_size        = len(entity_vocab),
+                    ent_embed_size        = params.ent_embed_size,
+                    ent_hidden_size       = params.ent_hidden_size,
+                    ent_intermediate_size = params.ent_intermediate_size,
                 ).to(device)
                 copy_with_reduced_state_dict(token_reduction, model, reduced_model)
                 del model
