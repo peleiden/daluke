@@ -357,7 +357,7 @@ def train(
             tt = TT,
         )
 
-    save_pus = set(range(-1, params.parameter_updates, save_every)).union({params.parameter_updates})
+    save_pus = set(range(-1, params.parameter_updates, save_every)).union({params.parameter_updates-1})
     log("Saving model at parameter updates: %s" % sorted(save_pus),
         "Validating at parameter updates: %s" % res.val_param_updates.tolist())
 
