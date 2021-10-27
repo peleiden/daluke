@@ -1,8 +1,6 @@
 from __future__ import annotations
-
 from collections import namedtuple
 from typing import NamedTuple, Optional
-
 
 import torch
 import torch.nn.functional as F
@@ -14,22 +12,52 @@ from transformers.models.bert.modeling_bert import (
     BertOutput,
     BertIntermediate,
 )
-from daluke.data import BatchedExamples
-
+from pelutils import Table, thousand_seps
 try:
     from sklearn.decomposition import PCA as scipy_PCA
     sklearn_available = True
 except ImportError:
     sklearn_available = False
 
+from daluke.data import BatchedExamples
+
 
 ENTITY_EMBEDDING_KEY = "entity_embeddings.ent_embeds.weight"
 
-
-def all_params(model: torch.nn.Module | dict) -> torch.Tensor:
+def all_params(model: torch.nn.Module) -> torch.Tensor:
     """ Returns an array of all model parameters, given either from a Module or a state_dict """
-    state_dict = model.state_dict() if isinstance(model, torch.nn.Module) else model
-    return torch.cat([x.detach().view(-1) for n, x in state_dict.items() if n != "word_embeddings.position_ids"])
+    return torch.cat([x.detach().view(-1) for n, x in model.state_dict().items() if n != "word_embeddings.position_ids"])
+
+def all_params_groups_to_slices(model: DaLUKE, num_blocks: int) -> tuple[dict[str, slice], Table]:
+    state_dict = model.state_dict()
+    if (del_key := "word_embeddings.position_ids") in state_dict:
+        del state_dict[del_key]
+    slices = dict()
+    keys = {
+        "word_embeddings":    "Word embeddings",
+        "entity_embeddings":  "Entity embeddings",
+        "mask_word_scorer":   "Masked word scorer",
+        "mask_entity_scorer": "Masked entity scorer",
+        **{ "encoder.%i" % i: "Encoder layer %i" % i for i in range(num_blocks) },
+    }
+    idx = 0
+    n = len(model)
+    t = Table()
+    t.add_header(["Group name", "Name", "Start index", "Stop index", "Number of parameters"])
+    for group_name, nice_name in keys.items():
+        numel = sum(state_dict.pop(n).numel() for n in tuple(state_dict.keys()) if n.startswith(group_name+"."))
+        slices[nice_name] = slice(idx, idx+numel)
+        t.add_row([
+            group_name,
+            nice_name,
+            thousand_seps(slices[nice_name].start),
+            thousand_seps(slices[nice_name].stop),
+            thousand_seps(numel) + " (%5.2f %%)" % (100*numel/n),
+        ], [1, 1, 0, 0, 0])
+        idx += numel
+    numel = sum(p.numel() for p in state_dict.values())
+    slices["Other"] = slice(idx, idx+numel)
+    return slices, t
 
 def get_ent_embed(state_dict: dict) -> torch.nn.Module:
     return state_dict[ENTITY_EMBEDDING_KEY]
@@ -38,10 +66,8 @@ def get_ent_embed_size(state_dict: dict) -> int:
     return get_ent_embed(state_dict).shape[1]
 
 class DaLUKE(nn.Module):
-    """
-    Language Understanding with Knowledge-based Embeddings in Danish.
-    Returns entity and word representations.
-    """
+    """ Language Understanding with Knowledge-based Embeddings in Danish.
+    Returns contextualized entity and word representations. """
     def __init__(
         self,
         bert_config: BertConfig,

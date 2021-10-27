@@ -7,6 +7,9 @@ from pelutils.ds.plot import rc_params_small
 def setup_mpl():
     mpl.rcParams.update(rc_params_small)
 
+def setup_mpl_small_legend():
+    mpl.rcParams.update({**rc_params_small, "legend.fontsize": 14})
+
 def running_avg(
     x: np.ndarray,
     y: np.ndarray | None = None, *,

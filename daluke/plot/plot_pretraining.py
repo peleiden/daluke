@@ -12,7 +12,7 @@ import torch
 
 from daluke.pretrain.train import MODEL_OUT
 from daluke.analysis.pretrain import TrainResults
-from daluke.plot import double_running_avg, setup_mpl
+from daluke.plot import double_running_avg, setup_mpl, setup_mpl_small_legend
 setup_mpl()
 
 DOTSIZE = 30
@@ -46,7 +46,7 @@ class PretrainingPlots:
         plt.scatter(self.val_x, self.res.val_e_losses[self.val_lim], color=tab_colours[2], label="Val. entity loss",   edgecolors="black")
         plt.xlabel(self.xlabel)
         plt.ylabel("Loss")
-        plt.title("Loss During Pretraining")
+        plt.title("Loss during pretraining")
         plt.grid()
         plt.legend()
         self._save("loss.png")
@@ -55,7 +55,7 @@ class PretrainingPlots:
         plt.figure(figsize=figsize_std)
 
         plt.plot(self.x, self.res.scaled_loss[:self.lim], color=tab_colours[0])
-        plt.title("Scaled Loss")
+        plt.title("Scaled loss")
         plt.yscale("log")
         plt.xlabel(self.xlabel)
         plt.ylabel("Loss")
@@ -67,42 +67,31 @@ class PretrainingPlots:
 
         plt.plot(self.x, self.res.runtime[:self.lim])
         plt.xlabel(self.xlabel)
-        plt.ylabel("Runtime per Batch [s]")
+        plt.ylabel("Runtime per batch [s]")
         plt.title("Runtime")
         plt.grid()
         self._save("runtime.png")
 
-    def parameter_plot(self):
-        norm1 = self.res.param_diff_1[:self.lim]
-        norm2 = self.res.param_diff_2[:self.lim]
-        D_big = ((norm1 / norm2) ** 2) / self.res.orig_params.size
+    def parameter_change_plot(self):
+        setup_mpl_small_legend()
+        plt.figure(figsize=figsize_std)
 
-        _, (ax1, ax2) = plt.subplots(ncols=2, figsize=figsize_wide)
+        x = self.x[::self.res.paramdiff_every]
 
         # Norms
-        ax1.plot(self.x, norm1, color=tab_colours[0], label="1-Norm")
-        ax1.set_xlabel(self.xlabel)
-        ax1.set_ylabel("1-Norm")
-
-        ax1_ = ax1.twinx()
-        ax1_.plot(self.x, norm2, color=tab_colours[1], label="2-Norm")
-        ax1_.set_ylabel("2-Norm")
-
-        h1, l1 = ax1.get_legend_handles_labels()
-        h1_, l1_ = ax1_.get_legend_handles_labels()
-        ax1.legend(h1+h1_, l1+l1_)
-        ax1.grid()
-
-        # D
-        ax2.plot(self.x, 100*D_big, color=tab_colours[2])
-        ax2.set_title(r"$D_{\operatorname{big}}$")
-        ax2.set_xlabel(self.xlabel)
-        ax2.set_ylabel(r"$D_{\operatorname{big}}$ [%]")
-        ax1_.set_ylim(bottom=0)
-        ax2.grid()
+        for key, n2 in self.res.paramdiff_1.items():
+            ls = "-." if key.startswith("Encoder") else ("dotted" if key == "Other" else "-")
+            slc = self.res.groups_to_slices[key]
+            plt.plot(x, n2[np.arange(n2.size)*self.res.paramdiff_every<self.lim] / (slc.stop-slc.start), ls=ls, label=key)
 
         plt.title("Parameter changes")
+        plt.xlabel(self.xlabel)
+        plt.ylabel("Normalized 1 norm")
+        plt.legend()
+        plt.grid()
+
         self._save("parameters.png")
+        setup_mpl()
 
     def accuracy_plot(self):
         plt.figure(figsize=figsize_wide)
@@ -120,7 +109,7 @@ class PretrainingPlots:
                 plt.scatter(self.val_x, 100*data_val[self.val_lim, j], s=DOTSIZE, c=c, label="Validation, $k=%i$" % k, edgecolors="black")
 
             plt.ylim((-5, 105))
-            plt.title("Top-k %s Accuracy" % label)
+            plt.title("Top-k %s accuracy" % label)
             plt.xlabel(self.xlabel)
             if i == 0:
                 plt.ylabel("Accuracy [%]")
@@ -133,8 +122,8 @@ class PretrainingPlots:
         plt.figure(figsize=figsize_std)
         plt.plot(self.x, self.res.lr[:self.lim])
         plt.xlabel(self.xlabel)
-        plt.ylabel("Learning Rate")
-        plt.title("Learning Rate")
+        plt.ylabel("Learning rate")
+        plt.title("Learning rate")
         plt.grid()
 
         self._save("lr.png")
@@ -198,7 +187,7 @@ class PretrainingPlots:
                     bins=bins,
                     weight=len(from_base_params)/len(model_params),
                 ),
-                label=r"DaLUKE $\cap$ da-BERT",
+                label=r"DaLUKE $\cap$ base model",
             )
             plt.plot(
                 *self._bins(
@@ -207,11 +196,11 @@ class PretrainingPlots:
                     bins=bins,
                     weight=len(not_from_base_params)/len(model_params),
                 ),
-                label=r"DaLUKE $\backslash$ da-BERT",
+                label=r"DaLUKE $\backslash$ base model",
             )
-            plt.title("Model Parameter Distribution After %i Parameter Updates" % (pu+1))
-            plt.xlabel("Size of Parameter")
-            plt.ylabel("Probability Density")
+            plt.title("Model parameter distribution after %i parameter updates" % (pu+1))
+            plt.xlabel("Size of parameter")
+            plt.ylabel("Density")
             plt.legend(loc=1)
             plt.grid()
             plt.xlim([-0.4, 0.4])
@@ -238,7 +227,7 @@ def make_pretraining_plots(location: str):
     log("Runtime plot")
     plotter.runtime_plot()
     log("Parameter plot")
-    plotter.parameter_plot()
+    plotter.parameter_change_plot()
     log("Weight distribution plot")
     plotter.weight_plot()
     log("Accuracy plot")
