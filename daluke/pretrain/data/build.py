@@ -295,11 +295,13 @@ class DatasetBuilder:
                 token_counts[word_ids] += counts
 
         log("%i of %i tokens in the vocab are used" % ((token_counts>0).sum(), self.tokenizer.vocab_size))
+        *ids, unk_id = get_special_ids(self.tokenizer)
+        unk_count = token_counts[unk_id]
+        token_counts[unk_id] = -1  # Make sure unk is only included as special token
         sort_idx = np.argsort(token_counts)[::-1]
         keep_idx = sort_idx[:self.vocab_size]
         keep = np.zeros_like(token_counts, dtype=bool)
         keep[keep_idx] = True
-        *ids, unk_id = get_special_ids(self.tokenizer)
         keep[[*ids, unk_id]] = True  # Always keep special tokens
         token_map = np.arange(self.tokenizer.vocab_size)
         token_map[~keep] = unk_id
@@ -308,7 +310,7 @@ class DatasetBuilder:
         log(
             "Reduced token vocabulary to %i tokens" % keep.sum(),
             "%.6f %% of word tokens in the dataset are now %s" % (
-                100 * (token_counts[unk_id] + token_counts[~keep].sum()) / token_counts.sum(),
+                100 * (unk_count + 1 + token_counts[~keep].sum()) / (unk_count + 1 + token_counts.sum()),
                 self.tokenizer.unk_token,
             ),
         )

@@ -409,7 +409,6 @@ def train(
                     ent_intermediate_size = params.ent_intermediate_size,
                 ).to(device)
                 copy_with_reduced_state_dict(token_reduction, model, reduced_model)
-                del model
                 model = reduced_model
     else:
         new_weights = set(model.state_dict())
@@ -497,7 +496,11 @@ def train(
         # Loop over enough batches to make a parameter update
         for j in range(grad_accumulation_steps):
             TT.profile("Sub-batch")
-            batch = next(batch_iter)
+            try:
+                batch = next(batch_iter)
+            except StopIteration:
+                batch_iter = iter(loader)
+                batch = next(batch_iter)
 
             TT.profile("FP and gradients")
             with amp.autocast() if params.fp16 else contextlib.ExitStack():
