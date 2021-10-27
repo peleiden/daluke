@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
+from math import ceil
 import contextlib
 import json
 import os
@@ -25,7 +26,7 @@ from daluke.data import get_special_ids, token_map_to_token_reduction
 from .data import DataLoader
 from .data.build import DatasetBuilder
 from .model import PretrainTaskDaLUKE, BertAttentionPretrainTaskDaLUKE, load_base_model_weights, copy_with_reduced_state_dict
-from ..model import all_params
+from ..model import all_params, all_params_groups_to_slices
 from ..analysis.pretrain import TrainResults, top_k_accuracy, validate_model
 
 PORT = "3090"  # Are we sure this port is in stock?
@@ -36,6 +37,8 @@ OPTIMIZER_OUT = "optim_pu_{i}.pt"
 SCHEDULER_OUT = "scheduler_pu_{i}.pt"
 SCALER_OUT = "scaler_pu_{i}.pt"
 
+
+MIN_EXAMPLES_PER_PARAMDIFF = 20_000
 
 @dataclass
 class Hyperparams(DataStorage):
@@ -319,7 +322,11 @@ def train(
     )
 
     if not resume:
+        # Calculate parameter differences, when at least 20k examples have been seen
+        paramdiff_every = ceil(MIN_EXAMPLES_PER_PARAMDIFF / params.batch_size)
+        log("Recalculating parameter differences every %i'th parameter update" % paramdiff_every)
         top_k = [1, 3, 10]
+        log("Calculating top %s accuracies" % top_k)
         if validate_every:
             val_updates = unique(np.array(
                 np.arange(-1, params.parameter_updates, validate_every).tolist() + [params.parameter_updates-1]
@@ -347,9 +354,10 @@ def train(
             val_w_accuracies  = np.zeros((len(val_updates), len(top_k))),
             val_e_accuracies  = np.zeros((len(val_updates), len(top_k))),
 
-            orig_params       = None,  # Set later
-            param_diff_1      = np.zeros(params.parameter_updates),
-            param_diff_2      = np.zeros(params.parameter_updates),
+            paramdiff_every   = paramdiff_every,
+            groups_to_slices  = None,  # Set later
+            orig_params       = None,
+            paramdiff_1       = None,
 
             luke_exclusive_params = None,  # Set later
             att_mats_from_base    = None,  # Set later
@@ -442,6 +450,10 @@ def train(
         log("Loading model from '%s'" % mpath)
         model.load_state_dict(torch.load(mpath, map_location=device))
         log(f"Resuming training saved at parameter update {res.parameter_update}")
+    else:
+        res.groups_to_slices, t = all_params_groups_to_slices(model, bert_config.num_hidden_layers)
+        log("Parameter groups and positions", t)
+        res.paramdiff_1 = { name: np.zeros(params.parameter_updates//res.paramdiff_every) for name in res.groups_to_slices }
     if is_distributed:
         model = DDP(model, device_ids=[rank])
 
@@ -548,13 +560,16 @@ def train(
             model.zero_grad()
 
         # Calculate how much gradient has changed
-        with torch.no_grad(), TT.profile("Parameter changes"):
-            if is_master:
+        if is_master and i % paramdiff_every == 0:
+            with torch.no_grad(), TT.profile("Parameter changes"):
+                log.debug("Calculating parameter changes")
                 orig_pars = torch.from_numpy(res.orig_params).to(device)
                 current_pars = all_params(model.module if is_distributed else model)
-                res.param_diff_1[i] = torch.abs(current_pars-orig_pars).sum().item()
-                res.param_diff_2[i] = torch.sqrt(((current_pars-orig_pars)**2).sum()).item()
-                del orig_pars
+                absdiff = torch.abs(current_pars-orig_pars)
+                for blockname, slice_ in res.groups_to_slices.items():
+                    j = i // paramdiff_every
+                    res.paramdiff_1[blockname][j] = absdiff[slice_].sum().item()
+                del orig_pars, current_pars
 
         res.losses[i]       = t_loss
         res.w_losses[i]     = w_loss

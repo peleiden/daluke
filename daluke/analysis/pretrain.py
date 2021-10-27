@@ -33,9 +33,10 @@ class TrainResults(DataStorage):
     val_w_accuracies:  np.ndarray  # Validation: Masked word pred. accuracy, len(val_param_updates) x len(top_k)
     val_e_accuracies:  np.ndarray  # Validation: Masked ent. pred. accuracy, len(val_param_updates) x len(top_k)
 
-    orig_params:       np.ndarray  # Array of all parameters in original model
-    param_diff_1:      np.ndarray  # 1-norm distance to original parameters by pu
-    param_diff_2:      np.ndarray  # 2-norm distance to original parameters by pu
+    paramdiff_every:   int                    # How many pus between each recalculation of the following
+    groups_to_slices:  dict[str, slice]       # Maps parameter group names to slices from all_params function
+    orig_params:       np.ndarray             # Array of all parameters in original model stored as fp16 by parameter name
+    paramdiff_1:       dict[str, np.ndarray]  # 1-norm distance to original parameters, where each array is of length parameter updates // paramdiff_every
 
     # Weights that do not exist in base model. Keys in state_dict
     luke_exclusive_params: set[str]
