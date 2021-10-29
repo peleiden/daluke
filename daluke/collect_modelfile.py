@@ -61,26 +61,24 @@ def main():
     if is_reduced:
         ins.append(os.path.join(modelpath, "..", DatasetBuilder.token_map_file))
         outs.append(TOKEN_MAP_FILE)
+    tmpdir = os.path.join(modelpath, "tmpdir")
     log.debug(f"Using:", *ins)
 
     # Operate directly on disk as opposed to serialize.save_to_archive which requires us to load the data into mem.
     if shutil.which("tar"):
         log.debug(f"Compressing to {args.outpath} using system tar tool...")
         try:
+            os.makedirs(tmpdir, exist_ok=True)
             for f, n in zip(ins, outs):
-                shutil.copy2(f, n)
+                shutil.copy2(f, os.path.join(tmpdir, n))
             p = subprocess.Popen(
-                ["tar", "-czvf", args.outpath] + outs,
+                ["tar", "-czvf", args.outpath, "-C", tmpdir] + outs,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
             p.wait()
         finally:
-            for n in outs:
-                try:
-                    os.remove(n)
-                except FileNotFoundError:
-                    pass
+            shutil.rmtree(tmpdir)
     else:
         with tarfile.open(args.outpath, "w:gz") as tar:
             for f, n in zip(ins, outs):
