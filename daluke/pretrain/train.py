@@ -560,14 +560,14 @@ def train(
             model.zero_grad()
 
         # Calculate how much gradient has changed
-        if is_master and i % paramdiff_every == 0:
+        if is_master and i % res.paramdiff_every == 0:
             with torch.no_grad(), TT.profile("Parameter changes"):
                 log.debug("Calculating parameter changes")
                 orig_pars = torch.from_numpy(res.orig_params).to(device)
                 current_pars = all_params(model.module if is_distributed else model)
                 absdiff = torch.abs(current_pars-orig_pars)
                 for blockname, slice_ in res.groups_to_slices.items():
-                    j = i // paramdiff_every
+                    j = i // res.paramdiff_every
                     res.paramdiff_1[blockname][j] = absdiff[slice_].sum().item()
                 del orig_pars, current_pars
 

@@ -23,15 +23,15 @@ class PretrainTaskDaLUKE(DaLUKE):
     def __init__(
         self,
         bert_config: BertConfig,
-        ent_vocab_size: int,
-        ent_embed_size: int,
-        ent_hidden_size:        int=None,
-        ent_intermediate_size:  int=None,
+        ent_vocab_size:        int,
+        ent_embed_size:        int,
+        ent_hidden_size:       int|None=None,
+        ent_intermediate_size: int|None=None,
     ):
         super().__init__(bert_config, ent_vocab_size, ent_embed_size, ent_hidden_size, ent_intermediate_size)
 
         self.mask_word_scorer = BertLMPredictionHead(bert_config)
-        self.mask_entity_scorer = EntityPreTrainingHeads(bert_config, ent_vocab_size, self.ent_embed_size, self.ent_hidden_size)
+        self.mask_entity_scorer = EntityPreTrainingHeads(bert_config, ent_vocab_size, self.ent_embed_size, ent_hidden_size)
 
         # Needed for reshaping in forward pass
         self.hiddsize, self.wsize, self.esize = bert_config.hidden_size, bert_config.vocab_size, ent_vocab_size
@@ -50,7 +50,7 @@ class PretrainTaskDaLUKE(DaLUKE):
         return word_scores, ent_scores
 
 class EntityPreTrainingHeads(nn.Module):
-    def __init__(self, bert_config: BertConfig, ent_vocab_size: int, ent_embed_size: int, ent_hidden_size: int):
+    def __init__(self, bert_config: BertConfig, ent_vocab_size: int, ent_embed_size: int, ent_hidden_size: int | None):
         super().__init__()
         self.transform = nn.Linear(ent_hidden_size, ent_embed_size)
         self.act = get_activation(bert_config.hidden_act)
@@ -63,9 +63,7 @@ class EntityPreTrainingHeads(nn.Module):
         return self.decode(self.lnorm(self.act(self.transform(hidden)))) + self.bias
 
 class BertAttentionPretrainTaskDaLUKE(PretrainTaskDaLUKE):
-    """
-    DaLUKE using the normal attention from BERT instead of the Entity-Aware Attention.
-    """
+    """ DaLUKE using the normal attention from BERT instead of the Entity-Aware Attention. """
     # TODO: Load bert weights
     def __init__(self,
         bert_config: BertConfig,
@@ -101,7 +99,7 @@ def load_base_model_weights(
     daluke: PretrainTaskDaLUKE,
     base_model_state_dict: OrderedDict,
     bert_attention: bool,
-) -> set:
+) -> set[str]:
     """ Load a base model into this model
     Returns the set of keys that were not tansfered from base model """
 
