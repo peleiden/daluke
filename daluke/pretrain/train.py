@@ -430,7 +430,7 @@ def train(
     att_mat_keys = set()
     if not params.bert_attention and not params.no_base_model:
         log("Initializing new attention matrices with%s PCA" % ("" if params.pcainit else "out"))
-        att_mat_keys = model.init_special_attention(params.pcainit)
+        att_mat_keys = model.init_special_attention(params.pcainit, device)
     if not resume:
         res.luke_exclusive_params = new_weights
         res.att_mats_from_base = att_mat_keys

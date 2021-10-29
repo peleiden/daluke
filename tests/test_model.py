@@ -23,11 +23,11 @@ def test_low_dim_daluke():
 
 def test_pca():
     model = DaLUKE(_create_cfg(), 100, 30, ent_hidden_size=48)
-    model.init_special_attention(True)
+    model.init_special_attention(True, torch.device("cpu"))
 
 def test_no_pca():
     model = DaLUKE(_create_cfg(), 100, 30, ent_hidden_size=48)
-    model.init_special_attention(False)
+    model.init_special_attention(False, torch.device("cpu"))
 
 def test_ent_embeds():
     # From original LUKE repository

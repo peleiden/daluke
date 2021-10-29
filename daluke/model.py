@@ -119,12 +119,12 @@ class DaLUKE(nn.Module):
         if not sklearn_available:
             raise ModuleNotFoundError("Using PCA for weight initialization requires isntallation of the optional requirement `scikit-learn`")
 
-        W_w2e = scipy_PCA(n_components=l).fit_transform(W.numpy())
+        W_w2e = scipy_PCA(n_components=l).fit_transform(W.cpu().detach().numpy())
         W_e2w = W_w2e.T
         W_e = scipy_PCA(n_components=l).fit_transform(W_e2w)
-        return torch.from_numpy(W_e), torch.from_numpy(W_e2w), torch.from_numpy(W_w2e)
+        return torch.from_numpy(W_e).contiguous(), torch.from_numpy(W_e2w).contiguous(), torch.from_numpy(W_w2e).contiguous()
 
-    def init_special_attention(self, pca: bool) -> set[str]:
+    def init_special_attention(self, pca: bool, device: torch.device) -> set[str]:
         """ As the attention layers of DaLUKE have four query matrices and the BERT-based transformers only have one,
         we might want to init the other three to this one word-to-word query matrix.
         Returns keys in state_dict set in this method. """
@@ -134,28 +134,28 @@ class DaLUKE(nn.Module):
             if pca and self.ent_hidden_size < layer.attention.Q_w.weight.data.shape[0]:
                 # In the low dimensional case, we must create low-dim Q, K, V using PCA
                 Q_e, Q_w2e, Q_e2w = self._weight_reduce_pca(
-                        self.ent_hidden_size,
-                        layer.attention.Q_w.weight.data.detach().clone(),
+                    self.ent_hidden_size,
+                    layer.attention.Q_w.weight.data.detach().clone(),
                 )
                 K_e, __, __ = self._weight_reduce_pca(
-                        self.ent_hidden_size,
-                        layer.attention.K.weight.data.detach().clone()
+                    self.ent_hidden_size,
+                    layer.attention.K.weight.data.detach().clone()
                 )
                 V_e, V_w2e, V_e2w = self._weight_reduce_pca(
-                        self.ent_hidden_size,
-                        layer.attention.V.weight.data.detach().clone(),
+                    self.ent_hidden_size,
+                    layer.attention.V.weight.data.detach().clone(),
                 )
-                layer.attention.K_e.weight.data = K_e
-                layer.attention.V_e.weight.data = V_e
-                layer.attention.V_w2e.weight.data = V_w2e
-                layer.attention.V_e2w.weight.data = V_e2w
+                layer.attention.K_e.weight.data = K_e.to(device)
+                layer.attention.V_e.weight.data = V_e.to(device)
+                layer.attention.V_w2e.weight.data = V_w2e.to(device)
+                layer.attention.V_e2w.weight.data = V_e2w.to(device)
             elif self.ent_hidden_size == layer.attention.Q_w.weight.data.shape[0]:
                 Q_e, Q_w2e, Q_e2w = (layer.attention.Q_w.weight.data.detach().clone() for _ in range(3))
             else:
                 Q_e, Q_w2e, Q_e2w = layer.attention.Q_e.weight.data, layer.attention.Q_w2e.weight.data, layer.attention.Q_e2w.weight.data
-            layer.attention.Q_e.weight.data = Q_e
-            layer.attention.Q_w2e.weight.data = Q_w2e
-            layer.attention.Q_e2w.weight.data = Q_e2w
+            layer.attention.Q_e.weight.data = Q_e.contiguous().to(device)
+            layer.attention.Q_w2e.weight.data = Q_w2e.contiguous().to(device)
+            layer.attention.Q_e2w.weight.data = Q_e2w.contiguous().to(device)
 
             if self.ent_hidden_size == layer.attention.Q_w.weight.data.shape[0]:
                 layer.attention.Q_e.bias.data = layer.attention.Q_w.bias.data.detach().clone()
