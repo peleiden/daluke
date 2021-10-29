@@ -28,6 +28,8 @@ class PretrainTaskDaLUKE(DaLUKE):
         ent_hidden_size:       int|None=None,
         ent_intermediate_size: int|None=None,
     ):
+        if ent_hidden_size is None:
+            ent_hidden_size = bert_config.hidden_size
         super().__init__(bert_config, ent_vocab_size, ent_embed_size, ent_hidden_size, ent_intermediate_size)
 
         self.mask_word_scorer = BertLMPredictionHead(bert_config)

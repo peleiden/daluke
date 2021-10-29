@@ -121,7 +121,7 @@ class DaLUKE(nn.Module):
 
         W_w2e = scipy_PCA(n_components=l).fit_transform(W.numpy())
         W_e2w = W_w2e.T
-        W_e = scipy_PCA(n_components=l).fit_transform(W_w2e)
+        W_e = scipy_PCA(n_components=l).fit_transform(W_e2w)
         return torch.from_numpy(W_e), torch.from_numpy(W_e2w), torch.from_numpy(W_w2e)
 
     def init_special_attention(self, pca: bool) -> set[str]:
@@ -137,7 +137,7 @@ class DaLUKE(nn.Module):
                         self.ent_hidden_size,
                         layer.attention.Q_w.weight.data.detach().clone(),
                 )
-                _, _, K_e = self._weight_reduce_pca(
+                K_e, __, __ = self._weight_reduce_pca(
                         self.ent_hidden_size,
                         layer.attention.K.weight.data.detach().clone()
                 )

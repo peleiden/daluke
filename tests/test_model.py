@@ -25,6 +25,10 @@ def test_pca():
     model = DaLUKE(_create_cfg(), 100, 30, ent_hidden_size=48)
     model.init_special_attention(True)
 
+def test_no_pca():
+    model = DaLUKE(_create_cfg(), 100, 30, ent_hidden_size=48)
+    model.init_special_attention(False)
+
 def test_ent_embeds():
     # From original LUKE repository
     # https://github.com/studio-ousia/luke/blob/6feefe657d97d2f847ace87f61f23b705f75d2aa/tests/test_model.py#L29
