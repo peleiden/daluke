@@ -125,13 +125,12 @@ class DaLUKE(nn.Module):
         return torch.from_numpy(W_e), torch.from_numpy(W_e2w), torch.from_numpy(W_w2e)
 
     def init_special_attention(self, pca: bool) -> set[str]:
-        """
-        As the attention layers of DaLUKE have four query matrices and the BERT-based transformers only have one,
-        we might want to init the other three to this one word-to-word query matrix
-        Returns keys in state_dict set in this method
-        """
+        """ As the attention layers of DaLUKE have four query matrices and the BERT-based transformers only have one,
+        we might want to init the other three to this one word-to-word query matrix.
+        Returns keys in state_dict set in this method. """
         keys = set()
         for i, layer in enumerate(self.encoder):
+            initial_shapes = [x.shape for x in layer.state_dict().values()]
             if pca and self.ent_hidden_size < layer.attention.Q_w.weight.data.shape[0]:
                 # In the low dimensional case, we must create low-dim Q, K, V using PCA
                 Q_e, Q_w2e, Q_e2w = self._weight_reduce_pca(
@@ -150,19 +149,25 @@ class DaLUKE(nn.Module):
                 layer.attention.V_e.weight.data = V_e
                 layer.attention.V_w2e.weight.data = V_w2e
                 layer.attention.V_e2w.weight.data = V_e2w
-            else:
+            elif self.ent_hidden_size == layer.attention.Q_w.weight.data.shape[0]:
                 Q_e, Q_w2e, Q_e2w = (layer.attention.Q_w.weight.data.detach().clone() for _ in range(3))
+            else:
+                Q_e, Q_w2e, Q_e2w = layer.attention.Q_e.weight.data, layer.attention.Q_w2e.weight.data, layer.attention.Q_e2w.weight.data
             layer.attention.Q_e.weight.data = Q_e
             layer.attention.Q_w2e.weight.data = Q_w2e
             layer.attention.Q_e2w.weight.data = Q_e2w
 
-            if not pca:
+            if self.ent_hidden_size == layer.attention.Q_w.weight.data.shape[0]:
                 layer.attention.Q_e.bias.data = layer.attention.Q_w.bias.data.detach().clone()
                 layer.attention.Q_w2e.bias.data = layer.attention.Q_w.bias.data.detach().clone()
             layer.attention.Q_e2w.bias.data = layer.attention.Q_w.bias.data.detach().clone()
 
             for key in "Q_e", "Q_w2e", "Q_e2w":
                 keys = set.union(keys, {f"encoder.{i}.attention.{key}.weight", f"encoder.{i}.attention.{key}.bias"})
+
+            # Assert that no shapes have been changed
+            for initial_shape, (name, p) in zip(initial_shapes, layer.state_dict().items()):
+                assert initial_shape == p.shape, "Parameter '%s' has had it shape changed from %s to %s" % (name, initial_shape, p.shape)
 
         return keys
 
@@ -235,9 +240,9 @@ class EntityAwareLayer(nn.Module):
         )
 
 class EntitySelfAttention(nn.Module):
-    """
-    As LUKE uses both entities and words, this self-attention takes the token type into account.
-    """
+
+    """ As LUKE uses both entities and words, this self-attention takes the token type into account """
+
     def __init__(self, hidden_size: int, num_heads: int, drop_prob: float, ent_hidden_size: int):
         """
         Sets up the four query matrices used in the Entity-aware Self-attention:
@@ -252,18 +257,19 @@ class EntitySelfAttention(nn.Module):
         self.num_heads = num_heads
         self.ent_low_dim = hidden_size != self.ent_hidden_size
         self.head_size = hidden_size // num_heads
+        assert ent_hidden_size % num_heads == 0, "Hidden entity size (%i) must be divisble by number of heads (%i)" % (ent_hidden_size, num_heads)
         self.ent_head_size = ent_hidden_size // num_heads
 
         self.dropout = nn.Dropout(drop_prob)
 
         # Four query matrices, the key and the value
-        self.Q_w    = nn.Linear(hidden_size, hidden_size)
-        self.Q_e    = nn.Linear(ent_hidden_size, ent_hidden_size)
-        self.Q_w2e  = nn.Linear(hidden_size, ent_hidden_size)
-        self.Q_e2w  = nn.Linear(ent_hidden_size, hidden_size)
+        self.Q_w   = nn.Linear(hidden_size, hidden_size)
+        self.Q_e   = nn.Linear(ent_hidden_size, ent_hidden_size)
+        self.Q_w2e = nn.Linear(hidden_size, ent_hidden_size)
+        self.Q_e2w = nn.Linear(ent_hidden_size, hidden_size)
 
-        self.K      = nn.Linear(hidden_size, hidden_size)
-        self.V      = nn.Linear(hidden_size, hidden_size)
+        self.K     = nn.Linear(hidden_size, hidden_size)
+        self.V     = nn.Linear(hidden_size, hidden_size)
         if self.ent_low_dim:
             self.K_e   = nn.Linear(ent_hidden_size, ent_hidden_size)
             self.V_e   = nn.Linear(ent_hidden_size, ent_hidden_size)
@@ -305,9 +311,7 @@ class EntitySelfAttention(nn.Module):
         return out_hidden[:, :word_size, :], out_hidden[:, word_size:, :]
 
     def entity_low_dim_forward(self, word_hidden: torch.Tensor, entity_hidden: torch.Tensor, attention_mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Forward pass for the novel method were entity representations live in lower dimensional space.
-        """
+        """ Forward pass for the novel method were entity representations live in lower dimensional space. """
         word_size = word_hidden.size(1)
         queries = self.Q_w(word_hidden), self.Q_e(entity_hidden), self.Q_w2e(word_hidden), self.Q_e2w(entity_hidden)
 
@@ -347,17 +351,15 @@ class EntitySelfAttention(nn.Module):
         return out_w, out_e
 
     def reshape_to_matrix(self, layer_out: torch.Tensor, entity=False) -> torch.Tensor:
-        """
-        Make the layer outputs usable for matrix products in the multihead setting.
-        """
+        """ Make the layer outputs usable for matrix products in the multihead setting """
         return layer_out.view(
             *layer_out.size()[:-1], self.num_heads, self.ent_head_size if entity else self.head_size
         ).permute(0, 2, 1, 3)
 
 class EntityEmbeddings(nn.Module):
-    """
-    Embeds entitites from the entity vocabulary
-    """
+
+    """ Embeds entitites from the entity vocabulary """
+
     def __init__(self, bert_config: BertConfig, ent_vocab_size: int, ent_embed_size: int, ent_hidden_size: int):
         super().__init__()
         self.ent_embeds = nn.Embedding(ent_vocab_size, ent_embed_size, padding_idx=0)
