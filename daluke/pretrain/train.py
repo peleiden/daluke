@@ -130,6 +130,10 @@ def clean_saved_pu(loc: str, pu: int) -> list[str]:
             removed_paths.remove(path)
     return list(removed_paths)
 
+def log_memory_stats(device: torch.device):
+    if torch.cuda.is_available():
+        log.debug("\n".join(torch.cuda.memory_summary(device=device, abbreviated=True).split("\n")[:-9]))
+
 def save_training(
     loc:       str,
     params:    Hyperparams,
@@ -266,6 +270,8 @@ def train(
         device = torch.device("cuda", index=rank)
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        log.debug("This worker runs on a %s" % torch.cuda.get_device_name(device))
 
     if params.entity_loss_weight:
         log("Setting up loss function with entity loss weighting")
@@ -476,7 +482,8 @@ def train(
             scaler.load_state_dict(torch.load(fpath((TrainResults.subfolder, SCALER_OUT.format(i=res.parameter_update))), map_location=device))
         res.parameter_update += 1  # We saved the data at pu i, but should now commence pu i+1
 
-    log("Time distribution before starting training", TT)
+    log.debug("Time distribution before starting training", TT)
+    log_memory_stats(device)
 
     log.section(f"Training DaLUKE for {params.parameter_updates} parameter updates")
     model.zero_grad()  # To avoid tracking of model parameter manipulation
@@ -603,16 +610,19 @@ def train(
             )
             model.train()
             TT.end_profile()
-            log("Time distribution so far", TT)
+            log.debug("Time distribution so far", TT)
 
         # Save results and model
         if is_master and i in save_pus:
             with TT.profile("Saving progress"):
                 save_progress(location, i, tmp_saved_pu, save_pus, params,
                     model.module if is_distributed else model, res, optimizer, scheduler, scaler)
+        if i in save_pus:
+            log_memory_stats(device)
 
         # If timed out, save, quit, and run resume command
         if post_time and time.time() > post_time:
+            log_memory_stats(device)
             log.section("Time limit reached. Quitting and running command '%s'" % post_command)
             with TT.profile("Saving progress"):
                 save_progress(location, i, tmp_saved_pu, save_pus, params,
