@@ -10,7 +10,7 @@ from matplotlib.lines import Line2D
 import numpy as np
 
 from daluke.ner.training import TrainResults
-from daluke.plot.plot_pretraining import PretrainingPlots
+from daluke.plot import running_avg
 
 update_rc_params(rc_params)
 
@@ -24,7 +24,7 @@ def loss_plot(location: str):
     # Loss axis
     x = np.arange(len(res.losses)) + 1
     ax1.semilogy(x/batches_per_epoch, res.losses, color="gray", alpha=0.3)
-    x, y = PretrainingPlots.rolling_avg(10, x, res.losses)
+    x, y = running_avg(x, res.losses, neighbors=10)
     ax1.semilogy(x/batches_per_epoch, y, color=tab_colours[0], label="Loss (Rolling Avg.)")
 
     ax1.set_xlabel("Epoch")
