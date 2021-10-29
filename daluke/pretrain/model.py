@@ -31,7 +31,7 @@ class PretrainTaskDaLUKE(DaLUKE):
         super().__init__(bert_config, ent_vocab_size, ent_embed_size, ent_hidden_size, ent_intermediate_size)
 
         self.mask_word_scorer = BertLMPredictionHead(bert_config)
-        self.mask_entity_scorer = EntityPreTrainingHeads(bert_config, ent_vocab_size, self.ent_embed_size)
+        self.mask_entity_scorer = EntityPreTrainingHeads(bert_config, ent_vocab_size, self.ent_embed_size, self.ent_hidden_size)
 
         # Needed for reshaping in forward pass
         self.hiddsize, self.wsize, self.esize = bert_config.hidden_size, bert_config.vocab_size, ent_vocab_size
@@ -44,15 +44,15 @@ class PretrainTaskDaLUKE(DaLUKE):
         word_hidden_masked = word_hidden[ex.word_mask].view(-1, self.hiddsize)
         word_scores = self.mask_word_scorer(word_hidden_masked).view(-1, self.wsize)
 
-        ent_hidden_masked = ent_hidden[ex.ent_mask].view(-1, self.hiddsize)
+        ent_hidden_masked = ent_hidden[ex.ent_mask].view(-1, self.ent_hidden_size)
         ent_scores = self.mask_entity_scorer(ent_hidden_masked).view(-1, self.esize)
 
         return word_scores, ent_scores
 
 class EntityPreTrainingHeads(nn.Module):
-    def __init__(self, bert_config: BertConfig, ent_vocab_size: int, ent_embed_size: int):
+    def __init__(self, bert_config: BertConfig, ent_vocab_size: int, ent_embed_size: int, ent_hidden_size: int):
         super().__init__()
-        self.transform = nn.Linear(bert_config.hidden_size, ent_embed_size)
+        self.transform = nn.Linear(ent_hidden_size, ent_embed_size)
         self.act = get_activation(bert_config.hidden_act)
         self.lnorm = nn.LayerNorm(ent_embed_size, eps=bert_config.layer_norm_eps)
 
