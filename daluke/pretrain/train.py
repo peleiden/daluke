@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from math import ceil
+from typing import Iterator
 import contextlib
 import json
 import os
@@ -10,6 +11,7 @@ import torch
 import torch.cuda.amp as amp
 import torch.distributed as dist
 from torch import nn
+from torch.nn.parameter import Parameter
 from torch.optim import Optimizer
 from torch.utils.data import RandomSampler, SequentialSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -109,7 +111,7 @@ def cleanup(rank: int):
     if rank != -1:
         dist.destroy_process_group()
 
-def get_optimizer_params(params: list, do_decay: bool) -> list:
+def get_optimizer_params(params: Iterator[tuple[str, Parameter]], do_decay: bool) -> list:
     """ Returns the parameters that should be tracked by optimizer with or without weight decay"""
     # Only include the parameter if do_decay has reverse truth value of the parameter being in no_decay
     include = lambda n: do_decay != any(nd in n for nd in NO_DECAY)
@@ -190,6 +192,12 @@ def save_progress(
         cleaned = clean_saved_pu(location, tmp_saved_pu)
         if cleaned:
             log.debug("Cleaned temporary files at", *cleaned)
+
+def fix_base_model_params(new_weights: set[str], model: torch.nn.Module, fix: bool):
+    """ Fixes or unfixes base model parameters """
+    for n, p in model.named_parameters():
+        if n not in new_weights:
+            p.requires_grad = not fix
 
 def train(
     rank:           int,
@@ -438,15 +446,6 @@ def train(
             res.orig_params = all_params(model).cpu().numpy()
     log("Pretraining model initialized with %s parameters" % thousand_seps(len(model)))
 
-    model_params = list(model.named_parameters())
-    def fix_base_model_params(fix: bool):
-        """ Fixes or unfixes base model parameters """
-        for n, p in model_params:
-            if n not in new_weights:
-                p.requires_grad = not fix
-    fix_base_model_params(True)
-    fixed_params = True
-
     # Unfixes params at this parameter update
     unfix_base_model_params_pu = round(params.bert_fix_prop * params.parameter_updates)
     log("Unfixing base model params after %i parameter updates" % unfix_base_model_params_pu)
@@ -459,14 +458,15 @@ def train(
     else:
         res.groups_to_slices, t = all_params_groups_to_slices(model, bert_config.num_hidden_layers)
         log("Parameter groups and positions", t)
-        res.paramdiff_1 = { name: np.zeros(params.parameter_updates//res.paramdiff_every) for name in res.groups_to_slices }
+        res.paramdiff_1 = { name: np.zeros(ceil(params.parameter_updates/res.paramdiff_every)) for name in res.groups_to_slices }
     if is_distributed:
-        model = DDP(model, device_ids=[rank])
+        model = DDP(model, device_ids=[rank], find_unused_parameters=True)
+    non_ddp_model = model.module if is_distributed else model
 
     log("Setting up optimizer, scaler, and learning rate scheduler")
     optimizer = AdamW(
-        [{"params": get_optimizer_params(model_params, do_decay=True),  "weight_decay": params.weight_decay},
-         {"params": get_optimizer_params(model_params, do_decay=False), "weight_decay": 0}],
+        [{"params": get_optimizer_params(non_ddp_model.named_parameters(), do_decay=True),  "weight_decay": params.weight_decay},
+         {"params": get_optimizer_params(non_ddp_model.named_parameters(), do_decay=False), "weight_decay": 0}],
         lr = params.lr,
     )
     scaler = amp.GradScaler() if params.fp16 else None
@@ -489,6 +489,10 @@ def train(
     model.zero_grad()  # To avoid tracking of model parameter manipulation
     model.train()
 
+    # Start with transfer learned weights locked
+    fix_base_model_params(res.luke_exclusive_params, non_ddp_model, True)
+    fixed_params = True
+
     # Save initial parameters
     if is_master and not resume:
         with TT.profile("Saving progress"):
@@ -502,7 +506,7 @@ def train(
         res.parameter_update = i
         if i >= unfix_base_model_params_pu and fixed_params:
             log("Unfixing base model params")
-            fix_base_model_params(False)
+            fix_base_model_params(res.luke_exclusive_params, model, False)
             fixed_params = False
         if is_distributed and i % batches_in_data == 0:
             sampler.set_epoch(i // batches_in_data)

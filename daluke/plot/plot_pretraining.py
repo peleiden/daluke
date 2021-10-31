@@ -80,13 +80,13 @@ class PretrainingPlots:
 
         # Norms
         for key, n2 in self.res.paramdiff_1.items():
-            ls = "-." if key.startswith("Encoder") else ("dotted" if key == "Other" else "-")
+            ls = "-." if key.startswith("Encoder") else "-"
             slc = self.res.groups_to_slices[key]
             plt.plot(x, n2[np.arange(n2.size)*self.res.paramdiff_every<self.lim] / (slc.stop-slc.start), ls=ls, label=key)
 
         plt.title("Parameter changes")
         plt.xlabel(self.xlabel)
-        plt.ylabel("Normalized 1 norm")
+        plt.ylabel("Avg. absolute change")
         plt.legend()
         plt.grid()
 
@@ -159,7 +159,7 @@ class PretrainingPlots:
 
     def weight_plot(self):
         bins = 200
-        samples = 10 ** 8
+        samples = 10 ** 7
 
         def plot_dist(self, pu: int):
             model_state_dict = torch.load(os.path.join(self.location, MODEL_OUT.format(i=pu)), map_location=torch.device("cpu"))

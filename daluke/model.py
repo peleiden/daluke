@@ -56,7 +56,7 @@ def all_params_groups_to_slices(model: DaLUKE, num_blocks: int) -> tuple[dict[st
         ], [1, 1, 0, 0, 0])
         idx += numel
     numel = sum(p.numel() for p in state_dict.values())
-    slices["Other"] = slice(idx, idx+numel)
+    assert numel == 0, "The following parameters have not been added to a group: %s" % state_dict.keys()
     return slices, t
 
 def get_ent_embed(state_dict: dict) -> torch.nn.Module:
