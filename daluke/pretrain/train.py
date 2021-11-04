@@ -504,6 +504,8 @@ def train(
     for i in range(res.parameter_update, params.parameter_updates):
         TT.profile("Parameter update")
         res.parameter_update = i
+        if i >= unfix_base_model_params_pu and is_distributed:
+            model.find_unused_parameters = False
         if i >= unfix_base_model_params_pu and fixed_params:
             log("Unfixing base model params")
             fix_base_model_params(res.luke_exclusive_params, model, False)
