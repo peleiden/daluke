@@ -1,6 +1,5 @@
 from __future__ import annotations
-from typing import TextIO
-import io
+from typing import BinaryIO
 import os
 import random
 
@@ -21,6 +20,9 @@ from daluke.pretrain.data import ICUSentenceTokenizer,\
     load_entity_vocab, calculate_spans, ignore_title
 
 
+# TODO Shuffle, so validation is always last fixed number of examples
+# TODO When counting tokens, make sure that max token count actually holds
+
 class DatasetBuilder:
 
     tokenizer_language = "da"
@@ -28,19 +30,27 @@ class DatasetBuilder:
     # Files saved by the build method
     metadata_file     = "metadata.json"
     entity_vocab_file = "entity-vocab.json"
-    data_file         = "data.jsonl"
+    # Concatenation of examples
+    # Each example is a concatenation of
+    #   - 3 32 bit uints with the number of word tokens (including cls and sep),
+    #     the number of word spans, and the number of entities, respectively
+    #   - 512 32 bit uint word tokens, including cls, sep, and pad tokens
+    #   - 512 16 bit uint (start, end) pairs of word spans
+    #   - 128 32 bit uint entity tokens
+    #   - 128 16 bit uint (start, end) pairs of entity spans
+    # for a total of 5132 bytes per example (when default settings)
+    data_file         = "data.pkl"
     token_map_file    = "token-map.npy"
 
     def __init__(
         self,
-        dump_db_file:        str,    # Location of file build by build-dump-db
-        tokenizer_name:      str,    # Tokenizer to use, e.g. Maltehb/danish-bert-botxo for Danish BERT
-        entity_vocab_file:   str,    # Build by build-entity-vocab
-        out_dir:             str,    # Where to put finished dataset. All contents will be removed before saving dataset
-        validation_prob:     float,  # Chance of each finished document to be marked as part of validation set
-        max_entities:        int,    # Only up to this many entities are included in each sequence
-        max_entity_span:     int,    # Maximum number tokens an entity can span before sequence is discarded
-        min_sentence_length: int,    # Minimum number of tokens a sentence must span to be included
+        dump_db_file:        str,  # Location of file build by build-dump-db
+        tokenizer_name:      str,  # Tokenizer to use, e.g. Maltehb/danish-bert-botxo for Danish BERT
+        entity_vocab_file:   str,  # Build by build-entity-vocab
+        out_dir:             str,  # Where to put finished dataset. All contents will be removed before saving dataset
+        max_entities:        int,  # Only up to this many entities are included in each sequence
+        max_entity_span:     int,  # Maximum number tokens an entity can span before sequence is discarded
+        min_sentence_length: int,  # Minimum number of tokens a sentence must span to be included
         max_articles:        int | None,
         max_vocab_size:      int,
     ):
@@ -66,7 +76,6 @@ class DatasetBuilder:
         self.data_file           = os.path.join(self.out_dir, self.data_file)
         self.token_map_file      = os.path.join(self.out_dir, self.token_map_file)
         self.max_seq_length      = self.tokenizer.model_max_length
-        self.validation_prob     = validation_prob
         self.max_entities        = max_entities
         self.max_entity_span     = max_entity_span
         self.min_sentence_length = min_sentence_length
@@ -75,13 +84,11 @@ class DatasetBuilder:
         self.max_articles        = max_articles
         self.vocab_size          = self.tokenizer.vocab_size if max_vocab_size == -1 else min(max_vocab_size, max_vocab_size)
 
+        # Number of bytes per example. 5123 with default settings
+        self.example_bytes = 4 * 3 + 4 * 2 * self.max_seq_length + 4 * 2 * self.max_entities
+
         # Filter titles so only real articles are included
         self.target_titles = list(self.dump_db.titles())
-
-        # Remove old datafile if it exists
-        if os.path.isfile(self.data_file):
-            log.debug("Removing old datafile '%s'" % self.data_file)
-            os.remove(self.data_file)
 
     def _tokenize(self, text: str, paragraph_text: str, idx: int) -> list[str]:
         if not text:
@@ -110,13 +117,14 @@ class DatasetBuilder:
             log("Saving entity vocab to '%s'" % path)
             ujson.dump(self.entity_vocab, ev, indent=2)
 
-        log.section("Processing %i pages" % len(self.target_titles[:self.max_articles]))
+        n_articles = len(self.target_titles[:self.max_articles])
+        log.section("Processing %i pages" % n_articles)
         log("Saving data to '%s'" % self.data_file)
         n_seqs, n_ents, n_vals, n_word_toks, n_words = 0, 0, 0, 0, 0
-        for title in log.tqdm(tqdm(self.target_titles[:self.max_articles])):
-            log("Processing %s" % title)
-            with TT.profile("Process page"):
-                s, e, v, nt, nw = self._process_page(title)
+        with open(self.data_file, "wb") as datafile, TT.profile("Process page", hits=n_articles):
+            for title in log.tqdm(tqdm(self.target_titles[:self.max_articles])):
+                log("Processing %s" % title)
+                s, e, v, nt, nw = self._process_page(title, datafile)
                 n_seqs += s
                 n_ents += e
                 n_vals += v
@@ -236,53 +244,43 @@ class DatasetBuilder:
 
         return sentences
 
-    def _process_page(self, page_title: str) -> tuple[int, int, int, int, int]:
-        """
-        Processes a Wikipedia article and save to self.data_file
-        Returns number of sequences
-        """
+    def _process_page(self, page_title: str, datafile: BinaryIO) -> tuple[int, int, int, int, int]:
+        """ Processes a Wikipedia article and save to self.data_file """
 
         sentences = self._get_sentence_features(page_title)
 
         # Construct features to be saved - word tokens, entities, and entity spans
         words = list()
         links: list[tuple[int, 3]] = list()
-        n_seqs, n_ents, n_val, n_word_toks, n_words = 0, 0, 0, 0, 0
         TT.profile("Get features")
         for i, (sent_words, sent_links) in enumerate(sentences):
             links += [(id_, start + len(words), end + len(words)) for id_, start, end in sent_links]
             words += sent_words
             if i == len(sentences) - 1 or len(words) + len(sentences[i+1][0]) > self.max_num_tokens:
-                n_seqs += 1
                 # Save features for this sequence
                 links = links[:self.max_entities]
-                n_ents += len(links)
-                word_ids = self.tokenizer.convert_tokens_to_ids(words)
+                word_ids = np.array(self.tokenizer.convert_tokens_to_ids(words), dtype=np.uint32)
                 with TT.profile("Word spans"):
-                    word_spans = calculate_spans(words, self.tokenizer)
+                    word_spans = np.array([
+                        start*2**16+end for start, end in calculate_spans(words, self.tokenizer)
+                    ])
                 assert self.min_sentence_length <= len(word_ids) <= self.max_num_tokens
-                entity_ids = [id_ for id_, _, _ in links]
-                entity_spans = [(start, end) for _, start, end in links]
-                # Whether to mark doc. as part of validation set
-                is_validation = random.random() < self.validation_prob
-                n_val += int(is_validation)
-                n_word_toks += len(word_ids)
-                n_words += len(word_spans)
-                features = ujson.dumps({
-                    "page_title":    page_title,
-                    "word_ids":      word_ids,
-                    "word_spans":    word_spans,
-                    "entity_ids":    entity_ids,
-                    "entity_spans":  entity_spans,
-                    "is_validation": is_validation,
-                })
-                with open(self.data_file, "a") as df, TT.profile("Save features"):
-                    df.write(features + "\n")
+                entity_ids = np.array([id_ for id_, _, _ in links], dtype=np.uint32)
+                entity_spans = np.array([start*2**16+end for _, start, end in links], dtype=np.uint32)
+
+                outarr = np.empty(self.example_bytes//4, dtype=np.uint32)
+                outarr[0:4] = [word_ids.size, word_spans.size, entity_ids.size, self.tokenizer.cls_token_id]
+                outarr[4:3+self.max_seq_length] = self.tokenizer.pad_token_id
+                outarr[4:4+word_ids.size] = word_ids
+                outarr[3+self.max_seq_length:3+self.max_seq_length+word_spans.size] = word_spans
+                entity_start_index = 3 + 2 * self.max_seq_length
+                outarr[entity_start_index:entity_start_index+entity_ids.size] = entity_ids
+                outarr[entity_start_index+self.max_entities:entity_start_index+self.max_entities+entity_spans.size] = entity_spans
+                outarr.tofile(datafile)
+
                 words = list()
                 links = list()
         TT.end_profile()
-
-        return n_seqs, n_ents, n_val, n_word_toks, n_words
 
     def _reduce_tokens(self, metadata: dict) -> tuple[np.ndarray, int]:
         token_counts = np.zeros(self.tokenizer.vocab_size, dtype=np.int32)
