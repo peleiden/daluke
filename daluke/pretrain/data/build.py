@@ -1,7 +1,6 @@
 from __future__ import annotations
 from typing import BinaryIO
 import os
-import random
 
 import ujson
 import numpy as np
@@ -120,41 +119,34 @@ class DatasetBuilder:
         n_articles = len(self.target_titles[:self.max_articles])
         log.section("Processing %i pages" % n_articles)
         log("Saving data to '%s'" % self.data_file)
-        n_seqs, n_ents, n_vals, n_word_toks, n_words = 0, 0, 0, 0, 0
+        token_counts = np.zeros(self.tokenizer.vocab_size, dtype=int)
         with open(self.data_file, "wb") as datafile, TT.profile("Process page", hits=n_articles):
             for title in log.tqdm(tqdm(self.target_titles[:self.max_articles])):
                 log("Processing %s" % title)
-                s, e, v, nt, nw = self._process_page(title, datafile)
-                n_seqs += s
-                n_ents += e
-                n_vals += v
-                n_word_toks += nt
-                n_words += nw
+                token_counts += self._process_page(title, datafile)
 
-        # Save metadata
         metadata = {
-            "number-of-items":       n_seqs,
-            "number-of-word-tokens": n_word_toks,
-            "number-of-words":       n_words,
-            "number-of-entities":    n_ents,
-            "number-of-val-items":   n_vals,
-            "max-seq-length":        self.max_seq_length,
-            "max-entities":          self.max_entities,
-            "max-entity-span":       self.max_entity_span,
-            "min-sentence-length":   self.min_sentence_length,
-            "base-model":            self.tokenizer_name,
-            "tokenizer-class":       self.tokenizer.__class__.__name__,
-            "language":              self.dump_db.language,
-            "reduced-vocab":         self.vocab_size < self.tokenizer.vocab_size,
-            "vocab-size":            self.vocab_size,
+            "number-of-items":     os.path.getsize(self.data_file) // self.example_bytes,
+            "max-seq-length":      self.max_seq_length,
+            "max-entities":        self.max_entities,
+            "max-entity-span":     self.max_entity_span,
+            "min-sentence-length": self.min_sentence_length,
+            "base-model":          self.tokenizer_name,
+            "tokenizer-class":     self.tokenizer.__class__.__name__,
+            "language":            self.dump_db.language,
+            "reduced-vocab":       self.vocab_size < self.tokenizer.vocab_size,
+            "vocab-size":          self.vocab_size,
+            "bytes-per-example":   self.example_bytes,
         }
 
-        if self.vocab_size < self.tokenizer.vocab_size:
-            log.section("Reducing token number")
-            with TT.profile("Reduce token vocab"):
-                token_map, metadata["vocab-size"] = self._reduce_tokens(metadata)
-            with TT.profile("Rewrite dataset with new tokens"):
-                self._update_tokens(metadata, token_map)
+        # Reduce token vocab size and shuffle data
+        log.section("Reducing to %i tokens" % self.vocab_size)
+        with TT.profile("Reduce token vocab"):
+            token_map = self._reduce_tokens(token_counts)
+        log.section("Updating and shuffling dataset")
+        metadata.update(
+            self._shuffle_and_update(metadata, token_map)
+        )
 
         with open(path := os.path.join(self.out_dir, self.metadata_file), "w") as f:
             log.section("Saving metadata to %s" % path)
@@ -244,10 +236,11 @@ class DatasetBuilder:
 
         return sentences
 
-    def _process_page(self, page_title: str, datafile: BinaryIO) -> tuple[int, int, int, int, int]:
+    def _process_page(self, page_title: str, datafile: BinaryIO) -> np.ndarray:
         """ Processes a Wikipedia article and save to self.data_file """
 
         sentences = self._get_sentence_features(page_title)
+        token_counts = np.zeros(self.tokenizer.vocab_size, dtype=int)
 
         # Construct features to be saved - word tokens, entities, and entity spans
         words = list()
@@ -260,6 +253,8 @@ class DatasetBuilder:
                 # Save features for this sequence
                 links = links[:self.max_entities]
                 word_ids = np.array(self.tokenizer.convert_tokens_to_ids(words), dtype=np.uint32)
+                unique_ids, count = unique(word_ids, return_counts=True)
+                token_counts[unique_ids] += count
                 with TT.profile("Word spans"):
                     word_spans = np.array([
                         start*2**16+end for start, end in calculate_spans(words, self.tokenizer)
@@ -272,6 +267,7 @@ class DatasetBuilder:
                 outarr[0:4] = [word_ids.size, word_spans.size, entity_ids.size, self.tokenizer.cls_token_id]
                 outarr[4:3+self.max_seq_length] = self.tokenizer.pad_token_id
                 outarr[4:4+word_ids.size] = word_ids
+                outarr[4+word_ids.size] = self.tokenizer.sep_token_id
                 outarr[3+self.max_seq_length:3+self.max_seq_length+word_spans.size] = word_spans
                 entity_start_index = 3 + 2 * self.max_seq_length
                 outarr[entity_start_index:entity_start_index+entity_ids.size] = entity_ids
@@ -282,22 +278,16 @@ class DatasetBuilder:
                 links = list()
         TT.end_profile()
 
-    def _reduce_tokens(self, metadata: dict) -> tuple[np.ndarray, int]:
-        token_counts = np.zeros(self.tokenizer.vocab_size, dtype=np.int32)
+        return token_counts
 
-        log("Counting tokens in dataset")
-        with open(self.data_file) as df:
-            for seq in tqdm(load_jsonl(df), total=metadata["number-of-items"]):
-                word_ids = np.array(seq["word_ids"])
-                word_ids, counts = unique(word_ids, return_counts=True)
-                token_counts[word_ids] += counts
+    def _reduce_tokens(self, token_counts: np.ndarray) -> tuple[np.ndarray, int]:
 
         log("%i of %i tokens in the vocab are used" % ((token_counts>0).sum(), self.tokenizer.vocab_size))
         *ids, unk_id = get_special_ids(self.tokenizer)
         unk_count = token_counts[unk_id]
-        token_counts[unk_id] = -1  # Make sure unk is only included as special token
-        sort_idx = np.argsort(token_counts)[::-1]
-        keep_idx = sort_idx[:self.vocab_size]
+        token_counts[[*ids, unk_id]] = -1  # Make sure special tokens are not included
+        sort_idx = np.argsort(token_counts)[::-1][:-5]
+        keep_idx = sort_idx[:self.vocab_size-5]
         keep = np.zeros_like(token_counts, dtype=bool)
         keep[keep_idx] = True
         keep[[*ids, unk_id]] = True  # Always keep special tokens
@@ -314,18 +304,35 @@ class DatasetBuilder:
         )
         np.save(self.token_map_file, token_map)
         log("Saved token map to '%s'" % self.token_map_file)
+        assert keep.sum() == self.vocab_size
+        return token_map
 
-        return token_map, int(keep.sum())
+    def _shuffle_and_update(self, metadata: dict, token_map: np.ndarray) -> dict[str, int]:
+        # Position x goes to position x + 1 in the shuffled positions
+        shuffle_pos = np.arange(metadata["number-of-items"]) * self.example_bytes
+        np.random.shuffle(shuffle_pos)
 
-    def _update_tokens(self, metadata: dict, token_map: np.ndarray):
-        log("Updating dataset with kept tokens")
-        tmp_file = os.path.join(os.path.split(self.data_file)[0], "tmpdata.json")
-        with open(self.data_file, "r+") as df,\
-             open(tmp_file, "w") as tf,\
-             TT.profile("Update example", hits=metadata["number-of-items"]):
-            for line in tqdm(df, total=metadata["number-of-items"]):
-                example = ujson.loads(line)
-                example["word_ids"] = token_map[example["word_ids"]].tolist()
-                tf.write(ujson.dumps(example) + "\n")
-        os.remove(self.data_file)
-        os.rename(tmp_file, self.data_file)
+        n_word_toks, n_words, n_ents = 0, 0, 0
+
+        with open(self.data_file, "rb+") as df,\
+             TT.profile("Update and shuffle example", hits=metadata["number-of-items"]):
+            df.seek(shuffle_pos[-1])
+            current_example = np.fromstring(df.read(self.example_bytes), dtype=np.uint32)
+            for pos in tqdm(shuffle_pos):
+                # Update  example
+                n_word_toks += current_example[0]
+                n_words += current_example[1]
+                n_ents += current_example[2]
+                current_example[3:3+self.max_seq_length] = token_map[current_example[3:3+self.max_seq_length]]
+                # Read new example and write old
+                df.seek(pos)
+                new_example = np.fromstring(df.read(self.example_bytes), dtype=np.uint32)
+                df.seek(pos)
+                current_example.tofile(df)
+                current_example = new_example
+
+        return {
+            "number-of-word-tokens": int(n_word_toks),
+            "number-of-words":       int(n_words),
+            "number-of-entities":    int(n_ents),
+        }

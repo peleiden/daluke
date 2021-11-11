@@ -63,6 +63,7 @@ class Hyperparams(DataStorage):
     word_unmask_prob:      float      = 0.1
     word_randword_prob:    float      = 0.1
     ent_mask_prob:         float      = 0.15
+    validation_prop:       float      = 0.01
     lukeinit:              bool       = False
     no_base_model:         bool       = False
     pcainit:               bool       = False

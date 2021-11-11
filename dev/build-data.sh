@@ -56,5 +56,4 @@ python3 daluke/pretrain/data/run.py\
     $DATA_PATH/entity-vocab.jsonl\
     $TOKENIZER\
     $DATA_PATH\
-    --max-vocab-size 60000\
-    --validation-prob 0.0025
+    --max-vocab-size 60000

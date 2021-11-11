@@ -12,7 +12,6 @@ def run_build_dataset():
     parser.add_argument("entity_vocab_file", type=str)
     parser.add_argument("tokenizer_name", type=str)
     parser.add_argument("out_dir", type=str)
-    parser.add_argument("--validation-prob", type=float, default=0.01)
     parser.add_argument("--max-entities", type=int, default=128)
     parser.add_argument("--max-entity-span", type=int, default=30)
     parser.add_argument("--min-sentence-length", type=int, default=5)
