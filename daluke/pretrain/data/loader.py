@@ -3,6 +3,7 @@ import os
 
 import numpy as np
 import torch
+import ujson
 from transformers import AutoTokenizer
 
 from pelutils import TT
@@ -33,6 +34,7 @@ class DataLoader:
     ):
         """ Loads a generated json dataset prepared by the preprocessing pipeline """
         self.data_dir        = data_dir
+        self.datafile        = os.path.join(self.data_dir, DatasetBuilder.data_file)
         self.metadata        = metadata
         self.ent_ids         = { info["id"] for info in entity_vocab.values() }
         self.ent_min_mention = ent_min_mention
@@ -62,20 +64,36 @@ class DataLoader:
             if self.word_mask_id < vocab_size-1 else\
                 (self.tokenizer.convert_tokens_to_ids(self.tokenizer.unk_token)+1, vocab_size-1)
 
-        with TT.profile("Building examples"):
-            self.train_examples, self.val_examples = self.build_examples()
+        self.positions = np.load(os.path.join(self.data_dir, DatasetBuilder.example_positions))
+
+        self.train_examples = np.zeros(metadata["number-of-items"], dtype=np.uint64)
+        self.val_examples = np.zeros(metadata["number-of-items"], dtype=np.uint64)
+        num_train = 0
+        num_val = 0
+        with open(self.datafile) as df:
+            for i, seq_data in enumerate(load_jsonl(df)):
+                if seq_data["is_validation"]:
+                    self.val_examples[num_val] = i
+                    num_val += 1
+                else:
+                    self.train_examples[num_train] = i
+                    num_train += 1
+        self.train_examples = self.train_examples[:num_train]
+        self.val_examples = self.val_examples[:num_val]
 
     def __len__(self):
         return len(self.train_examples) + len(self.val_examples)
 
-    def build_examples(self) -> tuple[list[Example], list[Example]]:
-        train_examples, val_examples = list(), list()
+    def build_examples(self, index: list[int]) -> list[Example]:
+        # Sort so they may be read faster on HDD's
+        index = sorted(index)
+
+        examples = list()
         with open(os.path.join(self.data_dir, DatasetBuilder.data_file)) as df:
-            for seq_data in load_jsonl(df):
-                # Backwards compatible to time before validation
-                is_validation = seq_data.get("is_validation", False)
-                if self.only_load_validation and not is_validation:
-                    continue
+            for i in index:
+                df.seek(self.positions[i])
+                seq_data = ujson.loads(df.readline())
+
                 if self.ent_min_mention:
                     # Keep only entities in filtered entity vocab
                     seq_data["entity_spans"] = [span for id_, span in
@@ -98,25 +116,22 @@ class DataLoader:
                         max_entity_span = self.max_entity_span,
                     ),
                 )
-                if is_validation:
-                    val_examples.append(ex)
-                else:
-                    train_examples.append(ex)
-        return train_examples, val_examples
+                examples.append(ex)
+        return examples
 
     def get_dataloader(self, batch_size: int, sampler: torch.utils.data.Sampler, validation=False):
         return torch.utils.data.DataLoader(
-            list(enumerate(self.val_examples if validation else self.train_examples)),
+            self.val_examples if validation else self.train_examples,
             batch_size  = batch_size,
             sampler     = sampler,
             collate_fn  = self.collate,
             drop_last   = True,
         )
 
-    def collate(self, batch: list[tuple[int, Example]]) -> MaskedBatchedExamples:
+    def collate(self, batch: list[int]) -> MaskedBatchedExamples:
         with TT.profile("Masking words and entities"):
             return MaskedBatchedExamples.build(
-                [ex for _, ex in batch],
+                self.build_examples(batch),
                 self.device,
                 word_mask_id       = self.word_mask_id,
                 ent_mask_id        = self.ent_mask_id,

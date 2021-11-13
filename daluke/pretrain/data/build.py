@@ -30,6 +30,7 @@ class DatasetBuilder:
     entity_vocab_file = "entity-vocab.json"
     data_file         = "data.jsonl"
     token_map_file    = "token-map.npy"
+    example_positions = "example-positions.npy"
 
     def __init__(
         self,
@@ -151,6 +152,15 @@ class DatasetBuilder:
         with open(path := os.path.join(self.out_dir, self.metadata_file), "w") as f:
             log.section("Saving metadata to %s" % path)
             ujson.dump(metadata, f, indent=4)
+
+        self.example_positions = os.path.join(self.out_dir, self.example_positions)
+        log("Saving example positions to %s" % self.example_positions)
+        example_positions = [0]
+        with open(self.data_file) as f:
+            while f.readline():
+                example_positions.append(f.tell())
+        example_positions = np.array(example_positions[:-1])
+        np.save(self.example_positions, example_positions)
 
         log.debug("Time distribution", TT)
 
