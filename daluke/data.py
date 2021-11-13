@@ -71,12 +71,9 @@ class Entities(Words):
         max_entities: int,
         max_entity_span: int,
     ):
-        """
-        For creating a single example
-
+        """ For creating a single example
         ids: N ids found from entity vocab used to train the model
-        spans: N long list containing start and end of entities
-        """
+        spans: N long list containing start and end of entities """
         N = ids.shape[0]
         ent_ids = torch.zeros(max_entities, dtype=torch.int)
         ent_ids[:N] = ids
@@ -96,17 +93,13 @@ class Entities(Words):
 
 @dataclass
 class Example:
-    """
-    A single data example
-    """
+    """ A single data example """
     words: Words
     entities: Entities
 
 @dataclass
 class BatchedExamples(Example):
-    """
-    Data to be forward passed to daLUKE
-    """
+    """ Data to be forward passed to daLUKE """
 
     @staticmethod
     def collate(ex: list[Example], device: torch.device, cut: bool) -> tuple[Words, Entities]:

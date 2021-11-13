@@ -28,7 +28,6 @@ ARGUMENTS = {
     "warmup-prop":           { "default": Hyperparams.warmup_prop,        "type": float, "help": "Proportion of training steps used for optimizer warmup" },
     "word-ent-weight":       { "default": Hyperparams.word_ent_weight,    "type": float, "help": "0 for only entities, 1 for only words, 0.5 for equal weighting" },
     "bert-fix-prop":         { "default": Hyperparams.bert_fix_prop,      "type": float, "help": "Share of epochs for which to fix base model weights" },
-    "ent-min-mention":       { "default": Hyperparams.ent_min_mention,    "type": int,   "help": "How many times an entity at least should mentioned to be kept. 0 for no limit" },
     "word-mask-prob":        { "default": Hyperparams.word_mask_prob,     "type": float, "help": "Prop. of full words to mask in MLM" },
     "word-unmask-prob":      { "default": Hyperparams.word_unmask_prob,   "type": float, "help": "Chance of masked word to be forward passed as unmasked" },
     "word-randword-prob":    { "default": Hyperparams.word_randword_prob, "type": float, "help": "Chance of masked word to be forward passed as another random word" },

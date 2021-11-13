@@ -263,6 +263,7 @@ class DatasetBuilder:
                 entity_ids = np.array([id_ for id_, _, _ in links], dtype=np.uint32)
                 entity_spans = np.array([start*2**16+end for _, start, end in links], dtype=np.uint32)
 
+                TT.profile("Build and write example array")
                 outarr = np.empty(self.example_bytes//4, dtype=np.uint32)
                 outarr[0:4] = [word_ids.size, word_spans.size, entity_ids.size, self.tokenizer.cls_token_id]
                 outarr[4:3+self.max_seq_length] = self.tokenizer.pad_token_id
@@ -273,6 +274,7 @@ class DatasetBuilder:
                 outarr[entity_start_index:entity_start_index+entity_ids.size] = entity_ids
                 outarr[entity_start_index+self.max_entities:entity_start_index+self.max_entities+entity_spans.size] = entity_spans
                 outarr.tofile(datafile)
+                TT.end_profile()
 
                 words = list()
                 links = list()

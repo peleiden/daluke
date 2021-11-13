@@ -56,7 +56,6 @@ class Hyperparams(DataStorage):
     word_ent_weight:       float      = 0.5
     bert_fix_prop:         float      = 0.5
     fp16:                  bool       = False
-    ent_min_mention:       int        = 0
     entity_loss_weight:    bool       = False
     bert_attention:        bool       = False
     word_mask_prob:        float      = 0.15
@@ -97,7 +96,6 @@ class Hyperparams(DataStorage):
         assert isinstance(self.fp16, bool)
         if self.fp16:
             assert torch.cuda.is_available(), "Half-precision cannot be used without CUDA access"
-        assert isinstance(self.ent_min_mention, int) and self.ent_min_mention >= 0
 
     def __str__(self):
         return json.dumps(self.__dict__, indent=4)
@@ -268,11 +266,6 @@ def train(
         entity_vocab = json.load(f)
     log("Loaded metadata:", json.dumps(metadata, indent=4))
     log(f"Loaded entity vocabulary of {len(entity_vocab)} entities")
-    if params.ent_min_mention:
-        log("Removing entities with less than %i mentions" % params.ent_min_mention)
-        entity_vocab = { ent: info for ent, info in entity_vocab.items()
-            if info["count"] >= params.ent_min_mention or ent in {"[PAD]", "[UNK]", "[MASK]"} }
-        log("After filtering, entity vocab now has %i entities" % len(entity_vocab))
 
     # Device should be cuda:rank or just cuda if single gpu, else cpu
     if is_distributed:
@@ -305,7 +298,7 @@ def train(
     else:
         token_map = None
 
-    log("Building dataset")
+    log("Building data loader")
     data = DataLoader(
         location,
         metadata,
@@ -315,12 +308,13 @@ def train(
         params.word_unmask_prob,
         params.word_randword_prob,
         params.ent_mask_prob,
-        vocab_size=metadata["vocab-size"],
-        token_map=token_map,
-        ent_min_mention=params.ent_min_mention,
+        validation_prop = params.validation_prop,
+        vocab_size      = metadata["vocab-size"],
+        token_map       = token_map,
     )
     sampler = (DistributedSampler if is_distributed else RandomSampler)(data.train_examples)
-    log("Built %i examples" % len(data))
+    num_val = int(params.validation_prop*len(data))
+    log("Examples:   %i" % len(data), "Training:   %i" % (len(data)-num_val), "Validation: %i" % num_val)
 
     loader = data.get_dataloader(params.ff_size, sampler)
     val_loader = data.get_dataloader(params.ff_size, SequentialSampler(data.val_examples), validation=True)
