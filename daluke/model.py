@@ -30,7 +30,8 @@ def all_params(model: torch.nn.Module) -> torch.Tensor:
 
 def all_params_groups_to_slices(model: DaLUKE, num_blocks: int) -> tuple[dict[str, slice], Table]:
     state_dict = model.state_dict()
-    if (del_key := "word_embeddings.position_ids") in state_dict:
+    del_key = "word_embeddings.position_ids"
+    if del_key in state_dict:
         del state_dict[del_key]
     slices = dict()
     keys = {

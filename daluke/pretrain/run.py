@@ -89,8 +89,9 @@ if __name__ == '__main__':
             args["name"] = "pretrain-results_" + get_timestamp(for_file=True)
 
     if not args["resume"]:
-        if os.path.isdir(p := os.path.join(args["location"], args["name"])):
-            rmtree(p)
+        dir_path = os.path.join(args["location"], args["name"])
+        if os.path.isdir(dir_path):
+            rmtree(dir_path)
         parser.document_settings(args["name"])
 
     if torch.cuda.device_count() > 1 and args["max_workers"] > 1:

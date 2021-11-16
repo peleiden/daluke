@@ -151,7 +151,7 @@ def load_base_model_weights(
                 daluke_key = "." + daluke_key[1+len(prefix):]
 
         # Fix 1:1 differences in naming scheme
-        parts = [new_part if (new_part := one2one_map.get(part)) else part for part in daluke_key.split(".")]
+        parts = [one2one_map.get(part) if one2one_map.get(part) else part for part in daluke_key.split(".")]
         daluke_key = ".".join(parts)
 
         # Set new key if different

@@ -107,8 +107,9 @@ class DatasetBuilder:
 
     def build(self):
         log("Saving tokenizer config and word token config to '%s'" % self.out_dir)
-        with open(path := os.path.join(self.out_dir, self.entity_vocab_file), "w", encoding="utf-8") as ev:
-            log("Saving entity vocab to '%s'" % path)
+        ent_vocab_path = os.path.join(self.out_dir, self.entity_vocab_file)
+        with open(ent_vocab_path, "w", encoding="utf-8") as ev:
+            log("Saving entity vocab to '%s'" % ent_vocab_path)
             ujson.dump(self.entity_vocab, ev, indent=2)
 
         log.section("Processing %i pages" % len(self.target_titles[:self.max_articles]))
@@ -149,8 +150,9 @@ class DatasetBuilder:
             with TT.profile("Rewrite dataset with new tokens"):
                 self._update_tokens(metadata, token_map)
 
-        with open(path := os.path.join(self.out_dir, self.metadata_file), "w") as f:
-            log.section("Saving metadata to %s" % path)
+        metadata_path = os.path.join(self.out_dir, self.metadata_file)
+        with open(metadata_path, "w") as f:
+            log.section("Saving metadata to %s" % metadata_path)
             ujson.dump(metadata, f, indent=4)
 
         self.example_positions = os.path.join(self.out_dir, self.example_positions)

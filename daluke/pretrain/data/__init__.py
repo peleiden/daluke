@@ -71,8 +71,8 @@ def load_entity_vocab(vocab_file: str) -> dict[str, dict[str, int]]:
     entities = dict()
     with open(vocab_file) as vf:
         for entity in load_jsonl(vf):
-            if not ignore_title(ent := entity["entities"][0][0]):
-                entities[ent] = {
+            if not ignore_title(entity["entities"][0][0]):
+                entities[entity["entities"][0][0]] = {
                     "id": entity["id"],
                     "count": entity["count"],
                 }
