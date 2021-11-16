@@ -277,7 +277,11 @@ def train(
     if is_distributed:
         device = torch.device("cuda", index=rank)
     else:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        try:
+            import torch_xla.core.xla_model as xm
+            device = xm.xla_device()
+        except ModuleNotFoundError:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if torch.cuda.is_available():
         log.debug("This worker runs on a %s" % torch.cuda.get_device_name(device))
 
