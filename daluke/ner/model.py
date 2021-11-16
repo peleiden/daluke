@@ -21,11 +21,13 @@ class NERDaLUKE(DaLUKE):
         dropout: float,
         words_only: bool,
         entities_only: bool,
+        ent_hidden_size:        Optional[int]=None,
+        ent_intermediate_size:  Optional[int]=None,
     ):
         """
         Build the architecture and setup the config
         """
-        super().__init__(bert_config, ent_vocab_size, ent_embed_size)
+        super().__init__(bert_config, ent_vocab_size, ent_embed_size, ent_hidden_size=ent_hidden_size, ent_intermediate_size=ent_intermediate_size)
         self.output_shape = output_shape
         self.drop = nn.Dropout(dropout if dropout is not None else bert_config.hidden_dropout_prob)
 
@@ -37,7 +39,8 @@ class NERDaLUKE(DaLUKE):
             concat_size = 1
         else:
             concat_size = 3
-        self.classifier = nn.Linear(concat_size*bert_config.hidden_size, self.output_shape)
+        out_size = (not self.entities_only)*2*bert_config.hidden_size + (not self.words_only)*ent_hidden_size
+        self.classifier = nn.Linear(out_size, self.output_shape)
 
     def forward(self, ex: NERBatchedExamples) -> torch.Tensor:
         """

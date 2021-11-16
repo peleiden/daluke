@@ -45,6 +45,7 @@ def main():
             "Can also be path to an exact model file, in which case this will be used instead of the newest."
     )
     parser.add_argument("outpath", type=str, help="File path to the compressed model")
+    parser.add_argument("--tmpdir", type=str, help="Where to create temporary folder", default="")
     args = parser.parse_args()
     log.configure(os.path.join(args.outpath if os.path.isdir(args.outpath) else os.path.dirname(args.outpath), "collect.log"), "Collector", print_level=Levels.DEBUG)
 
@@ -61,7 +62,7 @@ def main():
     if is_reduced:
         ins.append(os.path.join(modelpath, "..", DatasetBuilder.token_map_file))
         outs.append(TOKEN_MAP_FILE)
-    tmpdir = os.path.join(modelpath, "tmpdir")
+    tmpdir = os.path.join(args.tmpdir, "tmpdir")
     log.debug(f"Using:", *ins)
 
     # Operate directly on disk as opposed to serialize.save_to_archive which requires us to load the data into mem.

@@ -8,6 +8,7 @@ from transformers import AutoConfig
 import daluke.ner.data as datasets
 from daluke.model import get_ent_embed_size
 from daluke.ner.data import NERDataset
+from daluke.model import ent_dims_from_state_dict
 from daluke.ner.model import NERDaLUKE
 from daluke.pretrain.model import load_base_model_weights
 
@@ -43,6 +44,7 @@ def load_model(
 ) -> NERDaLUKE:
     bert_config = AutoConfig.from_pretrained(metadata["base-model"])
     bert_config.vocab_size = metadata["vocab-size"]
+    ent_hidden, ent_intermediate = ent_dims_from_state_dict(state_dict)
     model = NERDaLUKE(
         metadata.get("output-size", len(dataset.all_labels)),
         bert_config,
@@ -51,6 +53,9 @@ def load_model(
         dropout = dropout,
         words_only = metadata.get("NER-words-only", False),
         entities_only = metadata.get("NER-entities-only", False),
+        ent_hidden_size = ent_hidden,
+        ent_intermediate_size =  ent_intermediate,
+
     )
     model.load_state_dict(state_dict, strict=False)
     if bert_attention:
