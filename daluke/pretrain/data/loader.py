@@ -72,8 +72,7 @@ class DataLoader:
         train_examples, val_examples = list(), list()
         with open(os.path.join(self.data_dir, DatasetBuilder.data_file)) as df:
             for seq_data in load_jsonl(df):
-                # Backwards compatible to time before validation
-                is_validation = seq_data.get("is_validation", False)
+                is_validation = seq_data["is_validation"]
                 if self.only_load_validation and not is_validation:
                     continue
                 if self.ent_min_mention:

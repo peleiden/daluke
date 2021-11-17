@@ -28,7 +28,7 @@ class DatasetBuilder:
     # Files saved by the build method
     metadata_file     = "metadata.json"
     entity_vocab_file = "entity-vocab.json"
-    data_file         = "data.jsonl"
+    data_file         = "data.json"
     token_map_file    = "token-map.npy"
 
     def __init__(
@@ -83,6 +83,8 @@ class DatasetBuilder:
             log.debug("Removing old datafile '%s'" % self.data_file)
             os.remove(self.data_file)
 
+        self.examples = list()
+
     def _tokenize(self, text: str, paragraph_text: str, idx: int) -> list[str]:
         if not text:
             return list()
@@ -111,17 +113,21 @@ class DatasetBuilder:
             ujson.dump(self.entity_vocab, ev, indent=2)
 
         log.section("Processing %i pages" % len(self.target_titles[:self.max_articles]))
-        log("Saving data to '%s'" % self.data_file)
-        n_seqs, n_ents, n_vals, n_word_toks, n_words = 0, 0, 0, 0, 0
+        n_seqs, n_ents, n_word_toks, n_words = 0, 0, 0, 0
         for title in log.tqdm(tqdm(self.target_titles[:self.max_articles])):
             log("Processing %s" % title)
             with TT.profile("Process page"):
-                s, e, v, nt, nw = self._process_page(title)
+                s, e, nt, nw = self._process_page(title)
                 n_seqs += s
                 n_ents += e
-                n_vals += v
                 n_word_toks += nt
                 n_words += nw
+
+        log("Shuffling data")
+        random.shuffle(self.examples)
+        n_vals = int(self.validation_prob*len(self.examples))
+        for i in range(n_vals):
+            self.examples[i]["is_validation"] = True
 
         # Save metadata
         metadata = {
@@ -144,13 +150,16 @@ class DatasetBuilder:
         if self.vocab_size < self.tokenizer.vocab_size:
             log.section("Reducing token number")
             with TT.profile("Reduce token vocab"):
-                token_map, metadata["vocab-size"] = self._reduce_tokens(metadata)
+                token_map, metadata["vocab-size"] = self._reduce_tokens()
             with TT.profile("Rewrite dataset with new tokens"):
-                self._update_tokens(metadata, token_map)
+                self._update_tokens(token_map)
 
         with open(path := os.path.join(self.out_dir, self.metadata_file), "w") as f:
             log.section("Saving metadata to %s" % path)
             ujson.dump(metadata, f, indent=4)
+        with open(self.data_file, "w") as f, TT.profile("Save data"):
+            log("Saving data to '%s'" % self.data_file)
+            ujson.dump(self.examples, f)
 
         log.debug("Time distribution", TT)
 
@@ -236,18 +245,16 @@ class DatasetBuilder:
 
         return sentences
 
-    def _process_page(self, page_title: str) -> tuple[int, int, int, int, int]:
-        """
-        Processes a Wikipedia article and save to self.data_file
-        Returns number of sequences
-        """
+    def _process_page(self, page_title: str) -> tuple[int, int, int, int]:
+        """ Processes a Wikipedia article and save to self.data_file
+        Returns number of sequences """
 
         sentences = self._get_sentence_features(page_title)
 
         # Construct features to be saved - word tokens, entities, and entity spans
         words = list()
         links: list[tuple[int, 3]] = list()
-        n_seqs, n_ents, n_val, n_word_toks, n_words = 0, 0, 0, 0, 0
+        n_seqs, n_ents, n_word_toks, n_words = 0, 0, 0, 0
         TT.profile("Get features")
         for i, (sent_words, sent_links) in enumerate(sentences):
             links += [(id_, start + len(words), end + len(words)) for id_, start, end in sent_links]
@@ -264,35 +271,29 @@ class DatasetBuilder:
                 entity_ids = [id_ for id_, _, _ in links]
                 entity_spans = [(start, end) for _, start, end in links]
                 # Whether to mark doc. as part of validation set
-                is_validation = random.random() < self.validation_prob
-                n_val += int(is_validation)
                 n_word_toks += len(word_ids)
                 n_words += len(word_spans)
-                features = ujson.dumps({
-                    "page_title":    page_title,
+                self.examples.append({
                     "word_ids":      word_ids,
                     "word_spans":    word_spans,
                     "entity_ids":    entity_ids,
                     "entity_spans":  entity_spans,
-                    "is_validation": is_validation,
+                    "is_validation": False,
                 })
-                with open(self.data_file, "a") as df, TT.profile("Save features"):
-                    df.write(features + "\n")
                 words = list()
                 links = list()
         TT.end_profile()
 
-        return n_seqs, n_ents, n_val, n_word_toks, n_words
+        return n_seqs, n_ents, n_word_toks, n_words
 
-    def _reduce_tokens(self, metadata: dict) -> tuple[np.ndarray, int]:
+    def _reduce_tokens(self) -> tuple[np.ndarray, int]:
         token_counts = np.zeros(self.tokenizer.vocab_size, dtype=np.int32)
 
         log("Counting tokens in dataset")
-        with open(self.data_file) as df:
-            for seq in tqdm(load_jsonl(df), total=metadata["number-of-items"]):
-                word_ids = np.array(seq["word_ids"])
-                word_ids, counts = unique(word_ids, return_counts=True)
-                token_counts[word_ids] += counts
+        for example in tqdm(self.examples):
+            word_ids = np.array(example["word_ids"])
+            word_ids, counts = unique(word_ids, return_counts=True)
+            token_counts[word_ids] += counts
 
         log("%i of %i tokens in the vocab are used" % ((token_counts>0).sum(), self.tokenizer.vocab_size))
         *ids, unk_id = get_special_ids(self.tokenizer)
@@ -319,15 +320,7 @@ class DatasetBuilder:
 
         return token_map, int(keep.sum())
 
-    def _update_tokens(self, metadata: dict, token_map: np.ndarray):
+    def _update_tokens(self, token_map: np.ndarray):
         log("Updating dataset with kept tokens")
-        tmp_file = os.path.join(os.path.split(self.data_file)[0], "tmpdata.json")
-        with open(self.data_file, "r+") as df,\
-             open(tmp_file, "w") as tf,\
-             TT.profile("Update example", hits=metadata["number-of-items"]):
-            for line in tqdm(df, total=metadata["number-of-items"]):
-                example = ujson.loads(line)
-                example["word_ids"] = token_map[example["word_ids"]].tolist()
-                tf.write(ujson.dumps(example) + "\n")
-        os.remove(self.data_file)
-        os.rename(tmp_file, self.data_file)
+        for example in tqdm(self.examples):
+            example["word_ids"] = token_map[example["word_ids"]].tolist()
