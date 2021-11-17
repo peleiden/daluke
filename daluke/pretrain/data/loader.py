@@ -3,6 +3,7 @@ import os
 
 import numpy as np
 import torch
+import ujson
 from transformers import AutoTokenizer
 
 from pelutils import TT
@@ -20,7 +21,7 @@ class DataLoader:
         self,
         data_dir:           str,
         metadata:           dict,
-        entity_vocab:       dict,  # Only given if a subset of the full vocab
+        entity_vocab:       dict,
         device:             torch.device,
         word_mask_prob:     float,
         word_unmask_prob:   float,
@@ -62,7 +63,7 @@ class DataLoader:
             if self.word_mask_id < vocab_size-1 else\
                 (self.tokenizer.convert_tokens_to_ids(self.tokenizer.unk_token)+1, vocab_size-1)
 
-        with TT.profile("Building examples"):
+        with TT.profile("Build data"):
             self.train_examples, self.val_examples = self.build_examples()
 
     def __len__(self):
@@ -70,8 +71,12 @@ class DataLoader:
 
     def build_examples(self) -> tuple[list[Example], list[Example]]:
         train_examples, val_examples = list(), list()
-        with open(os.path.join(self.data_dir, DatasetBuilder.data_file)) as df:
-            for seq_data in load_jsonl(df):
+        with open(os.path.join(self.data_dir, DatasetBuilder.data_file)) as df, TT.profile("Load data"):
+            data = ujson.loads(df.read())
+        assert len(data) == self.metadata["number-of-items"], "Found %i examples, but there should be %i according to metadata"\
+            % (len(data), self.metadata["number-of-items"])
+        with TT.profile("Build example", hits=len(data)):
+            for seq_data in data:
                 is_validation = seq_data["is_validation"]
                 if self.only_load_validation and not is_validation:
                     continue
