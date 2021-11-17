@@ -1,12 +1,12 @@
 from __future__ import annotations
 from typing import TextIO
-import io
 import os
+import pickle
 import random
 
-import ujson
 import numpy as np
-from pelutils import log, TT, load_jsonl
+import ujson
+from pelutils import log, TT
 from pelutils.ds import unique
 from tqdm import tqdm
 from transformers import AutoTokenizer, RobertaTokenizer
@@ -28,7 +28,7 @@ class DatasetBuilder:
     # Files saved by the build method
     metadata_file     = "metadata.json"
     entity_vocab_file = "entity-vocab.json"
-    data_file         = "data.json"
+    data_file         = "data.pkl"
     token_map_file    = "token-map.npy"
 
     def __init__(
@@ -157,9 +157,9 @@ class DatasetBuilder:
         with open(path := os.path.join(self.out_dir, self.metadata_file), "w") as f:
             log.section("Saving metadata to %s" % path)
             ujson.dump(metadata, f, indent=4)
-        with open(self.data_file, "w") as f, TT.profile("Save data"):
+        with open(self.data_file, "wb") as f, TT.profile("Save data"):
             log("Saving data to '%s'" % self.data_file)
-            ujson.dump(self.examples, f)
+            pickle.dump(self.examples, f)
 
         log.debug("Time distribution", TT)
 
@@ -269,12 +269,12 @@ class DatasetBuilder:
                     word_spans = calculate_spans(words, self.tokenizer)
                 assert self.min_sentence_length <= len(word_ids) <= self.max_num_tokens
                 entity_ids = [id_ for id_, _, _ in links]
-                entity_spans = [(start, end) for _, start, end in links]
+                entity_spans = [(start+1, end+1) for _, start, end in links]
                 # Whether to mark doc. as part of validation set
                 n_word_toks += len(word_ids)
                 n_words += len(word_spans)
                 self.examples.append({
-                    "word_ids":      word_ids,
+                    "word_ids":      [self.tokenizer.cls_token_id, *word_ids, self.tokenizer.sep_token_id],
                     "word_spans":    word_spans,
                     "entity_ids":    entity_ids,
                     "entity_spans":  entity_spans,
@@ -298,7 +298,7 @@ class DatasetBuilder:
         log("%i of %i tokens in the vocab are used" % ((token_counts>0).sum(), self.tokenizer.vocab_size))
         *ids, unk_id = get_special_ids(self.tokenizer)
         unk_count = token_counts[unk_id]
-        token_counts[unk_id] = -1  # Make sure unk is only included as special token
+        token_counts[[*ids, unk_id]] = -1
         sort_idx = np.argsort(token_counts)[::-1]
         keep_idx = sort_idx[:self.vocab_size]
         keep = np.zeros_like(token_counts, dtype=bool)

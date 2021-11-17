@@ -103,7 +103,8 @@ def calculate_spans(tokens: list[str], tokenizer) -> list[tuple[int, int]]:
             else:
                 i += 1
 
-    return spans
+    # Take cls into account
+    return [(start+1, end+1) for start, end in spans]
 
 
 # Imported for API availability

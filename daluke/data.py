@@ -27,18 +27,16 @@ class Words:
         ids: torch.IntTensor,
         spans: list[list[int]] = None,
         max_len: int = 512,
-        sep_id:  int = 3,
-        cls_id:  int = 2,
         pad_id:  int = 0,
     ):
         """ For creating a single example: Pads and add special tokens """
         N = ids.shape[0]
         word_ids = torch.full((max_len,), pad_id, dtype=torch.int)
-        word_ids[:N+2] = torch.cat((torch.IntTensor([cls_id]), ids, torch.IntTensor([sep_id])))
+        word_ids[:N] = ids
 
         # Don't pad the spans as they are not given to model, but used for masking
         if spans is not None:
-            spans = torch.IntTensor(spans) + 1  # For [CLS]
+            spans = torch.IntTensor(spans)
 
         return cls(
             ids            = word_ids,
@@ -82,7 +80,6 @@ class Entities(Words):
         ent_ids[:N] = ids
 
         ent_pos = torch.full((max_entities, max_entity_span), -1, dtype=torch.int)
-        spans = [(s+1, e+1) for s, e in spans] # +1 for [CLS] token added to words
         for i, (start, end) in enumerate(spans):
             ent_pos[i, :end-start] = torch.arange(start, end)
 
@@ -96,24 +93,20 @@ class Entities(Words):
 
 @dataclass
 class Example:
-    """
-    A single data example
-    """
+    """ A single data example """
     words: Words
     entities: Entities
 
 @dataclass
 class BatchedExamples(Example):
-    """
-    Data to be forward passed to daLUKE
-    """
+    """ Data to be forward passed to daLUKE """
 
     @staticmethod
     def collate(ex: list[Example], device: torch.device, cut: bool) -> tuple[Words, Entities]:
         # Stack the tensors in specific field for each example and send to device
         tensor_collate = lambda field, subfield, limit: torch.stack(tuple(getattr(getattr(e, field), subfield)[:limit] for e in ex)).to(device)
 
-        word_N = torch.tensor(tuple(e.words.N for e in ex)).to(device) + 2 # +2 for CLS, SEP
+        word_N = torch.tensor(tuple(e.words.N for e in ex)).to(device)
         ent_N = torch.tensor(tuple(e.entities.N for e in ex)).to(device)
         # It is here assumed that all word and entity ids already have been padded to exactly same length (as they have in their build methods)
         word_limit = max(word_N) if cut else len(ex[0].words.ids)

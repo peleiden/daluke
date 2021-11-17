@@ -1,9 +1,9 @@
 from __future__ import annotations
 import os
+import pickle
 
 import numpy as np
 import torch
-import ujson
 from transformers import AutoTokenizer
 
 from pelutils import TT
@@ -72,7 +72,7 @@ class DataLoader:
     def build_examples(self) -> tuple[list[Example], list[Example]]:
         train_examples, val_examples = list(), list()
         with open(os.path.join(self.data_dir, DatasetBuilder.data_file)) as df, TT.profile("Load data"):
-            data = ujson.loads(df.read())
+            data = pickle.load(df)
         assert len(data) == self.metadata["number-of-items"], "Found %i examples, but there should be %i according to metadata"\
             % (len(data), self.metadata["number-of-items"])
         with TT.profile("Build example", hits=len(data)):
@@ -91,8 +91,6 @@ class DataLoader:
                         torch.IntTensor(seq_data["word_ids"]),
                         seq_data["word_spans"],
                         max_len = self.max_sentence_len,
-                        sep_id  = self.sep_id,
-                        cls_id  = self.cls_id,
                         pad_id  = self.pad_id,
                     ),
                     entities = Entities.build(
@@ -118,7 +116,7 @@ class DataLoader:
         )
 
     def collate(self, batch: list[tuple[int, Example]]) -> MaskedBatchedExamples:
-        with TT.profile("Masking words and entities"):
+        with TT.profile("Build masked batch"):
             return MaskedBatchedExamples.build(
                 [ex for _, ex in batch],
                 self.device,
