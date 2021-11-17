@@ -5,6 +5,7 @@ import pickle
 import random
 
 import numpy as np
+import torch
 import ujson
 from pelutils import log, TT
 from pelutils.ds import unique
@@ -274,10 +275,10 @@ class DatasetBuilder:
                 n_word_toks += len(word_ids)
                 n_words += len(word_spans)
                 self.examples.append({
-                    "word_ids":      [self.tokenizer.cls_token_id, *word_ids, self.tokenizer.sep_token_id],
-                    "word_spans":    word_spans,
-                    "entity_ids":    entity_ids,
-                    "entity_spans":  entity_spans,
+                    "word_ids":      torch.IntTensor([self.tokenizer.cls_token_id, *word_ids, self.tokenizer.sep_token_id]),
+                    "word_spans":    torch.IntTensor(word_spans),
+                    "entity_ids":    torch.IntTensor(entity_ids),
+                    "entity_spans":  torch.IntTensor(entity_spans),
                     "is_validation": False,
                 })
                 words = list()
@@ -291,7 +292,7 @@ class DatasetBuilder:
 
         log("Counting tokens in dataset")
         for example in tqdm(self.examples):
-            word_ids = np.array(example["word_ids"])
+            word_ids = example["word_ids"].numpy()
             word_ids, counts = unique(word_ids, return_counts=True)
             token_counts[word_ids] += counts
 
@@ -323,4 +324,4 @@ class DatasetBuilder:
     def _update_tokens(self, token_map: np.ndarray):
         log("Updating dataset with kept tokens")
         for example in tqdm(self.examples):
-            example["word_ids"] = token_map[example["word_ids"]].tolist()
+            example["word_ids"] = torch.from_numpy(token_map[example["word_ids"]]).to(torch.int32)

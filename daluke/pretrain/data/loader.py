@@ -71,7 +71,7 @@ class DataLoader:
 
     def build_examples(self) -> tuple[list[Example], list[Example]]:
         train_examples, val_examples = list(), list()
-        with open(os.path.join(self.data_dir, DatasetBuilder.data_file)) as df, TT.profile("Load data"):
+        with open(os.path.join(self.data_dir, DatasetBuilder.data_file), "rb") as df, TT.profile("Load data"):
             data = pickle.load(df)
         assert len(data) == self.metadata["number-of-items"], "Found %i examples, but there should be %i according to metadata"\
             % (len(data), self.metadata["number-of-items"])
@@ -82,19 +82,19 @@ class DataLoader:
                     continue
                 if self.ent_min_mention:
                     # Keep only entities in filtered entity vocab
-                    seq_data["entity_spans"] = [span for id_, span in
-                        zip(seq_data["entity_ids"], seq_data["entity_spans"]) if id_ in self.ent_ids]
-                    seq_data["entity_ids"] = [id_ for id_ in seq_data["entity_ids"] if id_ in self.ent_ids]
+                    seq_data["entity_spans"] = torch.IntTensor([span for id_, span in
+                        zip(seq_data["entity_ids"], seq_data["entity_spans"]) if id_ in self.ent_ids])
+                    seq_data["entity_ids"] = torch.IntTensor([id_ for id_ in seq_data["entity_ids"] if id_ in self.ent_ids])
 
                 ex = Example(
                     words = Words.build(
-                        torch.IntTensor(seq_data["word_ids"]),
+                        seq_data["word_ids"],
                         seq_data["word_spans"],
                         max_len = self.max_sentence_len,
                         pad_id  = self.pad_id,
                     ),
                     entities = Entities.build(
-                        torch.IntTensor(seq_data["entity_ids"]),
+                        seq_data["entity_ids"],
                         seq_data["entity_spans"],
                         max_entities    = self.max_entities,
                         max_entity_span = self.max_entity_span,

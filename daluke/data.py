@@ -25,7 +25,7 @@ class Words:
     def build(
         cls,
         ids: torch.IntTensor,
-        spans: list[list[int]] = None,
+        spans: torch.IntTensor | None = None,
         max_len: int = 512,
         pad_id:  int = 0,
     ):
@@ -34,13 +34,9 @@ class Words:
         word_ids = torch.full((max_len,), pad_id, dtype=torch.int)
         word_ids[:N] = ids
 
-        # Don't pad the spans as they are not given to model, but used for masking
-        if spans is not None:
-            spans = torch.IntTensor(spans)
-
         return cls(
             ids            = word_ids,
-            attention_mask = cls._build_att_mask(N+2, max_len),
+            attention_mask = cls._build_att_mask(N, max_len),
             N              = N,
             spans          = spans,
         )
@@ -65,7 +61,7 @@ class Entities(Words):
     def build(
         cls,
         ids: torch.IntTensor,
-        spans: list[tuple[int, int]],
+        spans: torch.IntTensor,
         max_entities: int,
         max_entity_span: int,
     ):
@@ -73,7 +69,7 @@ class Entities(Words):
         For creating a single example
 
         ids: N ids found from entity vocab used to train the model
-        spans: N long list containing start and end of entities
+        spans: N x 2 array containing start and end of entities
         """
         N = ids.shape[0]
         ent_ids = torch.zeros(max_entities, dtype=torch.int)
