@@ -1,7 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from math import ceil
-from typing import Iterator
 import contextlib
 import json
 import os
@@ -11,14 +10,13 @@ import torch
 import torch.cuda.amp as amp
 import torch.distributed as dist
 from torch import nn
-from torch.nn.parameter import Parameter
 from torch.optim import Optimizer
 from torch.utils.data import RandomSampler, SequentialSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 
 import numpy as np
-from transformers import AutoConfig, AutoModelForPreTraining, AutoTokenizer, AdamW, get_linear_schedule_with_warmup
+from transformers import AutoConfig, AutoModelForPreTraining, AutoTokenizer
 from pelutils import DataStorage, thousand_seps, TT
 from pelutils.logger import log, Levels
 from pelutils.ds import unique
@@ -28,11 +26,11 @@ from daluke.data import get_special_ids, token_map_to_token_reduction
 from .data import DataLoader
 from .data.build import DatasetBuilder
 from .model import PretrainTaskDaLUKE, BertAttentionPretrainTaskDaLUKE, load_base_model_weights, copy_with_reduced_state_dict
+from .optimization import get_lr_scheduler, get_optimizer
 from ..model import all_params, all_params_groups_to_slices
 from ..analysis.pretrain import TrainResults, top_k_accuracy, validate_model
 
 PORT = "3090"  # Are we sure this port is in stock?
-NO_DECAY =  { "bias", "LayerNorm.weight" }
 
 MODEL_OUT = "daluke_pu_{i}.pt"
 OPTIMIZER_OUT = "optim_pu_{i}.pt"
@@ -110,12 +108,6 @@ def setup(rank: int, world_size: int):
 def cleanup(rank: int):
     if rank != -1:
         dist.destroy_process_group()
-
-def get_optimizer_params(params: Iterator[tuple[str, Parameter]], do_decay: bool) -> list:
-    """ Returns the parameters that should be tracked by optimizer with or without weight decay"""
-    # Only include the parameter if do_decay has reverse truth value of the parameter being in no_decay
-    include = lambda n: do_decay != any(nd in n for nd in NO_DECAY)
-    return [p for n, p in params if p.requires_grad and include(n)]
 
 def clean_saved_pu(loc: str, pu: int) -> list[str]:
     paths = {
@@ -464,16 +456,13 @@ def train(
     non_ddp_model = model.module if is_distributed else model
 
     log("Setting up optimizer, scaler, and learning rate scheduler")
-    optimizer = AdamW(
-        [{"params": get_optimizer_params(non_ddp_model.named_parameters(), do_decay=True),  "weight_decay": params.weight_decay},
-         {"params": get_optimizer_params(non_ddp_model.named_parameters(), do_decay=False), "weight_decay": 0}],
-        lr = params.lr,
-    )
+    optimizer = get_optimizer(non_ddp_model, params.weight_decay, params.lr)
     scaler = amp.GradScaler() if params.fp16 else None
-    scheduler = get_linear_schedule_with_warmup(
+    scheduler = get_lr_scheduler(
         optimizer,
         int(params.warmup_prop * params.parameter_updates),
         params.parameter_updates,
+        unfix_base_model_params_pu,
     )
     if resume:
         optimizer.load_state_dict(torch.load(fpath((TrainResults.subfolder, OPTIMIZER_OUT.format(i=res.parameter_update))), map_location=device))
