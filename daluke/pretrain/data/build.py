@@ -29,7 +29,7 @@ class DatasetBuilder:
     # Files saved by the build method
     metadata_file     = "metadata.json"
     entity_vocab_file = "entity-vocab.json"
-    data_file         = "data.pkl"
+    data_file         = "data.json"
     token_map_file    = "token-map.npy"
 
     def __init__(
@@ -158,9 +158,9 @@ class DatasetBuilder:
         with open(path := os.path.join(self.out_dir, self.metadata_file), "w") as f:
             log.section("Saving metadata to %s" % path)
             ujson.dump(metadata, f, indent=4)
-        with open(self.data_file, "wb") as f, TT.profile("Save data"):
+        with open(self.data_file, "w") as f, TT.profile("Save data"):
             log("Saving data to '%s'" % self.data_file)
-            pickle.dump(self.examples, f)
+            ujson.dump(self.examples, f)
 
         log.debug("Time distribution", TT)
 
@@ -275,10 +275,10 @@ class DatasetBuilder:
                 n_word_toks += len(word_ids)
                 n_words += len(word_spans)
                 self.examples.append({
-                    "word_ids":      torch.IntTensor([self.tokenizer.cls_token_id, *word_ids, self.tokenizer.sep_token_id]),
-                    "word_spans":    torch.IntTensor(word_spans),
-                    "entity_ids":    torch.IntTensor(entity_ids),
-                    "entity_spans":  torch.IntTensor(entity_spans),
+                    "word_ids":      [self.tokenizer.cls_token_id, *word_ids, self.tokenizer.sep_token_id],
+                    "word_spans":    word_spans,
+                    "entity_ids":    entity_ids,
+                    "entity_spans":  entity_spans,
                     "is_validation": False,
                 })
                 words = list()
@@ -292,7 +292,7 @@ class DatasetBuilder:
 
         log("Counting tokens in dataset")
         for example in tqdm(self.examples):
-            word_ids = example["word_ids"].numpy()
+            word_ids = np.array(example["word_ids"])
             word_ids, counts = unique(word_ids, return_counts=True)
             token_counts[word_ids] += counts
 
@@ -324,4 +324,4 @@ class DatasetBuilder:
     def _update_tokens(self, token_map: np.ndarray):
         log("Updating dataset with kept tokens")
         for example in tqdm(self.examples):
-            example["word_ids"] = torch.from_numpy(token_map[example["word_ids"]]).to(torch.int32)
+            example["word_ids"] = token_map[example["word_ids"]].tolist()

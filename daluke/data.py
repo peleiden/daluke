@@ -25,7 +25,7 @@ class Words:
     def build(
         cls,
         ids: torch.IntTensor,
-        spans: torch.IntTensor | None = None,
+        spans: list[list[int]] | None = None,
         max_len: int = 512,
         pad_id:  int = 0,
     ):
