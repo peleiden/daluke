@@ -4,3 +4,4 @@ wikipedia2vec
 umap-learn
 scikit-learn
 scipy
+py-cpuinfo

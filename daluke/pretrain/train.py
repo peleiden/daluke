@@ -15,6 +15,7 @@ from torch.utils.data import RandomSampler, SequentialSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 
+import cpuinfo
 import numpy as np
 from transformers import AutoConfig, AutoModelForPreTraining, AutoTokenizer
 from pelutils import DataStorage, thousand_seps, TT
@@ -270,8 +271,12 @@ def train(
         device = torch.device("cuda", index=rank)
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if torch.cuda.is_available():
-        log.debug("This worker runs on a %s" % torch.cuda.get_device_name(device))
+    log.debug(
+        "Hardware for this worker:",
+        "CPU: %s" % cpuinfo.get_cpu_info()["brand_raw"],
+        "GPU: %s" % (torch.cuda.get_device_name(device) if torch.cuda.is_available() else "NA"),
+        sep="\t\n",
+    )
 
     if params.entity_loss_weight:
         log("Setting up loss function with entity loss weighting")
