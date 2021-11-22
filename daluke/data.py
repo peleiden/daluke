@@ -34,6 +34,9 @@ class Words:
         word_ids = torch.full((max_len,), pad_id, dtype=torch.int)
         word_ids[:N] = ids
 
+        if spans is not None:
+            spans = torch.IntTensor(spans)
+
         return cls(
             ids            = word_ids,
             attention_mask = cls._build_att_mask(N, max_len),

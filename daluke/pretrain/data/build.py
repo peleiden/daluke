@@ -29,7 +29,7 @@ class DatasetBuilder:
     # Files saved by the build method
     metadata_file     = "metadata.json"
     entity_vocab_file = "entity-vocab.json"
-    data_file         = "data.json"
+    data_file         = "data.jsonl"
     token_map_file    = "token-map.npy"
 
     def __init__(
@@ -160,7 +160,8 @@ class DatasetBuilder:
             ujson.dump(metadata, f, indent=4)
         with open(self.data_file, "w") as f, TT.profile("Save data"):
             log("Saving data to '%s'" % self.data_file)
-            ujson.dump(self.examples, f)
+            for example in self.examples:
+                f.write(ujson.dumps(example)+"\n")
 
         log.debug("Time distribution", TT)
 

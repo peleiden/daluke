@@ -88,7 +88,7 @@ def mask_word_batch(
     max_num_spans = n_spans.max().item()
     spans = torch.empty(len(wo.ids), max_num_spans, 2, dtype=torch.int32)
     for i, span in enumerate(wo.spans):
-        spans[i, :len(span)] = torch.IntTensor(span)
+        spans[i, :len(span)] = span
 
     num_labels = _lib.mask_words(
         ctypes.c_int(mask_id),
