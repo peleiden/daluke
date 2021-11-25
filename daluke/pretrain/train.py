@@ -253,7 +253,7 @@ def train(
     log.section("Starting pretraining with the following hyperparameters", params)
     log("Training using %i workers" % num_workers)
 
-    log.section("Reading metadata and entity vocabulary")
+    log("Reading metadata and entity vocabulary")
     with open(fpath(DatasetBuilder.metadata_file)) as f:
         metadata = json.load(f)
     with open(fpath(DatasetBuilder.entity_vocab_file)) as f:
@@ -527,6 +527,7 @@ def train(
                 # Compute and backpropagate loss
                 word_loss = word_criterion(word_preds, batch.word_mask_labels)
                 ent_loss = entity_criterion(ent_preds, batch.ent_mask_labels)
+                ent_loss = torch.nan_to_num(ent_loss)
             loss = loss_calculator(word_loss, ent_loss)
             loss /= grad_accumulation_steps
 
