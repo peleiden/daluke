@@ -527,6 +527,7 @@ def train(
                 # Compute and backpropagate loss
                 word_loss = word_criterion(word_preds, batch.word_mask_labels)
                 ent_loss = entity_criterion(ent_preds, batch.ent_mask_labels)
+                has_entities = not torch.isnan(ent_loss).item()
                 ent_loss = torch.nan_to_num(ent_loss)
             loss = loss_calculator(word_loss, ent_loss)
             loss /= grad_accumulation_steps
@@ -542,7 +543,7 @@ def train(
 
             t_loss += loss.item()
             w_loss += word_loss.item() / grad_accumulation_steps
-            e_loss += ent_loss.item() / grad_accumulation_steps
+            e_loss += ent_loss.item() / grad_accumulation_steps if has_entities else 0
 
             if torch.cuda.is_available():
                 torch.cuda.synchronize(rank if is_distributed else None)
@@ -585,7 +586,7 @@ def train(
         res.scaled_loss[i]  = s_loss
         res.lr[i]           = scheduler.get_last_lr()[0]
         res.w_accuracies[i] = np.mean(w_accuracies, axis=0)
-        res.e_accuracies[i] = np.mean(e_accuracies, axis=0)
+        res.e_accuracies[i] = np.nanmean(e_accuracies, axis=0)
         res.runtime[i]      = TT.end_profile()
         log.debug(
             "Performed parameter update %i / %i in %.2f s" % (i, params.parameter_updates-1, res.runtime[i]),
