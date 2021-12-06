@@ -29,7 +29,7 @@ class Words:
         max_len: int = 512,
         pad_id:  int = 0,
     ):
-        """ For creating a single example: Pads and add special tokens """
+        """ For creating a single example: Pads seq. and creates padding mask """
         N = ids.shape[0]
         word_ids = torch.full((max_len,), pad_id, dtype=torch.int)
         word_ids[:N] = ids

@@ -112,10 +112,10 @@ class NERDataset(ABC):
         self.label_to_idx = {label: i for i, label in enumerate(self.all_labels)}
 
         self.tokenizer = AutoTokenizer.from_pretrained(base_model)
-        self.sep_id, self.cls_id, self.pad_id, __, self.unk_id = get_special_ids(self.tokenizer)
+        self.sep_id, self.cls_id, self.pad_id, self.mask_id, self.unk_id = get_special_ids(self.tokenizer)
         if self.token_map is not None:
-            self.sep_id, self.cls_id, self.pad_id, self.unk_id = self.token_map[
-                [self.sep_id, self.cls_id, self.pad_id, self.unk_id]
+            self.sep_id, self.cls_id, self.pad_id, self.mask_id, self.unk_id = self.token_map[
+                [self.sep_id, self.cls_id, self.pad_id, self.mask_id, self.unk_id]
             ]
 
         # To be set by load method
@@ -157,18 +157,18 @@ class NERDataset(ABC):
                 # The cumulative length of each word in units of subwords
                 cumlength = np.cumsum([len(t) for t in text_token_ids[start: end]])
                 # Save the spans of entities as they are in the token list
-                true_entity_subword_spans = {(cumlength[s-1] if s else 0, cumlength[e-1]): ann
-                    for (s, e), ann in true_entity_fullword_spans.items()}
+                true_entity_subword_spans = {(cumlength[s-1] + 1 if s else 1, cumlength[e-1] + 1): ann
+                    for (s, e), ann in true_entity_fullword_spans.items()} # +1 for CLS token
                 assert all(e-s <= self.max_entity_span for s, e in true_entity_subword_spans),\
                         f"Example {i}, sentence {j} contains an entity longer than limit of {self.max_entity_span} tokens. Text:\n\t{text}"
                 assert len(true_entity_subword_spans) < self.max_entities,\
                         f"Example {i}, sentence {j} contains {len(true_entity_subword_spans)} entities, but only {self.max_entities} are allowed. Text:\n\t{text}"
 
                 all_entity_fullword_spans = self._generate_all_entity_spans(true_entity_fullword_spans, text_token_ids[start: end], cumlength)
-                all_entity_subword_spans = [(cumlength[s-1] if s else 0, cumlength[e-1]) for s, e in all_entity_fullword_spans]
+                # +1 for CLS token
+                all_entity_subword_spans = [(cumlength[s-1] + 1 if s else 1, cumlength[e-1] + 1) for s, e in all_entity_fullword_spans]
 
-                # We dont use the entity id: We just use the id feature for their length
-                # TODO: Document why ones
+                # We dont use the entity id: We just use code them as masked corresponding to ID 1, as we mutated this to be the case
                 entity_ids = torch.ones(len(all_entity_subword_spans), dtype=torch.int)
                 entity_labels = torch.LongTensor(
                     [self.label_to_idx[true_entity_subword_spans.get(span, self.null_label)] for span in all_entity_subword_spans]
@@ -179,16 +179,14 @@ class NERDataset(ABC):
                     subend   = self.max_entities * (sub_example + 1)
 
                     entities = Entities.build(
-                        entity_ids[substart:subend],
-                        all_entity_subword_spans[substart:subend],
+                        torch.IntTensor(entity_ids[substart:subend]),
+                        torch.IntTensor(all_entity_subword_spans[substart:subend]),
                         max_entities    = self.max_entities,
                         max_entity_span = self.max_entity_span,
                     )
                     words = Words.build(
-                        torch.IntTensor(word_ids),
+                        torch.IntTensor([self.cls_id, *word_ids, self.sep_id]),
                         max_len = self.max_seq_length,
-                        sep_id  = self.sep_id,
-                        cls_id  = self.cls_id,
                         pad_id  = self.pad_id,
                     )
                     examples.append(
