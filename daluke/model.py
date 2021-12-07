@@ -397,5 +397,8 @@ def ent_dims_from_state_dict(state_dict: dict) -> tuple[int, int]:
     which can be used for instantiating the model.
     """
     # We assume that all transformer blocks have same dim.
+    low_dim_key = "encoder.0.ent_output.dense.weight"
+    key = low_dim_key if low_dim_key in state_dict.keys() else "encoder.0.output.dense.weight"
+
     # The entity output maps from hidden to intermediate so gives us exactly the shape we need
-    return state_dict["encoder.0.ent_output.dense.weight"].shape
+    return state_dict[key].shape
