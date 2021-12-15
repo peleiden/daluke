@@ -159,7 +159,7 @@ class PretrainingPlots:
 
     def weight_plot(self):
         bins = 200
-        samples = 10 ** 7
+        samples = 10 ** 8
 
         def plot_dist(self, pu: int):
             model_state_dict = torch.load(os.path.join(self.location, MODEL_OUT.format(i=pu)), map_location=torch.device("cpu"))
