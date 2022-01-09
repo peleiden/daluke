@@ -15,7 +15,7 @@ from daluke.analysis.pretrain import TrainResults
 from daluke.plot import double_running_avg, setup_mpl, setup_mpl_small_legend
 setup_mpl()
 
-DOTSIZE = 30
+DOTSIZE = 24
 
 
 class PretrainingPlots:
@@ -103,8 +103,8 @@ class PretrainingPlots:
             for j, k in enumerate(self.res.top_k):
                 c = next(colours)
                 plt.plot(self.x, 100*data_train[:self.lim, j], alpha=0.4, color="gray")
-                n = 2 if label == "Word" else 3
-                x, y = double_running_avg(self.x, 100*data_train[:self.lim, j], inner_neighbors=n, samples=400)
+                n = 1 if label == "Word" else 2
+                x, y = double_running_avg(self.x, 100*data_train[:self.lim, j], inner_neighbors=n, outer_neighbors=1, samples=400)
                 plt.plot(x, y, color=c, label="$k=%i$" % k)
                 plt.scatter(self.val_x, 100*data_val[self.val_lim, j], s=DOTSIZE, c=c, label="Validation, $k=%i$" % k, edgecolors="black")
 
@@ -123,6 +123,8 @@ class PretrainingPlots:
         plt.plot(self.x, self.res.lr[:self.lim])
         plt.xlabel(self.xlabel)
         plt.ylabel("Learning rate")
+        m = np.ceil(np.log10(self.res.lr.max()))
+        plt.ticklabel_format(axis="y", scilimits=(m, m))
         plt.title("Learning rate")
         plt.grid()
 
@@ -158,7 +160,7 @@ class PretrainingPlots:
             return torch.Tensor()
 
     def weight_plot(self):
-        bins = 200
+        bins = 300
         samples = 10 ** 8
 
         def plot_dist(self, pu: int):
